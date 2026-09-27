@@ -22,3 +22,13 @@ lerna-debug.log*
 # temp directory
 .temp
 .tmp
+
+# Docker
+docker-compose.override.yml
+
+# Database
+*.sqlite
+
+# Env files adicionales
+.env.*
+!.env.example
