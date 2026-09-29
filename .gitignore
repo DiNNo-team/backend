@@ -32,3 +32,9 @@ docker-compose.override.yml
 # Env files adicionales
 .env.*
 !.env.example
+
+# Tests
+/coverage
+
+# TypeScript incremental
+*.tsbuildinfo
