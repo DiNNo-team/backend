@@ -21,6 +21,8 @@ export function configureApp(app: INestApplication): void {
 
   app.enableCors({
     origin: parseCorsOrigins(config.get<string>('CORS_ORIGINS')),
+    // Sin cookies/sesión por ahora (auth por token); activar si eso cambia.
+    credentials: false,
   });
 
   const document = SwaggerModule.createDocument(
