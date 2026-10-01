@@ -9,8 +9,8 @@
 
 | Repositorio (org `DiNNo-team`) | Qué es | Stack | Despliegue |
 |---|---|---|---|
-| `backend` | API (monolito modular) | NestJS 12 + TypeORM + PostgreSQL (Neon) + Redis (Upstash) | Render |
-| `frontend` | Dashboard web del restaurante | React 19 + Vite 8 + Tailwind CSS v4 | Vercel |
+| `backend` | API (monolito modular) | NestJS 12 + TypeORM + PostgreSQL (Neon) + Redis (Upstash) | Render (desde `develop`) |
+| `frontend` | Dashboard web del restaurante | React 19 + Vite 8 + Tailwind CSS v4 | Vercel (desde `main`) |
 | `mobile` | App del comensal | Expo SDK 57 + Expo Router + NativeWind v4 (Tailwind v3) | Expo / EAS |
 
 **Equipo y responsables:**
@@ -20,7 +20,7 @@
 | Elizabeth | Backend base, backend de mesas y de la edición del restaurante, integración y demo. Revisa los PR de backend |
 | Sebastián | Kit visual (`components/ui`), pantallas de mesas. Revisa los PR de web y mobile |
 | Santiago | Registro del restaurante (onboarding) |
-| Jacobo | Autenticación con Firebase y control de acceso; pantalla del restaurante |
+| Jacobo | Autenticación (login y control de acceso); pantalla del restaurante |
 | Sergio | Estado abierto/cerrado del restaurante y bitácora de cambios de mesas |
 
 **Sprint 1 (actual): “Restaurante operativo”.** Un restaurante puede iniciar sesión, registrar y editar sus datos, crear y administrar mesas, cambiar su estado, marcarse como abierto o cerrado y ver la bitácora, todo en el ambiente desplegado.
@@ -74,7 +74,7 @@
 
 ## 4. Seguridad
 - **Nunca leas, muestres, copies, edites ni subas archivos `.env`** ni su contenido. Si necesitas saber qué variables existen, usa `.env.example`.
-- No escribas secretos, contraseñas, tokens, llaves de Firebase ni cadenas de conexión en el código, los logs, los comentarios ni los mensajes de commit.
+- No escribas secretos, contraseñas, tokens, llaves de servicios ni cadenas de conexión en el código, los logs, los comentarios ni los mensajes de commit.
 - **Toda variable nueva va en `.env.example`** con un valor de ejemplo y un comentario, y se avisa en el PR para que la agreguen en Render, Vercel o Expo.
 - Las variables públicas (`VITE_*`, `EXPO_PUBLIC_*`) terminan dentro de la web o la app: **nunca pongas secretos en ellas**.
 - **No corras migraciones, seeds ni comandos que escriban en bases remotas** (Neon, Upstash) sin confirmación explícita de la persona.
@@ -114,7 +114,7 @@ Estos cambios rompen el trabajo de otras personas si no se comunican. Cuando los
 ---
 
 ## 8. Decisiones del equipo (no se cambian sin acordarlo)
-- **Autenticación:** Firebase Authentication (correo y contraseña; Google opcional). No hay registro público en el Sprint 1: las cuentas se crean en Firebase. El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente.
+- **Autenticación:** se propone Firebase Authentication, **pendiente de confirmar** (lo define Jacobo). No instales ni configures un proveedor de autenticación hasta que el equipo lo confirme. El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente.
 - **Estados de mesa:** Disponible, Reservada y Ocupada. *Inactiva* es una mesa desactivada, no un estado del control. “Pocas mesas” es disponibilidad del restaurante para el comensal, no un estado de mesa.
 - **Estado del restaurante:** Abierto o Cerrado.
 - **Diseño:** el manual de identidad v1.1 manda sobre cualquier otra preferencia. Un solo kit de componentes; nadie crea estilos propios.
@@ -162,7 +162,7 @@ npm run test:cov     # cobertura
 
 | Funcionalidad | Módulo | Subcarpeta sugerida | Dueño |
 |---|---|---|---|
-| Usuarios, Firebase, control de acceso por rol | `identity-access` | `users/`, `auth/` | Jacobo |
+| Usuarios, autenticación, control de acceso por rol | `identity-access` | `users/`, `auth/` | Jacobo |
 | Datos del restaurante (registro y edición) | `restaurant-operations` | `restaurants/` | Santiago (registro), Elizabeth (edición) |
 | Estado abierto/cerrado del restaurante | `restaurant-operations` | `restaurants/` (su propio archivo de servicio o controlador) | Sergio |
 | Mesas (crear, consultar, cambiar estado) | `restaurant-operations` | `tables/` | Elizabeth |
@@ -173,7 +173,7 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 
 ### Configuración y variables de entorno
 - **Nunca leas `process.env` en el código de una funcionalidad:** usa `ConfigService` (`getOrThrow` para lo obligatorio).
-- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local). Las de Firebase se agregan en la tarea de Jacobo.
+- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local). Las de autenticación se agregan en la tarea de Jacobo, cuando se confirme el proveedor.
 - `CORS_ORIGINS`: lista separada por comas, sin `/` final. **Nunca la abras a `*`.** Si un origen nuevo necesita acceso, se agrega en Render.
 
 ### Base de datos (PostgreSQL en Neon, TypeORM)
