@@ -38,6 +38,10 @@ cp .env.example .env
 Edita `.env` con los valores reales (ver siguiente sección). **Nunca subas `.env` al
 repositorio** — ya está en `.gitignore`.
 
+> ⚠️ **Sin `DEV_USER_ENABLED=true` en tu `.env`, toda ruta protegida responde `401`.**
+> Mientras llega la autenticación real (PBI 2), el usuario actual lo da el *usuario de
+> desarrollo*. Ver [sección 10](#10-usuario-de-desarrollo).
+
 ## 3. Variables de entorno
 
 Todas están documentadas con placeholders en [`.env.example`](.env.example):
@@ -48,6 +52,8 @@ Todas están documentadas con placeholders en [`.env.example`](.env.example):
 | `CORS_ORIGINS` | No (por defecto `http://localhost:5173`) | Lista de orígenes permitidos para peticiones cross-origin, separados por comas y **sin `/` final**. | La defines tú: el o los orígenes del frontend/mobile que van a consumir la API. | `http://localhost:5173,https://frontend-rose-gamma-96.vercel.app` |
 | `DATABASE_URL` | **Sí** | Cadena de conexión de PostgreSQL. | Panel de **Neon** → tu proyecto → "Connection string". | `postgresql://usuario:password@host/nombre_db?sslmode=require` |
 | `REDIS_URL` | **Sí** | Cadena de conexión de Redis. | Panel de **Upstash** → tu base de datos → "Connect" (usar la URL `rediss://...` con TLS). | `redis://default:password@host:puerto` |
+| `DEV_USER_ENABLED` | No (por defecto apagado) | Activa el usuario de desarrollo. **Solo local:** se apaga solo en Render aunque esté en `true`. | La defines tú en tu `.env`. **No la definas en Render.** | `true` |
+| `DEV_USER_ID` | Si `DEV_USER_ENABLED=true` | UUID (tabla `users`) del usuario de desarrollo por defecto. | Lo imprime `npm run seed`. | `3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f` |
 
 La app usa `ConfigService.getOrThrow()` para leer `DATABASE_URL` y `REDIS_URL`: si falta
 cualquiera de las dos, **no arranca**.
@@ -112,6 +118,11 @@ src/
 | `npm run test:watch` | Pruebas unitarias en modo watch. |
 | `npm run test:cov` | Pruebas unitarias con reporte de cobertura. |
 | `npm run test:e2e` | Pruebas e2e de la capa HTTP (prefijo, CORS, Swagger) — no requieren PostgreSQL ni Redis. |
+| `npm run seed` | Crea los datos de prueba (ver [sección 9](#9-base-de-datos-migraciones-y-datos-de-prueba)). |
+| `npm run migration:create -- src/migrations/<Nombre>` | Crea una migración vacía para escribir el SQL a mano. |
+| `npm run migration:generate -- src/migrations/<Nombre>` | Genera una migración comparando las entidades con la base. **Solo Elizabeth.** |
+| `npm run migration:run` | Aplica las migraciones pendientes. **Solo Elizabeth.** |
+| `npm run migration:revert` | Deshace la última migración. **Solo Elizabeth.** |
 
 > `npm run deploy` también existe en `package.json` (viene de `@nestjs/mau`, la plataforma
 > propia de NestJS), pero **no es lo que usamos para desplegar**: el despliegue real es vía
@@ -167,3 +178,43 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
   Vercel), hay que **actualizar `CORS_ORIGINS` en el dashboard de Render** agregando el nuevo
   origen a la lista separada por comas — de lo contrario el navegador bloqueará las peticiones
   por CORS aunque el backend esté funcionando bien.
+
+## 9. Base de datos: migraciones y datos de prueba
+
+- El esquema vigente, sus reglas y las decisiones están en [`docs/database.md`](docs/database.md).
+- **Las migraciones las corre solo Elizabeth**: en el Sprint 1 compartimos una sola base en
+  Neon. El porqué y cómo crear la tuya está en el [CLAUDE.md](CLAUDE.md) (sección 10,
+  "Migraciones").
+- **Datos de prueba:** `npm run seed` compila y crea, si no existen:
+  - un usuario **sin restaurante** (para probar el onboarding);
+  - `demo@example.com`, también sin restaurante, **reservado para la demo del Día 7: no lo uses
+    para probar**;
+  - un usuario con el restaurante **Casa 72** y 8 mesas (Disponibles, Reservadas, Ocupadas y una
+    Inactiva).
+
+  Se puede correr varias veces: no duplica nada. Al final imprime los ids de los tres usuarios
+  para usarlos en `DEV_USER_ID`. Como la base es compartida, normalmente ya están creados:
+  pide los ids en el grupo antes de correrlo. No es una migración, así que nunca llega a Render.
+
+  Después de probar un registro, el usuario de onboarding queda con restaurante. Para
+  devolverlo a su estado inicial, ver [Reiniciar los datos de prueba](docs/database.md#reiniciar-los-datos-de-prueba).
+
+## 10. Usuario de desarrollo
+
+Hasta que la autenticación real esté lista (PBI 2), el usuario actual de cada petición lo
+resuelve un usuario de desarrollo que se lee **de la base** en cada petición.
+
+- `DEV_USER_ENABLED=true` lo activa. **Sin esto, toda ruta protegida responde `401`.**
+- `DEV_USER_ID` es el UUID del usuario por defecto.
+- La cabecera `x-dev-user-id` cambia de usuario en una petición, sin reiniciar el servidor. Recibe
+  un UUID; si tiene mal formato, la respuesta es `401`:
+
+  ```bash
+  curl http://localhost:3000/v1/<ruta> -H "x-dev-user-id: 3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f"
+  ```
+
+- En Render no funciona aunque la variable esté en `true`. Al arrancar en local con el usuario
+  de desarrollo activo, Nest deja un aviso en la consola.
+- En el código: `@UseGuards(CurrentUserGuard)` y `@CurrentUser() user: CurrentUserData`,
+  importados desde `src/modules/identity-access/index.ts`. El `restaurantId` sale siempre de
+  `user`, nunca del body, query ni parámetros de ruta.

@@ -137,6 +137,8 @@ Una tarea está lista solo si:
 
 ## 10. Este repositorio: backend (NestJS)
 
+**Antes de empezar cualquier tarea, lee [`AVISOS.md`](AVISOS.md):** cambios recientes que afectan al equipo y acciones pendientes.
+
 ### Versiones (revisa antes de usar una API)
 NestJS **12**, TypeORM **1.x**, TypeScript **6**, Node **24**, Vitest **4**. Lee `package.json` y consulta https://docs.nestjs.com y https://typeorm.io para la versión instalada; no confíes en APIs de versiones anteriores.
 
@@ -177,11 +179,40 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 - `CORS_ORIGINS`: lista separada por comas, sin `/` final. **Nunca la abras a `*`.** Si un origen nuevo necesita acceso, se agrega en Render.
 
 ### Base de datos (PostgreSQL en Neon, TypeORM)
-- `synchronize: false` y `autoLoadEntities: true`. **Todo cambio de esquema va por migraciones de TypeORM.** Si todavía no existe la configuración de migraciones, no la improvises: es parte de la tarea base de Elizabeth; pregúntale.
+- `synchronize: false` y `autoLoadEntities: true`. **Todo cambio de esquema va por migraciones de TypeORM.** Cómo crearlas y correrlas: subsección "Migraciones".
 - **Nunca corras migraciones contra Neon sin confirmación.**
 - Convenciones: entidad en PascalCase singular (`Restaurant`); tabla y columnas en `snake_case`; la tabla en plural. Toda tabla con `id`, `created_at` y `updated_at`.
 - **El esquema vigente se documenta en `docs/database.md`.** Si cambias una tabla, actualízalo en el mismo PR y avisa al equipo.
 - Cada consulta de datos de un restaurante filtra por el restaurante del usuario de la sesión.
+
+### Migraciones
+**Cómo se corren**
+- `npm run migration:generate -- src/migrations/<Nombre>`: compara las entidades con la base y escribe la migración en `src/migrations/`.
+- `npm run migration:run` aplica las pendientes; `npm run migration:revert` deshace la última.
+- Los tres compilan primero (`npm run build`): el CLI de TypeORM lee de `dist/` y `migration:run` solo opera sobre `.js`.
+- **No se usa `typeorm-ts-node-esm`:** `ts-node` no está instalado y no se va a instalar. No lo propongas.
+- `src/data-source.ts` es solo para el CLI y el seed, y es el **único** archivo que lee `process.env` directo, porque vive fuera de la inyección de dependencias de Nest. Es una excepción consciente a la regla de "Configuración y variables de entorno".
+
+**Quién las corre**
+- En el Sprint 1 los cinco compartimos una sola base en Neon. Por eso **solo Elizabeth ejecuta `migration:run` y `migration:generate`.**
+- `migration:generate` compara las entidades contra el estado real de la base: si otra persona lo corre en la base compartida, la migración le sale con las tablas de los demás y ensucia el historial.
+- Los demás crean la migración con `npm run migration:create -- src/migrations/<Nombre>` y escriben el SQL a mano, o se la piden a Elizabeth.
+- Nada se corre contra Neon sin avisar (sección 4).
+
+**Cómo se agregan columnas**
+- Cada quien hace `ALTER` sobre las tablas que ya existen. **Nadie recrea una tabla ni toca columnas de otra persona.**
+- `Restaurant` la editan tres personas, cada una con su propia migración: Elizabeth dejó el mínimo (`name`), Santiago agrega categoría, dirección y horarios, y Sergio el estado abierto/cerrado.
+- `docs/database.md` se actualiza en el mismo PR que cambia el esquema.
+
+**Convenciones del esquema**
+- Llaves primarias: `@PrimaryGeneratedColumn('uuid')`, generadas con `gen_random_uuid()` (`uuidExtension: 'pgcrypto'` e `installExtensions: false` en `app.module.ts` y `data-source.ts`: la app no ejecuta `CREATE EXTENSION` al conectarse). Las FK hacia ellas son de tipo `uuid`.
+- Fechas en `timestamptz`.
+- Nombre explícito en checks, índices y restricciones únicas (`CHK_`, `UQ_`), no los hashes que genera TypeORM. Las PK y FK quedan con el nombre generado.
+- Para apuntar a una entidad de otro módulo sin importar sus carpetas internas: `@ForeignKey('NombreEntidad')` con el nombre en texto, no `@ManyToOne`.
+
+**Advertencia: índice escrito a mano**
+- `UQ_tables_restaurant_id_identifier` está sobre `(restaurant_id, lower(trim(identifier)))` y vive escrito a mano en la migración `CreateInitialTables`, porque `@Index` no acepta expresiones.
+- Por eso la entidad `Table` lo declara con `{ synchronize: false }`. **No quites esa línea:** si falta, el próximo `migration:generate` genera un `DROP INDEX` y se pierde la regla de identificadores únicos sin que nadie lo note.
 
 ### Redis (Upstash)
 Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDIS_CLIENT`. No se usa en el Sprint 1 salvo que una tarea lo pida.
