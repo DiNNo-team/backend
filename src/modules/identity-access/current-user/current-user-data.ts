@@ -1,6 +1,6 @@
 export interface CurrentUserData {
-  userId: number;
+  userId: string;
   // null: the user has not registered a restaurant yet (onboarding).
-  restaurantId: number | null;
+  restaurantId: string | null;
   role: string;
 }

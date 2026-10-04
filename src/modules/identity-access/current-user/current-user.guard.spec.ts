@@ -15,7 +15,7 @@ function contextFor(request: RequestWithCurrentUser): ExecutionContext {
 describe('CurrentUserGuard', () => {
   it('stores the resolved user on the request', async () => {
     const currentUser: CurrentUserData = {
-      userId: 2,
+      userId: '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718',
       restaurantId: null,
       role: 'restaurant_admin',
     };

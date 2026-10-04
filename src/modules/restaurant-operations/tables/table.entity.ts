@@ -19,12 +19,12 @@ export type TableStatus = 'available' | 'reserved' | 'occupied';
 @Check('CHK_tables_capacity', '"capacity" BETWEEN 1 AND 20')
 @Check('CHK_tables_status', `"status" IN ('available', 'reserved', 'occupied')`)
 export class Table {
-  @PrimaryGeneratedColumn('identity', { generatedIdentity: 'BY DEFAULT' })
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  @Column({ name: 'restaurant_id', type: 'int' })
+  @Column({ name: 'restaurant_id', type: 'uuid' })
   @ForeignKey(() => Restaurant)
-  restaurantId: number;
+  restaurantId: string;
 
   @Column({ type: 'varchar', length: 50 })
   identifier: string;

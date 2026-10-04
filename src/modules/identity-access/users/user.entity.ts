@@ -11,8 +11,8 @@ import {
 @Entity({ name: 'users' })
 @Unique('UQ_users_email', ['email'])
 export class User {
-  @PrimaryGeneratedColumn('identity', { generatedIdentity: 'BY DEFAULT' })
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({ type: 'varchar', length: 255 })
   email: string;
@@ -21,9 +21,9 @@ export class User {
   role: string;
 
   // String target: restaurant-operations does not export its entity class.
-  @Column({ name: 'restaurant_id', type: 'int', nullable: true })
+  @Column({ name: 'restaurant_id', type: 'uuid', nullable: true })
   @ForeignKey('Restaurant')
-  restaurantId: number | null;
+  restaurantId: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

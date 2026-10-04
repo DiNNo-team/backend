@@ -14,6 +14,9 @@ import { CurrentUserResolver } from './current-user.resolver.js';
 
 export const DEV_USER_HEADER = 'x-dev-user-id';
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 // Development-only user, until the real authentication (PBI 2) replaces it.
 @Injectable()
 export class DevUserResolver
@@ -78,11 +81,12 @@ export class DevUserResolver
     };
   }
 
-  private parseUserId(value: string | string[] | undefined): number {
-    const userId = typeof value === 'string' ? Number(value.trim()) : NaN;
-    if (!Number.isSafeInteger(userId) || userId <= 0) {
+  // Validated before querying: Postgres rejects a malformed uuid with a 500.
+  private parseUserId(value: string | string[] | undefined): string {
+    const userId = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (!UUID_PATTERN.test(userId)) {
       throw new UnauthorizedException(
-        `No se pudo identificar el usuario de desarrollo. Define DEV_USER_ID o envía la cabecera ${DEV_USER_HEADER} con un id numérico.`,
+        `No se pudo identificar el usuario de desarrollo. Define DEV_USER_ID o envía la cabecera ${DEV_USER_HEADER} con un UUID válido (por ejemplo, 3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f).`,
       );
     }
     return userId;

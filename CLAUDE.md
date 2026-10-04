@@ -137,6 +137,8 @@ Una tarea está lista solo si:
 
 ## 10. Este repositorio: backend (NestJS)
 
+**Antes de empezar cualquier tarea, lee [`AVISOS.md`](AVISOS.md):** cambios recientes que afectan al equipo y acciones pendientes.
+
 ### Versiones (revisa antes de usar una API)
 NestJS **12**, TypeORM **1.x**, TypeScript **6**, Node **24**, Vitest **4**. Lee `package.json` y consulta https://docs.nestjs.com y https://typeorm.io para la versión instalada; no confíes en APIs de versiones anteriores.
 
@@ -189,7 +191,7 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 - `npm run migration:run` aplica las pendientes; `npm run migration:revert` deshace la última.
 - Los tres compilan primero (`npm run build`): el CLI de TypeORM lee de `dist/` y `migration:run` solo opera sobre `.js`.
 - **No se usa `typeorm-ts-node-esm`:** `ts-node` no está instalado y no se va a instalar. No lo propongas.
-- `src/data-source.ts` es solo para el CLI y es el **único** archivo que lee `process.env` directo, porque vive fuera de la inyección de dependencias de Nest. Es una excepción consciente a la regla de "Configuración y variables de entorno".
+- `src/data-source.ts` es solo para el CLI y el seed, y es el **único** archivo que lee `process.env` directo, porque vive fuera de la inyección de dependencias de Nest. Es una excepción consciente a la regla de "Configuración y variables de entorno".
 
 **Quién las corre**
 - En el Sprint 1 los cinco compartimos una sola base en Neon. Por eso **solo Elizabeth ejecuta `migration:run` y `migration:generate`.**
@@ -203,7 +205,7 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 - `docs/database.md` se actualiza en el mismo PR que cambia el esquema.
 
 **Convenciones del esquema**
-- Llaves primarias: `@PrimaryGeneratedColumn('identity', { generatedIdentity: 'BY DEFAULT' })`. No `SERIAL`, que es la forma heredada de Postgres.
+- Llaves primarias: `@PrimaryGeneratedColumn('uuid')`, generadas con `gen_random_uuid()` (`uuidExtension: 'pgcrypto'` e `installExtensions: false` en `app.module.ts` y `data-source.ts`: la app no ejecuta `CREATE EXTENSION` al conectarse). Las FK hacia ellas son de tipo `uuid`.
 - Fechas en `timestamptz`.
 - Nombre explícito en checks, índices y restricciones únicas (`CHK_`, `UQ_`), no los hashes que genera TypeORM. Las PK y FK quedan con el nombre generado.
 - Para apuntar a una entidad de otro módulo sin importar sus carpetas internas: `@ForeignKey('NombreEntidad')` con el nombre en texto, no `@ManyToOne`.
