@@ -36,6 +36,8 @@ import {
 import {
   RESTAURANT_REQUIRED_CODE,
   RESTAURANT_REQUIRED_MESSAGE,
+} from '../shared/restaurant-required.js';
+import {
   TABLE_INACTIVE_MESSAGE,
   TABLE_NOT_FOUND_MESSAGE,
   TablesService,

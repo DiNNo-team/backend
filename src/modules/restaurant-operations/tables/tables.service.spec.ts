@@ -3,10 +3,8 @@ import { QueryFailedError, type Repository } from 'typeorm';
 import type { CreateTableDto } from './dto/create-table.dto.js';
 import type { Table } from './table.entity.js';
 import type { TableStatusLog } from './table-status-log.js';
-import {
-  RESTAURANT_REQUIRED_MESSAGE,
-  TablesService,
-} from './tables.service.js';
+import { RESTAURANT_REQUIRED_MESSAGE } from '../shared/restaurant-required.js';
+import { TablesService } from './tables.service.js';
 
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const OTHER_RESTAURANT_ID = '1d2c3b4a-5f6e-4d7c-8b9a-0a1b2c3d4e5f';

@@ -38,10 +38,9 @@ class ProbeController {
 
   @Get('forbidden')
   forbidden(): never {
-    throw new ForbiddenException(
-      'Primero registra tu restaurante para poder usar tus mesas.',
-      { errorCode: 'RESTAURANT_REQUIRED' },
-    );
+    throw new ForbiddenException('Primero registra tu restaurante.', {
+      errorCode: 'RESTAURANT_REQUIRED',
+    });
   }
 
   @Post('validate')
@@ -120,7 +119,7 @@ describe('Unhandled errors (e2e)', () => {
 
     expect(res.body).toEqual({
       statusCode: 403,
-      message: 'Primero registra tu restaurante para poder usar tus mesas.',
+      message: 'Primero registra tu restaurante.',
       error: 'Forbidden',
       errorCode: 'RESTAURANT_REQUIRED',
     });

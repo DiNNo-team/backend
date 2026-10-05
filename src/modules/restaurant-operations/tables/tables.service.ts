@@ -1,12 +1,12 @@
 import {
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import type { CurrentUserData } from '../../identity-access/index.js';
+import { requireRestaurant } from '../shared/restaurant-required.js';
 import type { CreateTableDto } from './dto/create-table.dto.js';
 import { Table, type TableStatus } from './table.entity.js';
 import { TableStatusLog } from './table-status-log.js';
@@ -14,9 +14,6 @@ import { TableStatusLog } from './table-status-log.js';
 const UNIQUE_VIOLATION = '23505';
 const UNIQUE_IDENTIFIER_INDEX = 'UQ_tables_restaurant_id_identifier';
 
-export const RESTAURANT_REQUIRED_MESSAGE =
-  'Primero registra tu restaurante para poder usar tus mesas.';
-export const RESTAURANT_REQUIRED_CODE = 'RESTAURANT_REQUIRED';
 // Same text for a missing table and another restaurant's table: never reveal
 // that a table of another restaurant exists.
 export const TABLE_NOT_FOUND_MESSAGE =
@@ -35,7 +32,7 @@ export class TablesService {
     restaurantId: string | null,
     dto: CreateTableDto,
   ): Promise<Table> {
-    const ownerId = this.requireRestaurant(restaurantId);
+    const ownerId = requireRestaurant(restaurantId);
     const identifier = dto.identifier.trim();
     // Explicit fields: nothing else from the request reaches the entity.
     const table = this.tables.create({
@@ -59,7 +56,7 @@ export class TablesService {
   }
 
   async findAll(restaurantId: string | null): Promise<Table[]> {
-    const ownerId = this.requireRestaurant(restaurantId);
+    const ownerId = requireRestaurant(restaurantId);
     // created_at, not identifier: by text "Mesa 10" would sort before "Mesa 2".
     // id breaks ties so rows created in the same instant keep a stable order.
     return this.tables.find({
@@ -75,7 +72,7 @@ export class TablesService {
     tableId: string,
     status: TableStatus,
   ): Promise<Table> {
-    const ownerId = this.requireRestaurant(user.restaurantId);
+    const ownerId = requireRestaurant(user.restaurantId);
 
     return this.tables.manager.transaction(async (manager) => {
       // Row lock: concurrent changes to the same table queue up, so each log
@@ -111,16 +108,6 @@ export class TablesService {
       );
       return saved;
     });
-  }
-
-  private requireRestaurant(restaurantId: string | null): string {
-    if (!restaurantId) {
-      // errorCode lets the front tell this 403 apart and send the user to sign-up.
-      throw new ForbiddenException(RESTAURANT_REQUIRED_MESSAGE, {
-        errorCode: RESTAURANT_REQUIRED_CODE,
-      });
-    }
-    return restaurantId;
   }
 }
 

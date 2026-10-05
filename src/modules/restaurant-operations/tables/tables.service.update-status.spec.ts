@@ -7,8 +7,8 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { CurrentUserData } from '../../identity-access/index.js';
 import { Table, type TableStatus } from './table.entity.js';
 import type { TableStatusChange, TableStatusLog } from './table-status-log.js';
+import { RESTAURANT_REQUIRED_CODE } from '../shared/restaurant-required.js';
 import {
-  RESTAURANT_REQUIRED_CODE,
   TABLE_INACTIVE_MESSAGE,
   TABLE_NOT_FOUND_MESSAGE,
   TablesService,

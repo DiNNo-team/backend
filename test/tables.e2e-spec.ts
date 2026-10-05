@@ -21,7 +21,7 @@ const TABLE_ID = '3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f';
 const RESTAURANT_REQUIRED_BODY = {
   statusCode: 403,
   error: 'Forbidden',
-  message: 'Primero registra tu restaurante para poder usar tus mesas.',
+  message: 'Primero registra tu restaurante.',
   errorCode: 'RESTAURANT_REQUIRED',
 };
 
