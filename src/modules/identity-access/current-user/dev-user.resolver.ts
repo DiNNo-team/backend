@@ -60,7 +60,7 @@ export class DevUserResolver
   async resolve(request: Request): Promise<CurrentUserData> {
     if (!this.enabled) {
       throw new UnauthorizedException(
-        'No hay una sesión activa. Inicia sesión para continuar.',
+        'Tu sesión terminó. Inicia sesión de nuevo.',
       );
     }
 
