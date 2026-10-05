@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { QueryFailedError, type Repository } from 'typeorm';
 import type { CreateTableDto } from './dto/create-table.dto.js';
 import type { Table } from './table.entity.js';
+import type { TableStatusLog } from './table-status-log.js';
 import {
   RESTAURANT_REQUIRED_MESSAGE,
   TablesService,
@@ -32,7 +33,10 @@ function createService() {
     ),
     find: vi.fn(() => Promise.resolve([] as Table[])),
   };
-  const service = new TablesService(tables as unknown as Repository<Table>);
+  const service = new TablesService(
+    tables as unknown as Repository<Table>,
+    { record: vi.fn() } as unknown as TableStatusLog,
+  );
   return { service, tables };
 }
 

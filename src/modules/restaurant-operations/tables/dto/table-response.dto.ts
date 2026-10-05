@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { Table, TableStatus } from '../table.entity.js';
-
-const TABLE_STATUSES: TableStatus[] = ['available', 'reserved', 'occupied'];
+import {
+  TABLE_STATUSES,
+  type Table,
+  type TableStatus,
+} from '../table.entity.js';
 
 export class TableResponseDto {
   @ApiProperty({

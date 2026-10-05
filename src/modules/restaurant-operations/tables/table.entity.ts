@@ -10,7 +10,8 @@ import {
 } from 'typeorm';
 import { Restaurant } from '../restaurants/restaurant.entity.js';
 
-export type TableStatus = 'available' | 'reserved' | 'occupied';
+export const TABLE_STATUSES = ['available', 'reserved', 'occupied'] as const;
+export type TableStatus = (typeof TABLE_STATUSES)[number];
 
 @Entity({ name: 'tables' })
 // Unique on (restaurant_id, lower(trim(identifier))). TypeORM cannot express

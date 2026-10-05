@@ -1,11 +1,23 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -18,10 +30,28 @@ import {
 import { CAPACITY_RANGE, CreateTableDto } from './dto/create-table.dto.js';
 import { TableResponseDto } from './dto/table-response.dto.js';
 import {
+  STATUS_INVALID,
+  UpdateTableStatusDto,
+} from './dto/update-table-status.dto.js';
+import {
   RESTAURANT_REQUIRED_CODE,
   RESTAURANT_REQUIRED_MESSAGE,
+  TABLE_INACTIVE_MESSAGE,
+  TABLE_NOT_FOUND_MESSAGE,
   TablesService,
 } from './tables.service.js';
+
+const TABLE_ID_INVALID = 'El id de la mesa no es un UUID válido.';
+
+// :id of every /tables/:id route. Checked before the query: Postgres rejects a
+// malformed uuid with a 500. A list, like the other validation 400s.
+const TableIdParam = () =>
+  Param(
+    'id',
+    new ParseUUIDPipe({
+      exceptionFactory: () => new BadRequestException([TABLE_ID_INVALID]),
+    }),
+  );
 
 @ApiTags('tables')
 @ApiUnauthorizedResponse({
@@ -90,5 +120,56 @@ export class TablesController {
   ): Promise<TableResponseDto[]> {
     const tables = await this.tablesService.findAll(user.restaurantId);
     return tables.map((table) => TableResponseDto.fromEntity(table));
+  }
+
+  @Patch(':id/status')
+  @ApiOperation({
+    summary: 'Cambiar el estado de una mesa',
+    description:
+      'Cambia el estado de una mesa activa del restaurante del usuario a Disponible, Reservada u Ocupada, y lo registra en la bitácora en la misma transacción: si la bitácora falla, el estado no cambia. Poner el estado que la mesa ya tiene es válido: responde 200 con la mesa sin cambios y no se registra en la bitácora (sirve para un "Deshacer" sin errores).',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Id de la mesa.' })
+  @ApiOkResponse({
+    description:
+      'Mesa con su estado nuevo. También responde 200 si el estado pedido es el que ya tenía.',
+    type: TableResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'El estado no es available, reserved ni occupied, falta, o el id no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [STATUS_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse({
+    description:
+      'La mesa no existe o es de otro restaurante (mismo mensaje en los dos casos). Conviene recargar la lista de mesas.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: TABLE_NOT_FOUND_MESSAGE,
+      error: 'Not Found',
+    },
+  })
+  @ApiConflictResponse({
+    description:
+      'La mesa está inactiva (isActive: false): una mesa desactivada no cambia de estado.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 409,
+      message: TABLE_INACTIVE_MESSAGE,
+      error: 'Conflict',
+    },
+  })
+  async updateStatus(
+    @CurrentUser() user: CurrentUserData,
+    @TableIdParam() id: string,
+    @Body() dto: UpdateTableStatusDto,
+  ): Promise<TableResponseDto> {
+    const table = await this.tablesService.updateStatus(user, id, dto.status);
+    return TableResponseDto.fromEntity(table);
   }
 }

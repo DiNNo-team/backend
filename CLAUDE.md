@@ -147,13 +147,14 @@ NestJS **12**, TypeORM **1.x**, TypeScript **6**, Node **24**, Vitest **4**. Lee
 npm install          # siempre primero, y después de cada pull
 npm run start:dev    # servidor en modo desarrollo (http://localhost:3000)
 npm run build        # compila a dist/
-npm run lint         # oxlint sobre src/ y test/
+npm run lint         # oxlint sobre src/ y test/ (no revisa tipos)
+npm run typecheck    # tsc --noEmit con el tsconfig.json raíz: revisa tipos también en pruebas y test/, que el build excluye
 npm run format       # prettier (comillas simples, trailing commas)
 npm run test         # pruebas unitarias (Vitest)
 npm run test:e2e     # pruebas e2e de la capa HTTP (no requieren base de datos)
 npm run test:cov     # cobertura
 ```
-**Antes de dar una tarea por terminada:** `npm run lint`, `npm run test` y `npm run build` sin errores.
+**Antes de dar una tarea por terminada:** `npm run lint`, `npm run typecheck`, `npm run test` y `npm run build` sin errores.
 
 ### Arquitectura: monolito modular
 - El código de negocio vive en `src/modules/<dominio>/`, un módulo por dominio, registrado en `src/app.module.ts`.

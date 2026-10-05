@@ -106,7 +106,10 @@ describe('DevUserResolver', () => {
     expect(users.findOneBy).not.toHaveBeenCalled();
   });
 
-  it.each([{ RENDER: 'true' }, { NODE_ENV: 'production' }])(
+  it.each<Record<string, string>>([
+    { RENDER: 'true' },
+    { NODE_ENV: 'production' },
+  ])(
     'rejects in a deployed environment even if enabled (%o)',
     async (deployedEnv) => {
       const { resolver } = createResolver({ ...devEnv, ...deployedEnv });
