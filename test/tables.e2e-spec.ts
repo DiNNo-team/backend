@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -10,6 +10,7 @@ import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
@@ -50,16 +51,34 @@ describe('Tables (e2e)', () => {
     create: ReturnType<typeof vi.fn>;
     save: ReturnType<typeof vi.fn>;
     find: ReturnType<typeof vi.fn>;
+    manager: { transaction: ReturnType<typeof vi.fn> };
   };
+  // What the status change sees inside its transaction.
+  let txManager: {
+    findOne: ReturnType<typeof vi.fn>;
+    save: ReturnType<typeof vi.fn>;
+  };
+  let statusLog: { record: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    txManager = {
+      findOne: vi.fn(() => Promise.resolve(storedTable({}))),
+      save: vi.fn((table: Table) => Promise.resolve({ ...table })),
+    };
     tables = {
       create: vi.fn((data: Partial<Table>) => ({ ...data })),
       save: vi.fn((table: Partial<Table>) =>
         Promise.resolve(storedTable({ ...table })),
       ),
       find: vi.fn(() => Promise.resolve([])),
+      manager: {
+        transaction: vi.fn(
+          (work: (manager: typeof txManager) => Promise<unknown>) =>
+            work(txManager),
+        ),
+      },
     };
+    statusLog = { record: vi.fn(() => Promise.resolve()) };
 
     const moduleFixture = await Test.createTestingModule({
       imports: [
@@ -80,6 +99,8 @@ describe('Tables (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(Table))
       .useValue(tables)
+      .overrideProvider(TableStatusLog)
+      .useValue(statusLog)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -236,7 +257,156 @@ describe('Tables (e2e)', () => {
     });
   });
 
-  it('documents both routes in Swagger', async () => {
+  describe('PATCH /v1/tables/:id/status', () => {
+    const statusUrl = (id: string) => '/v1/tables/' + id + '/status';
+
+    it('returns 200 with the updated table', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(statusUrl(TABLE_ID))
+        .send({ status: 'occupied' })
+        .expect(200);
+
+      expect(res.body).toEqual({
+        id: TABLE_ID,
+        identifier: 'Mesa 1',
+        capacity: 4,
+        status: 'occupied',
+        isActive: true,
+      });
+      expect(txManager.findOne).toHaveBeenCalledWith(Table, {
+        where: { id: TABLE_ID, restaurantId: RESTAURANT_ID },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(statusLog.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableId: TABLE_ID,
+          previousStatus: 'available',
+          newStatus: 'occupied',
+          userId: OWNER_ID,
+        }),
+        txManager,
+      );
+    });
+
+    it('returns 200 when the status is the one it already has', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(statusUrl(TABLE_ID))
+        .send({ status: 'available' })
+        .expect(200);
+
+      expect(res.body.status).toBe('available');
+      expect(statusLog.record).not.toHaveBeenCalled();
+    });
+
+    it.each([['inactive'], ['Ocupada'], [''], [null]])(
+      'returns 400 for status %j',
+      async (status) => {
+        const res = await request(app.getHttpServer())
+          .patch(statusUrl(TABLE_ID))
+          .send({ status })
+          .expect(400);
+
+        expect(res.body).toEqual({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: [
+            'Elige un estado para la mesa: Disponible, Reservada u Ocupada.',
+          ],
+        });
+        expect(tables.manager.transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('returns 400 when isActive or other fields come in the body', async () => {
+      await request(app.getHttpServer())
+        .patch(statusUrl(TABLE_ID))
+        .send({ status: 'occupied', isActive: true })
+        .expect(400);
+      expect(tables.manager.transaction).not.toHaveBeenCalled();
+    });
+
+    it.each(['abc', '123', TABLE_ID + 'x'])(
+      'returns 400, not 500, for a malformed id (%s)',
+      async (id) => {
+        const res = await request(app.getHttpServer())
+          .patch(statusUrl(id))
+          .send({ status: 'occupied' })
+          .expect(400);
+
+        expect(res.body).toEqual({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: ['El id de la mesa no es un UUID válido.'],
+        });
+        expect(tables.manager.transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('returns 404 when the table is not found in the user restaurant', async () => {
+      txManager.findOne.mockResolvedValueOnce(null);
+
+      const res = await request(app.getHttpServer())
+        .patch(statusUrl(TABLE_ID))
+        .send({ status: 'occupied' })
+        .expect(404);
+
+      expect(res.body).toEqual({
+        statusCode: 404,
+        error: 'Not Found',
+        message:
+          'No encontramos esta mesa. Actualiza la lista de mesas e intenta de nuevo.',
+      });
+    });
+
+    it('returns 409 for an inactive table', async () => {
+      txManager.findOne.mockResolvedValueOnce(storedTable({ isActive: false }));
+
+      const res = await request(app.getHttpServer())
+        .patch(statusUrl(TABLE_ID))
+        .send({ status: 'occupied' })
+        .expect(409);
+
+      expect(res.body).toEqual({
+        statusCode: 409,
+        error: 'Conflict',
+        message: 'Esta mesa está inactiva. Reactívala para cambiar su estado.',
+      });
+      expect(statusLog.record).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 with errorCode RESTAURANT_REQUIRED for a user without a restaurant', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(statusUrl(TABLE_ID))
+        .set('x-dev-user-id', NEWCOMER_ID)
+        .send({ status: 'occupied' })
+        .expect(403);
+
+      expect(res.body).toEqual(RESTAURANT_REQUIRED_BODY);
+      expect(tables.manager.transaction).not.toHaveBeenCalled();
+    });
+
+    it('answers the Spanish 500 when the log fails, without its detail', async () => {
+      const silenced = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      statusLog.record.mockRejectedValueOnce(
+        new Error('insert into table_logs failed'),
+      );
+
+      const res = await request(app.getHttpServer())
+        .patch(statusUrl(TABLE_ID))
+        .send({ status: 'occupied' })
+        .expect(500);
+
+      expect(res.body.message).toBe(
+        'No pudimos completar la acción. Intenta de nuevo en un momento.',
+      );
+      expect(res.text).not.toContain('table_logs');
+      silenced.mockRestore();
+    });
+  });
+
+  it('documents the routes in Swagger', async () => {
     const res = await request(app.getHttpServer())
       .get('/docs-json')
       .expect(200);
@@ -254,6 +424,18 @@ describe('Tables (e2e)', () => {
       '401',
       '403',
     ]);
+    const statusRoute = res.body.paths['/v1/tables/{id}/status'].patch;
+    expect(Object.keys(statusRoute.responses).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+      '404',
+      '409',
+    ]);
+    expect(
+      Object.keys(res.body.components.schemas.UpdateTableStatusDto.properties),
+    ).toEqual(['status']);
     expect(
       Object.keys(res.body.components.schemas.CreateTableDto.properties),
     ).toEqual(['identifier', 'capacity']);
