@@ -158,7 +158,8 @@ npm run test:cov     # cobertura
 ### Arquitectura: monolito modular
 - El código de negocio vive en `src/modules/<dominio>/`, un módulo por dominio, registrado en `src/app.module.ts`.
 - Cada módulo es dueño de sus controladores, servicios, entidades y DTOs. **Entre módulos solo se usan los providers que el otro módulo exporta**; nunca se importa desde las carpetas internas de otro módulo.
-- La configuración global (ConfigModule, TypeORM, Redis) vive en `src/app.module.ts` y `src/config/`. La configuración HTTP (prefijo, CORS, Swagger) vive en `src/app.setup.ts`.
+- **`src/common/`** es para lo que de verdad usan varios módulos y no pertenece a ningún dominio (por ejemplo `common/dto/error-response.dto.ts`, la forma de error de toda la API). Nada de lógica de negocio ni entidades: si algo solo lo usa un módulo, o es de un dominio, va en ese módulo.
+- La configuración global (ConfigModule, TypeORM, Redis) vive en `src/app.module.ts` y `src/config/`. La configuración HTTP (prefijo, CORS, validación, filtro de errores, Swagger) vive en `src/app.setup.ts`.
 
 **Dónde va cada cosa del Sprint 1:**
 
@@ -221,8 +222,10 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - Todas las rutas bajo **`/v1`** (definido en `app.setup.ts`). Health check: `GET /v1/health`.
 - **Swagger en `/docs`** (fuera del prefijo `/v1`). Toda ruta nueva queda documentada con sus DTOs y respuestas: es el contrato con web y mobile.
 - Rutas en inglés, sustantivos en plural y `kebab-case` (por ejemplo `/v1/restaurants/me`, `/v1/tables/:id/status`).
-- **Toda entrada se valida en el backend**, aunque la web también valide. Si el proyecto todavía no tiene una librería de validación, pregunta a Elizabeth antes de instalar una.
+- **Toda entrada se valida en el backend**, aunque la web también valide, con `class-validator` y `class-transformer`: decoradores sobre el DTO, cada uno con su `message` en español que diga cómo corregir. El `ValidationPipe` es global (en `app.setup.ts`, con `whitelist`, `forbidNonWhitelisted` y `transform`): **cualquier campo que no esté en el DTO se rechaza con 400**, en todos los endpoints.
 - Errores con las excepciones HTTP de Nest (`BadRequestException`, `NotFoundException`, `ForbiddenException`…) y un mensaje claro. Nunca se devuelve un error interno, una consulta SQL ni un stack trace.
+- Forma de los errores: `{ statusCode, message, error }` y, a veces, `errorCode` (`src/common/dto/error-response.dto.ts`). **Lleva `errorCode` el error donde el front tiene que ramificar según el motivo; los demás no lo llevan.** Hoy solo `RESTAURANT_REQUIRED` (403 del usuario sin restaurante). Se usa la opción nativa de Nest 12 (`HttpExceptionOptions.errorCode`): `new ForbiddenException(mensaje, { errorCode: '...' })`. No se arma el cuerpo a mano ni se crea un campo propio.
+- **Un error no controlado** (no es una excepción HTTP: se cae la base, un bug) responde `500` con la forma de Nest y el mensaje en español "No pudimos completar la acción. Intenta de nuevo en un momento.", sin `errorCode`. El detalle real (mensaje, stack) **solo va al log del servidor, nunca al cliente**. Lo hace el filtro global `src/common/filters/unhandled-exception.filter.ts`, registrado en `app.setup.ts`: nadie monta su propio manejo de errores genéricos, y las excepciones HTTP que lanzamos pasan sin cambios.
 - No cambies la forma de una respuesta existente sin avisar (sección 7).
 
 ### Pruebas
