@@ -28,11 +28,34 @@ describe('HTTP (e2e)', () => {
     await app.init();
   });
 
-  it('/v1/health (GET)', () => {
+  it('/v1/health (GET) answers commit null where RENDER_GIT_COMMIT is not set', () => {
     return request(app.getHttpServer())
       .get('/v1/health')
       .expect(200)
-      .expect({ status: 'ok' });
+      .expect({ status: 'ok', commit: null });
+  });
+
+  it('/v1/health (GET) answers the deployed commit on Render', async () => {
+    const commit = '2ad0fcd4b1e8c9a7f3d2e1b0c9a8f7e6d5c4b3a2';
+    const moduleFixture = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          ignoreEnvFile: true,
+          load: [() => ({ RENDER_GIT_COMMIT: commit })],
+        }),
+      ],
+      controllers: [AppController],
+      providers: [AppService],
+    }).compile();
+    const renderApp = moduleFixture.createNestApplication();
+    configureApp(renderApp);
+    await renderApp.init();
+
+    await request(renderApp.getHttpServer())
+      .get('/v1/health')
+      .expect(200)
+      .expect({ status: 'ok', commit });
+    await renderApp.close();
   });
 
   it('allows the configured CORS origin', () => {
@@ -50,7 +73,9 @@ describe('HTTP (e2e)', () => {
   });
 
   it('/docs-json exposes the OpenAPI document', async () => {
-    const res = await request(app.getHttpServer()).get('/docs-json').expect(200);
+    const res = await request(app.getHttpServer())
+      .get('/docs-json')
+      .expect(200);
     expect(res.body.paths).toHaveProperty('/v1/health');
   });
 
