@@ -5,6 +5,8 @@ Cómo crear y correr migraciones, y quién las corre: sección 10 del [CLAUDE.md
 
 Última migración aplicada: `1791092320241-CreateInitialTables`.
 
+> **Pendiente de aplicar por Elizabeth:** `1791250327133-AddRestaurantProfile` (Santiago, PBI 3). Agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`. Lo que se documenta abajo de esa migración no existe en Neon hasta que se aplique. **Se aplica antes de fusionar el PR:** si el código se despliega primero, las consultas de restaurantes fallan porque piden columnas que todavía no existen.
+
 ## Tablas
 
 Todas las tablas tienen `id`, `created_at` y `updated_at`:
@@ -20,6 +22,24 @@ Todas las tablas tienen `id`, `created_at` y `updated_at`:
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `name` | `varchar(120)` | NOT NULL |
+| `category` | `varchar(50)` | NULL. Solo uno de los valores de la lista de categorías (`CHK_restaurants_category`); ver "Decisiones" |
+| `address` | `varchar(255)` | NULL |
+
+### `restaurant_schedules` · entidad `RestaurantSchedule`
+
+Horario de atención: una fila por cada día que el restaurante **abre**. Un día cerrado no tiene fila.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` |
+| `day_of_week` | `smallint` | NOT NULL, de 1 a 7: 1 = lunes … 7 = domingo (`CHK_restaurant_schedules_day_of_week`) |
+| `is_open_24h` | `boolean` | NOT NULL, por defecto `false` |
+| `opens_at` | `time` | NULL. Hora de apertura, sin zona horaria |
+| `closes_at` | `time` | NULL. Hora de cierre, sin zona horaria |
+
+- Un solo horario por día y restaurante (`UQ_restaurant_schedules_restaurant_id_day_of_week`, sobre `(restaurant_id, day_of_week)`). Como empieza por `restaurant_id`, también sirve de índice para buscar los horarios de un restaurante.
+- `CHK_restaurant_schedules_hours`: o `is_open_24h = true` sin horas, o `is_open_24h = false` con las dos horas y distintas entre sí.
+- La numeración de días es la de ISO 8601, la misma que da Postgres con `EXTRACT(ISODOW FROM ...)`.
 
 ### `users` · entidad `User`
 
@@ -48,7 +68,8 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 
 | Tabla | Dueño | Qué agrega (cada uno con su propia migración de `ALTER`) |
 |---|---|---|
-| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: categoría, dirección y horarios. Sergio: estado abierto/cerrado |
+| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: estado abierto/cerrado |
+| `restaurant_schedules` | Santiago | Tabla nueva para los horarios del restaurante |
 | `users` | Elizabeth (esquema base) | Jacobo: lo que necesite para enlazar con Firebase |
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
 | `table_logs` (aún no existe) | Sergio | Tabla nueva para la bitácora de cambios de mesas |
@@ -62,6 +83,26 @@ Nadie recrea una tabla ni toca columnas de otra persona.
 - **`is_active` separado de `status`:** Inactiva es una mesa desactivada, no un estado del control (CLAUDE.md, sección 8).
 - **Índice único sobre `lower(trim(identifier))` escrito a mano:** "Mesa 04", "mesa 04" y "Mesa 04 " son la misma mesa; `@Index` no acepta expresiones, así que vive en la migración y la entidad lo declara con `synchronize: false` (no quitarlo).
 - **Restricciones únicas, checks e índices con nombre explícito; PK y FK con el nombre generado:** el backend identifica qué restricción falló (error `23505`) por su nombre.
+- **Categorías del restaurante** (`category`, constante `RESTAURANT_CATEGORIES` en `restaurant.entity.ts`). El valor en inglés va en la base y en la API; el texto en español, en la interfaz:
+
+  | Valor | Texto |
+  |---|---|
+  | `colombian` | Colombiana |
+  | `italian` | Italiana |
+  | `mexican` | Mexicana |
+  | `asian` | Asiática |
+  | `grill` | Parrilla |
+  | `fast_food` | Comida rápida |
+  | `healthy` | Saludable |
+  | `seafood` | Mariscos |
+  | `cafe` | Cafetería |
+  | `other` | Otra |
+
+  Como `status` en `tables`, es `varchar` con check y no `enum` de Postgres. **Para agregar o quitar una categoría hace falta una migración escrita a mano** que borre y vuelva a crear `CHK_restaurants_category`: TypeORM compara los checks solo por su nombre, así que `migration:generate` no detecta que cambió la lista.
+- **`category` y `address` son NULL en la base a propósito:** ya hay restaurantes creados solo con nombre (el del seed, y `src/seed.ts` sigue creándolos así). Que sean obligatorios lo impone el endpoint de registro, no la base. No tienen valor por defecto.
+- **Un día cerrado es un día sin fila** en `restaurant_schedules`; no hay columna de "cerrado".
+- **"Abierto 24 horas" es explícito, con `is_open_24h = true`** y sin horas. Una apertura igual al cierre no es válida, para que "24 horas" no tenga dos formas de escribirse.
+- **Un cierre menor que la apertura significa que cierra al día siguiente** (por ejemplo, abre a las 18:00 y cierra a las 02:00). Por eso no hay un check `closes_at > opens_at`.
 
 ## Reiniciar los datos de prueba
 
