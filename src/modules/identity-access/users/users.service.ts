@@ -26,7 +26,12 @@ export class UsersService {
   }
 
   create(input: CreateUserInput): Promise<User> {
-    const user = this.usersRepository.create(input);
+    const user = this.usersRepository.create({
+      email: input.email,
+      firebaseUid: input.firebaseUid,
+      role: input.role,
+      restaurantId: input.restaurantId,
+    });
     return this.usersRepository.save(user);
   }
 }

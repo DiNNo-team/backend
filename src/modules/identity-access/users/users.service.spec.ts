@@ -102,5 +102,29 @@ describe('UsersService', () => {
 
       await expect(usersService.create(input)).rejects.toBe(error);
     });
+
+    it('does not persist unexpected input fields', async () => {
+      const input = {
+        firebaseUid: 'firebase-uid',
+        email: 'owner@example.com',
+        role: 'restaurant',
+        restaurantId: null,
+        unexpected: 'must not be persisted',
+      };
+      const persistedFields = {
+        firebaseUid: input.firebaseUid,
+        email: input.email,
+        role: input.role,
+        restaurantId: input.restaurantId,
+      };
+      const user = persistedFields as User;
+      usersRepository.create.mockReturnValue(user);
+      usersRepository.save.mockResolvedValue(user);
+
+      await usersService.create(input);
+
+      expect(usersRepository.create).toHaveBeenCalledWith(persistedFields);
+      expect(usersRepository.save).toHaveBeenCalledWith(persistedFields);
+    });
   });
 });
