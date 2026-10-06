@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from './users.entity.js';
+import { User } from './user.entity.js';
 
 export interface CreateUserInput {
   firebaseUid: string;
   email: string;
-  role: UserRole;
+  role: string;
   restaurantId: string | null;
 }
 
@@ -25,7 +25,7 @@ export class UsersService {
     return this.usersRepository.findOneBy({ id });
   }
 
-  createUser(input: CreateUserInput): Promise<User> {
+  create(input: CreateUserInput): Promise<User> {
     const user = this.usersRepository.create(input);
     return this.usersRepository.save(user);
   }

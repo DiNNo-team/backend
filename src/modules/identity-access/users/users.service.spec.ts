@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { User, UserRole } from './users.entity.js';
+import { User } from './user.entity.js';
 import { UsersService } from './users.service.js';
 
 describe('UsersService', () => {
@@ -71,12 +71,12 @@ describe('UsersService', () => {
     });
   });
 
-  describe('createUser', () => {
+  describe('create', () => {
     it('creates and persists a user', async () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: 'owner@example.com',
-        role: UserRole.RESTAURANT,
+        role: 'restaurant',
         restaurantId: null,
       };
       const newUser = { ...input } as User;
@@ -84,7 +84,7 @@ describe('UsersService', () => {
       usersRepository.create.mockReturnValue(newUser);
       usersRepository.save.mockResolvedValue(savedUser);
 
-      await expect(usersService.createUser(input)).resolves.toBe(savedUser);
+      await expect(usersService.create(input)).resolves.toBe(savedUser);
       expect(usersRepository.create).toHaveBeenCalledWith(input);
       expect(usersRepository.save).toHaveBeenCalledWith(newUser);
     });
@@ -93,14 +93,14 @@ describe('UsersService', () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: 'owner@example.com',
-        role: UserRole.RESTAURANT,
+        role: 'restaurant',
         restaurantId: null,
       };
       const error = new Error('Unique constraint violation');
       usersRepository.create.mockReturnValue(input);
       usersRepository.save.mockRejectedValue(error);
 
-      await expect(usersService.createUser(input)).rejects.toBe(error);
+      await expect(usersService.create(input)).rejects.toBe(error);
     });
   });
 });

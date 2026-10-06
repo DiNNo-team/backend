@@ -25,6 +25,7 @@ Todas las tablas tienen `id`, `created_at` y `updated_at`:
 
 | Columna | Tipo | Reglas |
 |---|---|---|
+| `firebase_uid` | `varchar(128)` | NULL, único (`UQ_users_firebase_uid`); NULL para usuarios de prueba sin UID |
 | `email` | `varchar(255)` | NOT NULL, único (`UQ_users_email`) |
 | `role` | `varchar(50)` | NOT NULL. Sin check: los valores los define Jacobo (PBI 2) |
 | `restaurant_id` | `uuid` | NULL = usuario que aún no registra su restaurante (onboarding). FK → `restaurants.id` |

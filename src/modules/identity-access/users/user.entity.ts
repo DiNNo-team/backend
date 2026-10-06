@@ -10,12 +10,16 @@ import {
 
 @Entity({ name: 'users' })
 @Unique('UQ_users_email', ['email'])
+@Unique('UQ_users_firebase_uid', ['firebaseUid'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'varchar', length: 255 })
   email: string;
+
+  @Column({ name: 'firebase_uid', type: 'varchar', length: 128, nullable: true })
+  firebaseUid: string | null;
 
   @Column({ type: 'varchar', length: 50 })
   role: string;
