@@ -1,11 +1,16 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './users/users.entity.js';
-import { UsersService } from './users/users.service.js';
+import { CurrentUserGuard } from './current-user/current-user.guard.js';
+import { CurrentUserResolver } from './current-user/current-user.resolver.js';
+import { DevUserResolver } from './current-user/dev-user.resolver.js';
+import { User } from './users/user.entity.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
-  providers: [UsersService],
-  exports: [UsersService],
+  providers: [
+    { provide: CurrentUserResolver, useClass: DevUserResolver },
+    CurrentUserGuard,
+  ],
+  exports: [CurrentUserResolver, CurrentUserGuard],
 })
 export class IdentityAccessModule {}

@@ -25,6 +25,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
           url: databaseUrl,
           autoLoadEntities: true,
           synchronize: false,
+          uuidExtension: 'pgcrypto',
+          installExtensions: false,
           ssl: databaseUrl.includes('sslmode=require')
             ? { rejectUnauthorized: false }
             : false,

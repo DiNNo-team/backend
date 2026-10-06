@@ -1,13 +1,22 @@
 name: CI/CD
 
 on:
+  # PRs to develop are checked before merging; a push to develop (a merged PR)
+  # is checked again and then Render's deployment is verified.
+  pull_request:
+    branches:
+      - develop
   push:
     branches:
       - develop
 
+permissions:
+  contents: read
+
 jobs:
-  build-and-test:
+  checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,20 +27,43 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      # Exactly the versions in package-lock.json, like local installs.
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      # Fast checks first: they fail in seconds with the clearest error.
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: E2E tests
+        run: npm run test:e2e
 
       - name: Build
         run: npm run build
 
-      - name: Test
-        run: npm run test -- --passWithNoTests
-
-  report-deployment:
-    needs: build-and-test
+  # Render deploys develop on its own; this job does not deploy, it only checks
+  # that Render is serving the pushed commit and records the result as a
+  # GitHub deployment.
+  verify-deployment:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Render deploys only the latest commit of develop: an older run would
+    # wait for a commit that never gets deployed, so a newer push cancels it.
+    concurrency:
+      group: verify-deployment-develop
+      cancel-in-progress: true
     permissions:
       deployments: write
+    env:
+      SERVICE_URL: https://dinno-backend.onrender.com
     steps:
       - name: Create GitHub deployment
         id: deployment
@@ -39,12 +71,88 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           environment: production
-          environment-url: https://dinno-backend.onrender.com
+          environment-url: ${{ env.SERVICE_URL }}
+          sha: ${{ github.sha }}
+          initial-status: in_progress
+
+      # Waits until /v1/health answers status "ok" AND the pushed commit:
+      # status alone is not enough, because when a Render build fails the
+      # previous version stays up and keeps answering "ok". Render needs a few
+      # minutes to build and the free plan sleeps the service (the first
+      # request can take about a minute): retry every 20 s for up to 15 min.
+      - name: Wait for Render to serve this commit
+        id: health
+        run: |
+          expected="$GITHUB_SHA"
+          deadline=$((SECONDS + 15 * 60))
+          attempt=0
+          last_commit=""
+          last_problem="el health no respondió"
+          until [ "$SECONDS" -ge "$deadline" ]; do
+            attempt=$((attempt + 1))
+            if body=$(curl --silent --show-error --fail --max-time 90 \
+              "$SERVICE_URL/v1/health" 2>&1); then
+              fields=$(echo "$body" | jq -r '[.status // "", .commit // "null"] | @tsv' 2>/dev/null) || fields=""
+              status=$(echo "$fields" | cut -f1)
+              commit=$(echo "$fields" | cut -f2)
+              if [ "$status" = "ok" ] && [ "$commit" = "$expected" ]; then
+                echo "Render sirve el commit $expected (intento $attempt)."
+                exit 0
+              fi
+              if [ "$status" = "ok" ]; then
+                last_commit="$commit"
+                echo "Intento $attempt: responde el commit $commit; se espera $expected."
+              else
+                last_problem="respuesta inesperada: $body"
+                echo "Intento $attempt: $last_problem"
+              fi
+            else
+              last_problem="el health no respondió ($body)"
+              echo "Intento $attempt: $last_problem"
+            fi
+            sleep 20
+          done
+
+          # reason goes to the log; summary (under 140 characters, the GitHub
+          # limit) goes to the deployment status.
+          if [ "$last_commit" = "null" ]; then
+            reason="El health responde sin commit: RENDER_GIT_COMMIT no está definida en el servicio."
+            summary="El health responde sin commit (falta RENDER_GIT_COMMIT)."
+          elif [ -n "$last_commit" ]; then
+            reason="Se esperaba el commit $expected y respondió $last_commit. Lo más probable es que el build de Render haya fallado y siga viva la versión anterior: revisa el despliegue en el panel de Render."
+            summary="Responde ${last_commit:0:7} en vez de ${expected:0:7}: probablemente falló el build de Render."
+          else
+            reason="En 15 minutos, $SERVICE_URL/v1/health no respondió con el commit $expected ($last_problem)."
+            summary="El health no respondió en 15 minutos."
+          fi
+          echo "::error::$reason"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+          exit 1
 
       - name: Mark deployment as successful
+        if: success()
         uses: chrnorm/deployment-status@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           state: success
           deployment-id: ${{ steps.deployment.outputs.deployment_id }}
-          environment-url: https://dinno-backend.onrender.com
+          environment-url: ${{ env.SERVICE_URL }}
+
+      - name: Mark deployment as failed
+        if: failure() && steps.deployment.outputs.deployment_id != ''
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          state: failure
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          description: ${{ steps.health.outputs.summary || 'La verificación del despliegue falló.' }}
+          log-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Mark deployment as replaced
+        if: cancelled() && steps.deployment.outputs.deployment_id != ''
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          state: inactive
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          description: Reemplazado por un push más reciente a develop.
