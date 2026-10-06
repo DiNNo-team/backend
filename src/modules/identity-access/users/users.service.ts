@@ -21,8 +21,17 @@ export class UsersService {
     return this.usersRepository.findOneBy({ firebaseUid });
   }
 
+  findByEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOneBy({ email });
+  }
+
   findById(id: string): Promise<User | null> {
     return this.usersRepository.findOneBy({ id });
+  }
+
+  linkFirebaseUid(user: User, firebaseUid: string): Promise<User> {
+    user.firebaseUid = firebaseUid;
+    return this.usersRepository.save(user);
   }
 
   create(input: CreateUserInput): Promise<User> {

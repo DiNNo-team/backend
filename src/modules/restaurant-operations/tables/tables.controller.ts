@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -56,6 +57,7 @@ const TableIdParam = () =>
   );
 
 @ApiTags('tables')
+@ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description: 'No hay una sesión activa.',
   type: ErrorResponseDto,

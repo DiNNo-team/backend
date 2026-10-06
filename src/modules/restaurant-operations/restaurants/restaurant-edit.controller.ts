@@ -1,6 +1,7 @@
 import { Body, Controller, Patch, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
@@ -25,6 +26,7 @@ import {
 } from './restaurant-edit.service.js';
 
 @ApiTags('restaurants')
+@ApiBearerAuth()
 @UseGuards(CurrentUserGuard)
 @Controller('restaurants')
 export class RestaurantEditController {

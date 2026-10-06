@@ -114,7 +114,7 @@ Estos cambios rompen el trabajo de otras personas si no se comunican. Cuando los
 ---
 
 ## 8. Decisiones del equipo (no se cambian sin acordarlo)
-- **Autenticación:** se propone Firebase Authentication, **pendiente de confirmar** (lo define Jacobo). No instales ni configures un proveedor de autenticación hasta que el equipo lo confirme. El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente.
+- **Autenticación:** Firebase Authentication está confirmado. El usuario actual se obtiene siempre de la sesión, nunca de lo que envía el cliente.
 - **Estados de mesa:** Disponible, Reservada y Ocupada. *Inactiva* es una mesa desactivada, no un estado del control. “Pocas mesas” es disponibilidad del restaurante para el comensal, no un estado de mesa.
 - **Estado del restaurante:** Abierto o Cerrado.
 - **Diseño:** el manual de identidad v1.1 manda sobre cualquier otra preferencia. Un solo kit de componentes; nadie crea estilos propios.
@@ -178,7 +178,7 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 
 ### Configuración y variables de entorno
 - **Nunca leas `process.env` en el código de una funcionalidad:** usa `ConfigService` (`getOrThrow` para lo obligatorio).
-- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local). Las de autenticación se agregan en la tarea de Jacobo, cuando se confirme el proveedor.
+- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID` y `PORT` (solo local).
 - `CORS_ORIGINS`: lista separada por comas, sin `/` final. **Nunca la abras a `*`.** Si un origen nuevo necesita acceso, se agrega en Render.
 
 ### Base de datos (PostgreSQL en Neon, TypeORM)
