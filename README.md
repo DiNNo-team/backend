@@ -61,8 +61,10 @@ cualquiera de las dos, **no arranca**.
 ## 4. Arquitectura
 
 - **Monolito modular.** El código de negocio vive bajo `src/modules/`, uno por dominio,
-  registrado en [`src/app.module.ts`](src/app.module.ts). Hoy existen 5 módulos base (sin
-  lógica de negocio todavía):
+  registrado en [`src/app.module.ts`](src/app.module.ts). Hoy existen 5 módulos.
+  `restaurant-operations` ya tiene controladores y servicios (mesas y edición del restaurante);
+  `identity-access` ya tiene el usuario actual (guard, resolver y `UsersService`); los otros
+  tres siguen vacíos:
   - `identity-access`
   - `restaurant-operations`
   - `reservations-checkin`
@@ -85,8 +87,9 @@ cualquiera de las dos, **no arranca**.
 - **Swagger en `/docs`.** La documentación OpenAPI se sirve en `/docs` (JSON en `/docs-json`),
   **fuera** del prefijo `/v1` — `SwaggerModule.setup()` se monta directo sobre el adaptador HTTP
   y no hereda el prefijo global.
-- **Health check en `/v1/health`.** Responde `{"status":"ok"}`; es el endpoint que usa Render
-  para el *Health Check* del Web Service.
+- **Health check en `/v1/health`.** Responde `{"status":"ok","commit":"<sha>"}`; `commit` es el
+  SHA que despliega Render (`RENDER_GIT_COMMIT`) y en local es `null`. Render lo usa para el
+  *Health Check* del Web Service y el CI, para comprobar qué commit está sirviendo.
 
 ```
 src/
@@ -95,7 +98,7 @@ src/
 ├── app.module.ts         # Configuración, PostgreSQL (TypeORM), Redis y módulos
 ├── app.controller.ts    # GET /v1/health
 ├── config/               # Configuración de infraestructura (Redis)
-└── modules/              # Módulos del monolito modular (sin lógica de negocio aún)
+└── modules/              # Módulos del monolito modular
     ├── identity-access/
     ├── restaurant-operations/
     ├── reservations-checkin/
@@ -113,6 +116,7 @@ src/
 | `npm run build` | Compila el proyecto a `dist/` (`nest build`). |
 | `npm run start:prod` | Ejecuta la build ya compilada (`node dist/main`). |
 | `npm run lint` | Revisa `src/` y `test/` con oxlint. |
+| `npm run typecheck` | Revisa los tipos de todo el proyecto, pruebas incluidas (`tsc --noEmit`). |
 | `npm run format` | Formatea `src/` y `test/` con Prettier. |
 | `npm run test` | Pruebas unitarias (Vitest). |
 | `npm run test:watch` | Pruebas unitarias en modo watch. |
@@ -148,7 +152,7 @@ Y con el servidor arriba:
 
 ```bash
 curl http://localhost:3000/v1/health
-# {"status":"ok"}
+# {"status":"ok","commit":null}
 ```
 
 También puedes abrir `http://localhost:3000/docs` para ver el contrato de la API en Swagger UI.
@@ -163,11 +167,13 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
   ahí: Render lo asigna en tiempo de ejecución.
 - **Health Check Path:** `/v1/health`.
 - Además del despliegue en sí (gestionado por Render), el workflow de GitHub Actions en
-  [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) corre en cada push a `develop`:
-  instala dependencias, compila (`npm run build`) y corre las pruebas
-  (`npm run test -- --passWithNoTests`); si pasa, registra el despliegue en la pestaña
-  **Deployments** de GitHub apuntando a la URL de producción (usando la Deployments API, con el
-  `GITHUB_TOKEN` automático de Actions — no despliega nada por sí mismo, Render ya lo hizo).
+  [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) tiene dos jobs:
+  - `checks` corre en cada PR hacia `develop` y en cada push a `develop`, con Node 24:
+    `npm ci`, lint, typecheck, pruebas unitarias, pruebas e2e y build.
+  - `verify-deployment` corre solo en cada push a `develop`, si `checks` pasa: espera hasta
+    15 minutos a que `/v1/health` devuelva el commit del push y registra el resultado en la
+    pestaña **Deployments** de GitHub (con la Deployments API y el `GITHUB_TOKEN` automático de
+    Actions — no despliega nada por sí mismo, Render ya lo hizo).
 
 ## 8. Integración con frontend y mobile
 

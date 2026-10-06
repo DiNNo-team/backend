@@ -180,7 +180,11 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 
 ### Configuración y variables de entorno
 - **Nunca leas `process.env` en el código de una funcionalidad:** usa `ConfigService` (`getOrThrow` para lo obligatorio).
-- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local). Las de autenticación se agregan en la tarea de Jacobo, cuando se confirme el proveedor.
+- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local), `DEV_USER_ENABLED`, `DEV_USER_ID`, `RENDER`, `NODE_ENV` y `RENDER_GIT_COMMIT`. Las de autenticación se agregan en la tarea de Jacobo, cuando se confirme el proveedor.
+  - **Obligatorias:** `DATABASE_URL` y `REDIS_URL`; si faltan, la app no arranca (`getOrThrow`). Las demás son opcionales.
+  - `DEV_USER_ENABLED=true` activa el usuario de desarrollo y `DEV_USER_ID` es el uuid del usuario por defecto. Solo local: sin ellas, toda ruta protegida responde `401`.
+  - `RENDER` (la define Render) y `NODE_ENV=production` apagan el usuario de desarrollo aunque `DEV_USER_ENABLED` sea `true`. No se definen a mano.
+  - `RENDER_GIT_COMMIT` la define Render con el commit desplegado; `GET /v1/health` la devuelve en `commit` y el CI la compara con el commit del push. En local es `null`.
 - `CORS_ORIGINS`: lista separada por comas, sin `/` final. **Nunca la abras a `*`.** Si un origen nuevo necesita acceso, se agrega en Render.
 
 ### Base de datos (PostgreSQL en Neon, TypeORM)
@@ -238,5 +242,5 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 
 ### Despliegue
 - **Render**, con despliegue automático en cada push a `develop`. URL: https://dinno-backend.onrender.com (health: `/v1/health`).
-- `.github/workflows/ci-cd.yml` corre build y pruebas en cada push a `develop`.
+- `.github/workflows/ci-cd.yml` tiene dos jobs. `checks` corre en cada PR hacia `develop` y en cada push a `develop`: Node 24, `npm ci`, lint, typecheck, test, test:e2e y build. `verify-deployment` corre solo en cada push a `develop`, después de `checks`, y espera a que `/v1/health` devuelva el commit del push.
 - `PORT` lo asigna Render; no lo fijes. Las variables se configuran en el panel de Render, nunca en el repositorio.

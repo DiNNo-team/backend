@@ -175,6 +175,18 @@ describe('Tables · edit and deactivate (e2e)', () => {
       expect(tables.save).not.toHaveBeenCalled();
     });
 
+    it('returns 400 in Spanish for a null identifier and saves nothing', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/v1/tables/${TABLE_ID}`)
+        .send({ identifier: null })
+        .expect(400);
+
+      expect(res.body.message).toEqual([
+        'Escribe el identificador de la mesa.',
+      ]);
+      expect(tables.save).not.toHaveBeenCalled();
+    });
+
     it('returns 409 for a repeated identifier ("t1" against "T1")', async () => {
       const res = await request(app.getHttpServer())
         .patch(`/v1/tables/${TABLE_ID}`)
@@ -233,6 +245,17 @@ describe('Tables · edit and deactivate (e2e)', () => {
       );
     });
 
+    it('returns 404 for a table that is not in the user restaurant', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/v1/tables/${UNKNOWN_ID}/deactivate`)
+        .expect(404);
+
+      expect(res.body.message).toBe(
+        'No encontramos esta mesa. Actualiza la lista de mesas e intenta de nuevo.',
+      );
+      expect(statusLog.record).not.toHaveBeenCalled();
+    });
+
     it('returns 409 for a table that is already inactive', async () => {
       current = storedTable({ isActive: false });
 
@@ -282,6 +305,17 @@ describe('Tables · edit and deactivate (e2e)', () => {
         }),
         expect.anything(),
       );
+    });
+
+    it('returns 404 for a table that is not in the user restaurant', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/v1/tables/${UNKNOWN_ID}/reactivate`)
+        .expect(404);
+
+      expect(res.body.message).toBe(
+        'No encontramos esta mesa. Actualiza la lista de mesas e intenta de nuevo.',
+      );
+      expect(statusLog.record).not.toHaveBeenCalled();
     });
 
     it('returns 409 for a table that is already active', async () => {

@@ -3,9 +3,9 @@
 Esquema vigente de PostgreSQL (Neon). **Se actualiza en el mismo PR que cambia el esquema.**
 Cómo crear y correr migraciones, y quién las corre: sección 10 del [CLAUDE.md](../CLAUDE.md), subsección "Migraciones".
 
-Última migración aplicada: `1791092320241-CreateInitialTables`.
+Última migración aplicada: `1791268910540-AddFirebaseUidToUsers` (2026-10-06).
 
-> **Pendiente de aplicar por Elizabeth:** `1791250327133-AddRestaurantProfile` (Santiago, PBI 3). Agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`. Lo que se documenta abajo de esa migración no existe en Neon hasta que se aplique. **Se aplica antes de fusionar el PR:** si el código se despliega primero, las consultas de restaurantes fallan porque piden columnas que todavía no existen.
+> Las tres migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05) y `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06). Lo que se documenta abajo existe en Neon.
 
 ## Tablas
 
@@ -70,7 +70,7 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 |---|---|---|
 | `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: estado abierto/cerrado |
 | `restaurant_schedules` | Santiago | Tabla nueva para los horarios del restaurante |
-| `users` | Elizabeth (esquema base) | Jacobo: lo que necesite para enlazar con Firebase |
+| `users` | Elizabeth (esquema base) | Jacobo: `firebase_uid` (ya aplicada) y lo que más necesite para enlazar con Firebase |
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
 | `table_logs` (aún no existe) | Sergio | Tabla nueva para la bitácora de cambios de mesas |
 
