@@ -19,6 +19,8 @@ function createService() {
   const stored: Restaurant = {
     id: RESTAURANT_ID,
     name: 'Nombre anterior',
+    category: null,
+    address: null,
     createdAt: new Date('2026-10-04T12:00:00Z'),
     updatedAt: new Date('2026-10-04T12:00:00Z'),
   };
