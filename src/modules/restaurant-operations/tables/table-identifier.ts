@@ -19,9 +19,13 @@ export function normalizeTableIdentifier(identifier: string): string {
   return NUMERIC.test(core) ? String(Number(core)) : core.toLowerCase();
 }
 
-// Display name used in messages: "4" → "Mesa 04", "T1" → "Mesa T1".
+// Display name used in messages: "4" → "Mesa 04", "T1" → "Mesa T1". An
+// identifier that is only "Mesa" is shown as "Mesa", not "Mesa Mesa".
 export function formatTableName(identifier: string): string {
   const core = identifierCore(identifier);
+  if (core.toLowerCase() === 'mesa') {
+    return 'Mesa';
+  }
   return NUMERIC.test(core)
     ? `Mesa ${String(Number(core)).padStart(2, '0')}`
     : `Mesa ${core}`;

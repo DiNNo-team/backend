@@ -42,6 +42,13 @@ describe('formatTableName', () => {
     expect(formatTableName(identifier)).toBe(shown);
   });
 
+  it.each([['Mesa'], ['mesa'], [' MESA ']])(
+    'shows %j as "Mesa", not "Mesa Mesa"',
+    (identifier) => {
+      expect(formatTableName(identifier)).toBe('Mesa');
+    },
+  );
+
   it.each([
     ['T1', 'Mesa T1'],
     ['t1', 'Mesa t1'],
