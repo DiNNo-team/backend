@@ -1,11 +1,22 @@
 import type { EntityManager } from 'typeorm';
-import type { TableStatus } from './table.entity.js';
+
+// What the log stores as a table's status: its operational status, or
+// 'inactive' for a deactivated table. Deactivating logs <status> → 'inactive';
+// reactivating logs 'inactive' → 'available' (PBI 7 and PBI 9). 'inactive' is
+// never a value of tables.status: it only exists in the log.
+export const TABLE_LOG_STATUSES = [
+  'available',
+  'reserved',
+  'occupied',
+  'inactive',
+] as const;
+export type TableLogStatus = (typeof TABLE_LOG_STATUSES)[number];
 
 // One table status change, as agreed with the table log owner (Sergio).
 export interface TableStatusChange {
   tableId: string;
-  previousStatus: TableStatus;
-  newStatus: TableStatus;
+  previousStatus: TableLogStatus;
+  newStatus: TableLogStatus;
   // The session user who made the change.
   userId: string;
   changedAt: Date;

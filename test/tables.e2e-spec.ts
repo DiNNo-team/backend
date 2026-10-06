@@ -163,7 +163,7 @@ describe('Tables (e2e)', () => {
         expect(res.body).toEqual({
           statusCode: 400,
           error: 'Bad Request',
-          message: ['Escribe cuántas personas caben en la mesa, entre 1 y 20.'],
+          message: ['La capacidad va de 1 a 20 personas.'],
         });
       },
     );
@@ -186,7 +186,7 @@ describe('Tables (e2e)', () => {
         .expect(409);
 
       expect(res.body.message).toBe(
-        'Ya tienes una mesa con ese nombre. Usa uno diferente.',
+        'Ya tienes una Mesa 04. Usa otro identificador.',
       );
     });
 

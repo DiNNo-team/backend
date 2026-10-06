@@ -120,6 +120,8 @@ Estos cambios rompen el trabajo de otras personas si no se comunican. Cuando los
 - **Diseño:** el manual de identidad v1.1 manda sobre cualquier otra preferencia. Un solo kit de componentes; nadie crea estilos propios.
 - **API:** prefijo `/v1`, contrato documentado en Swagger (`/docs`).
 - **Base de datos:** cambios de esquema solo con migraciones; nunca `synchronize`.
+- **Identificador de mesa:** corto ("04", "T1") y se muestra "Mesa 04"; "4", "04" y "Mesa 4" son la misma mesa; máximo 10 caracteres; en la interfaz se llama "Identificador" (manual 12.4).
+- **Bitácora de mesas:** cambiar el estado, desactivar (`<estado>` → `inactive`) y reactivar (`inactive` → `available`) se registran; editar el identificador o la capacidad no.
 - Nuevas decisiones: se agregan aquí, en una línea, en el mismo PR que las aplica.
 
 ---
