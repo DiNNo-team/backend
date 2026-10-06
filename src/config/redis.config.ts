@@ -1,12 +1,15 @@
+import { Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
 
 export const REDIS_CLIENT = 'REDIS_CLIENT';
+
+const logger = new Logger('Redis');
 
 export function createRedisClient(redisUrl: string): Redis {
   const client = new Redis(redisUrl);
 
   client.on('connect', () => {
-    console.log('Redis conectado');
+    logger.log('Redis conectado');
   });
 
   client.on('error', (error: Error) => {
