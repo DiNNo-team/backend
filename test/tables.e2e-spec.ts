@@ -9,6 +9,7 @@ import { configureApp } from './../src/app.setup.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
+import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 
@@ -96,6 +97,8 @@ describe('Tables (e2e)', () => {
           Promise.resolve(users.find((user) => user.id === id) ?? null),
       })
       .overrideProvider(getRepositoryToken(Restaurant))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(RestaurantSchedule))
       .useValue({})
       .overrideProvider(getRepositoryToken(Table))
       .useValue(tables)
