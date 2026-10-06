@@ -55,7 +55,7 @@ Horario de atención: una fila por cada día que el restaurante **abre**. Un dí
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` |
-| `identifier` | `varchar(50)` | NOT NULL. Único por restaurante sin importar mayúsculas ni espacios (`UQ_tables_restaurant_id_identifier`) |
+| `identifier` | `varchar(50)` | NOT NULL. Único por restaurante sin importar mayúsculas ni espacios (`UQ_tables_restaurant_id_identifier`). La API acepta máximo 10 caracteres y además trata "4", "04" y "Mesa 4" como la misma mesa (`tables/table-identifier.ts`) |
 | `capacity` | `smallint` | NOT NULL, entre 1 y 20 (`CHK_tables_capacity`) |
 | `status` | `varchar(20)` | NOT NULL, por defecto `'available'`; solo `'available'`, `'reserved'` u `'occupied'` (`CHK_tables_status`) |
 | `is_active` | `boolean` | NOT NULL, por defecto `true` |
