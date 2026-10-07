@@ -90,7 +90,11 @@ describe('Tables · edit and deactivate (e2e)', () => {
           isGlobal: true,
           ignoreEnvFile: true,
           load: [
-            () => ({ DEV_USER_ENABLED: devUserEnabled, DEV_USER_ID: OWNER_ID }),
+            () => ({
+              DEV_USER_ENABLED: devUserEnabled,
+              DEV_USER_ID: OWNER_ID,
+              FIREBASE_PROJECT_ID: 'firebase-project-example',
+            }),
           ],
         }),
         RestaurantOperationsModule,

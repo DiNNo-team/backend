@@ -11,6 +11,7 @@ import {
 } from './firebase-admin.provider.js';
 
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión terminó. Inicia sesión de nuevo.';
+const EMAIL_NOT_VERIFIED_MESSAGE = 'Verifica tu correo para continuar.';
 const CREATE_ROLE = 'restaurant_admin';
 
 function isUniqueViolation(error: unknown): boolean {
@@ -78,21 +79,20 @@ export class FirebaseUserResolver extends CurrentUserResolver {
       return toCurrentUser(userByUid);
     }
 
+    if (decodedToken.email_verified !== true) {
+      throw new UnauthorizedException(EMAIL_NOT_VERIFIED_MESSAGE, {
+        errorCode: 'EMAIL_NOT_VERIFIED',
+      });
+    }
+
     const userByEmail = await this.usersService.findByEmail(decodedToken.email);
     if (userByEmail) {
-      if (
-        decodedToken.email_verified !== true ||
-        userByEmail.firebaseUid !== null
-      ) {
+      if (userByEmail.firebaseUid !== null) {
         throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
       }
       return toCurrentUser(
         await this.usersService.linkFirebaseUid(userByEmail, decodedToken.uid),
       );
-    }
-
-    if (decodedToken.email_verified !== true) {
-      throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
     }
 
     try {

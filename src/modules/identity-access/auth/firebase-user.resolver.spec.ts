@@ -7,6 +7,7 @@ import type { FirebaseAuthFactory } from './firebase-admin.provider.js';
 import { FirebaseUserResolver } from './firebase-user.resolver.js';
 
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión terminó. Inicia sesión de nuevo.';
+const EMAIL_NOT_VERIFIED_MESSAGE = 'Verifica tu correo para continuar.';
 const FIREBASE_UID = 'firebase-uid';
 const EMAIL = 'owner@example.com';
 const USER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
@@ -44,6 +45,29 @@ function createResolver() {
   return { auth, firebaseAuthFactory, resolver, usersService };
 }
 
+async function expectUnauthorized(
+  promise: Promise<unknown>,
+  message: string,
+  errorCode?: string,
+): Promise<void> {
+  let caughtError: unknown;
+  try {
+    await promise;
+  } catch (error) {
+    caughtError = error;
+  }
+
+  expect(caughtError).toBeInstanceOf(UnauthorizedException);
+  expect(
+    (caughtError as UnauthorizedException).getResponse(),
+  ).toEqual({
+    statusCode: 401,
+    message,
+    error: 'Unauthorized',
+    ...(errorCode ? { errorCode } : {}),
+  });
+}
+
 describe('FirebaseUserResolver', () => {
   beforeEach(() => vi.resetAllMocks());
 
@@ -74,20 +98,19 @@ describe('FirebaseUserResolver', () => {
     const { auth, resolver, usersService } = createResolver();
     auth.verifyIdToken.mockRejectedValue(new Error('private SDK detail'));
 
-    await expect(
+    await expectUnauthorized(
       resolver.resolve(requestWith('Bearer invalid-token')),
-    ).rejects.toMatchObject({
-      status: 401,
-      response: { message: SESSION_EXPIRED_MESSAGE },
-    });
+      SESSION_EXPIRED_MESSAGE,
+    );
     expect(usersService.findByFirebaseUid).not.toHaveBeenCalled();
   });
 
   it('rejects a request without a Bearer token', async () => {
     const { auth, resolver } = createResolver();
 
-    await expect(resolver.resolve(requestWith())).rejects.toBeInstanceOf(
-      UnauthorizedException,
+    await expectUnauthorized(
+      resolver.resolve(requestWith()),
+      SESSION_EXPIRED_MESSAGE,
     );
     expect(auth.verifyIdToken).not.toHaveBeenCalled();
   });
@@ -96,11 +119,10 @@ describe('FirebaseUserResolver', () => {
     const { auth, resolver, usersService } = createResolver();
     auth.verifyIdToken.mockResolvedValue(decodedToken({ email: undefined }));
 
-    await expect(
+    await expectUnauthorized(
       resolver.resolve(requestWith('Bearer valid-token')),
-    ).rejects.toMatchObject({
-      response: { message: SESSION_EXPIRED_MESSAGE },
-    });
+      SESSION_EXPIRED_MESSAGE,
+    );
     expect(usersService.findByFirebaseUid).not.toHaveBeenCalled();
     expect(usersService.create).not.toHaveBeenCalled();
   });
@@ -156,7 +178,7 @@ describe('FirebaseUserResolver', () => {
     expect(usersService.create).not.toHaveBeenCalled();
   });
 
-  it('does not link or create when an existing email is unverified', async () => {
+  it('returns EMAIL_NOT_VERIFIED before looking up an existing email row', async () => {
     const { auth, resolver, usersService } = createResolver();
     const existingUser = { id: USER_ID, email: EMAIL } as User;
     auth.verifyIdToken.mockResolvedValue(
@@ -164,11 +186,12 @@ describe('FirebaseUserResolver', () => {
     );
     usersService.findByEmail.mockResolvedValue(existingUser);
 
-    await expect(
+    await expectUnauthorized(
       resolver.resolve(requestWith('Bearer valid-token')),
-    ).rejects.toMatchObject({
-      response: { message: SESSION_EXPIRED_MESSAGE },
-    });
+      EMAIL_NOT_VERIFIED_MESSAGE,
+      'EMAIL_NOT_VERIFIED',
+    );
+    expect(usersService.findByEmail).not.toHaveBeenCalled();
     expect(usersService.linkFirebaseUid).not.toHaveBeenCalled();
     expect(usersService.create).not.toHaveBeenCalled();
   });
@@ -183,28 +206,51 @@ describe('FirebaseUserResolver', () => {
     auth.verifyIdToken.mockResolvedValue(decodedToken());
     usersService.findByEmail.mockResolvedValue(existingUser);
 
-    await expect(
+    await expectUnauthorized(
       resolver.resolve(requestWith('Bearer valid-token')),
-    ).rejects.toMatchObject({
-      response: { message: SESSION_EXPIRED_MESSAGE },
-    });
+      SESSION_EXPIRED_MESSAGE,
+    );
     expect(usersService.linkFirebaseUid).not.toHaveBeenCalled();
     expect(usersService.create).not.toHaveBeenCalled();
   });
 
-  it('does not create a user when the token email is unverified', async () => {
+  it('returns EMAIL_NOT_VERIFIED without creating when no email row exists', async () => {
     const { auth, resolver, usersService } = createResolver();
     auth.verifyIdToken.mockResolvedValue(
       decodedToken({ email_verified: false }),
     );
 
+    await expectUnauthorized(
+      resolver.resolve(requestWith('Bearer valid-token')),
+      EMAIL_NOT_VERIFIED_MESSAGE,
+      'EMAIL_NOT_VERIFIED',
+    );
+    expect(usersService.findByEmail).not.toHaveBeenCalled();
+    expect(usersService.create).not.toHaveBeenCalled();
+  });
+
+  it('resolves an already UID-linked user even when its email is unverified', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    const user = {
+      id: USER_ID,
+      firebaseUid: FIREBASE_UID,
+      email: EMAIL,
+      role: 'restaurant_admin',
+      restaurantId: null,
+    } as User;
+    auth.verifyIdToken.mockResolvedValue(
+      decodedToken({ email_verified: false }),
+    );
+    usersService.findByFirebaseUid.mockResolvedValue(user);
+
     await expect(
       resolver.resolve(requestWith('Bearer valid-token')),
-    ).rejects.toMatchObject({
-      response: { message: SESSION_EXPIRED_MESSAGE },
+    ).resolves.toEqual({
+      userId: USER_ID,
+      restaurantId: null,
+      role: 'restaurant_admin',
     });
-    expect(usersService.findByEmail).toHaveBeenCalledWith(EMAIL);
-    expect(usersService.create).not.toHaveBeenCalled();
+    expect(usersService.findByEmail).not.toHaveBeenCalled();
   });
 
   it('rechecks by UID after a unique conflict while creating', async () => {

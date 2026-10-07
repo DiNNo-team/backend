@@ -21,8 +21,8 @@ export class ErrorResponseDto {
   // front has to branch on the reason; see CLAUDE.md, "API".
   @ApiPropertyOptional({
     description:
-      'Motivo del error, solo cuando el front tiene que actuar distinto según el motivo. Los demás errores no lo traen. Valores: RESTAURANT_REQUIRED (403: el usuario todavía no registra su restaurante; llévalo al registro).',
-    enum: ['RESTAURANT_REQUIRED'],
+      'Motivo del error, solo cuando el front tiene que actuar distinto según el motivo. Los demás errores no lo traen. Valores: RESTAURANT_REQUIRED (403: el usuario todavía no registra su restaurante; llévalo al registro), EMAIL_NOT_VERIFIED (401: verifica tu correo para continuar).',
+    enum: ['RESTAURANT_REQUIRED', 'EMAIL_NOT_VERIFIED'],
   })
   errorCode?: string;
 }

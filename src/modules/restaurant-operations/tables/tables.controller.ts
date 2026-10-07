@@ -88,8 +88,15 @@ const TableIdParam = () =>
 @ApiTags('tables')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
-  description: 'No hay una sesión activa.',
+  description:
+    'No hay una sesión activa o el correo no está verificado (errorCode: EMAIL_NOT_VERIFIED).',
   type: ErrorResponseDto,
+  example: {
+    statusCode: 401,
+    message: 'Verifica tu correo para continuar.',
+    error: 'Unauthorized',
+    errorCode: 'EMAIL_NOT_VERIFIED',
+  },
 })
 @ApiForbiddenResponse({
   description:
