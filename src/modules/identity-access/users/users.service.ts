@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, IsNull, Repository } from 'typeorm';
+import { EntityManager, IsNull, QueryFailedError, Repository } from 'typeorm';
 import { User } from './user.entity.js';
 
 function normalizeEmail(email: string): string {
@@ -33,6 +33,9 @@ export class UsersService {
     return this.usersRepository.findOneBy({ id });
   }
 
+  // userId must come from the session, never the request body. Returns true
+  // when assigned, false when the user is missing or already has a restaurant.
+  // Call with the transaction manager that creates the restaurant.
   async assignRestaurantIfNone(
     userId: string,
     restaurantId: string,
@@ -47,9 +50,25 @@ export class UsersService {
     return (result.affected ?? 0) > 0;
   }
 
-  linkFirebaseUid(user: User, firebaseUid: string): Promise<User> {
+  async linkFirebaseUid(user: User, firebaseUid: string): Promise<User> {
     user.firebaseUid = firebaseUid;
-    return this.usersRepository.save(user);
+    try {
+      return await this.usersRepository.save(user);
+    } catch (error) {
+      if (
+        !(error instanceof QueryFailedError) ||
+        error.driverError.code !== '23505' ||
+        error.driverError.constraint !== 'UQ_users_firebase_uid'
+      ) {
+        throw error;
+      }
+
+      const linkedUser = await this.findByFirebaseUid(firebaseUid);
+      if (linkedUser?.firebaseUid === firebaseUid) {
+        return linkedUser;
+      }
+      throw error;
+    }
   }
 
   create(input: CreateUserInput): Promise<User> {
