@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { User } from './user.entity.js';
 import { UsersService } from './users.service.js';
 
@@ -68,6 +68,57 @@ describe('UsersService', () => {
       usersRepository.findOneBy.mockRejectedValue(error);
 
       await expect(usersService.findById('user-id')).rejects.toBe(error);
+    });
+  });
+
+  describe('assignRestaurantIfNone', () => {
+    const userId = 'user-id';
+    const restaurantId = 'restaurant-id';
+
+    function createManager(affected: number) {
+      return {
+        update: vi.fn().mockResolvedValue({ affected }),
+      } as unknown as EntityManager & { update: ReturnType<typeof vi.fn> };
+    }
+
+    it('assigns a restaurant when the user has none and returns true', async () => {
+      const manager = createManager(1);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(true);
+
+      expect(manager.update).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(
+        User,
+        { id: userId, restaurantId: IsNull() },
+        { restaurantId },
+      );
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('returns false and does not overwrite an existing restaurant', async () => {
+      const manager = createManager(0);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(false);
+
+      expect(manager.update).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(
+        User,
+        { id: userId, restaurantId: IsNull() },
+        { restaurantId },
+      );
+    });
+
+    it('returns false when the user does not exist', async () => {
+      const manager = createManager(0);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(false);
+      expect(manager.update).toHaveBeenCalledTimes(1);
     });
   });
 

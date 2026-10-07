@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { User } from './user.entity.js';
 
 export interface CreateUserInput {
@@ -23,6 +23,20 @@ export class UsersService {
 
   findById(id: string): Promise<User | null> {
     return this.usersRepository.findOneBy({ id });
+  }
+
+  async assignRestaurantIfNone(
+    userId: string,
+    restaurantId: string,
+    manager: EntityManager,
+  ): Promise<boolean> {
+    const result = await manager.update(
+      User,
+      { id: userId, restaurantId: IsNull() },
+      { restaurantId },
+    );
+
+    return (result.affected ?? 0) > 0;
   }
 
   create(input: CreateUserInput): Promise<User> {
