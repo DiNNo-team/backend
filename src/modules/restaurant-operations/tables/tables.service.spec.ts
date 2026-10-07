@@ -110,7 +110,7 @@ describe('TablesService', () => {
 
       await expect(result).rejects.toBeInstanceOf(ConflictException);
       await expect(result).rejects.toThrow(
-        'Ya tienes una mesa con ese nombre. Usa uno diferente.',
+        'Ya tienes una Mesa 04. Usa otro identificador.',
       );
     });
 

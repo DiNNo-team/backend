@@ -1,4 +1,4 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Logger, Module, OnModuleInit } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -10,6 +10,8 @@ import { RestaurantOperationsModule } from './modules/restaurant-operations/rest
 import { ReservationsCheckinModule } from './modules/reservations-checkin/reservations-checkin.module.js';
 import { SearchAvailabilityModule } from './modules/search-availability/search-availability.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
+
+const logger = new Logger('Database');
 
 @Module({
   imports: [
@@ -56,7 +58,7 @@ export class AppModule implements OnModuleInit {
 
   onModuleInit() {
     if (this.dataSource.isInitialized) {
-      console.log('PostgreSQL conectado');
+      logger.log('PostgreSQL conectado');
     }
   }
 }

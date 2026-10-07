@@ -15,13 +15,14 @@ npm run start:dev     # dev server, watch mode
 npm run build          # nest build
 npm run start:prod     # run compiled dist/main.js
 npm run lint            # oxlint src/ test/
+npm run typecheck       # tsc --noEmit (types, including tests)
 npm run format          # prettier --write
 npm run test             # vitest run (unit)
 npm run test:e2e        # vitest run --config vitest.config.e2e.ts
 npm run test:cov        # vitest run --coverage
 ```
 
-Run `npm run lint` and `npm run test` before declaring any task done.
+Run `npm run lint`, `npm run typecheck` and `npm run test` before declaring any task done.
 
 ## Architecture: modular monolith
 

@@ -31,8 +31,8 @@ export class RestaurantEditService {
 
     const restaurant = await this.restaurants.findOneBy({ id: ownerId });
     if (!restaurant) {
-      // users.restaurant_id is a foreign key, so this means broken data:
-      // let the global filter log it and answer the generic 500.
+      // users.restaurant_id has a foreign key to restaurants, so this cannot happen
+      // with valid data: let the global filter log it and answer the generic 500.
       throw new Error(`Restaurant ${ownerId} of the session user not found`);
     }
     // id last: whatever the changes carry, the session restaurant is updated.

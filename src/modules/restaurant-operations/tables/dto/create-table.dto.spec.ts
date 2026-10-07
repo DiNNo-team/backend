@@ -2,10 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { createValidationPipe } from '../../../../app.setup.js';
 import { CreateTableDto } from './create-table.dto.js';
 
-const CAPACITY_MESSAGE =
-  'Escribe cuántas personas caben en la mesa, entre 1 y 20.';
-const IDENTIFIER_MESSAGE =
-  'Escribe un nombre para la mesa, por ejemplo "Mesa 4".';
+const CAPACITY_MESSAGE = 'La capacidad va de 1 a 20 personas.';
+const IDENTIFIER_MESSAGE = 'Escribe el identificador de la mesa.';
 
 // Same pipe the app registers globally in configureApp.
 const pipe = createValidationPipe();
@@ -67,15 +65,15 @@ describe('CreateTableDto', () => {
     },
   );
 
-  it('rejects an identifier longer than 50 characters after trimming', async () => {
+  it('rejects an identifier longer than 10 characters after trimming', async () => {
     await expect(
-      messagesFor({ identifier: 'x'.repeat(51), capacity: 4 }),
+      messagesFor({ identifier: 'x'.repeat(11), capacity: 4 }),
     ).resolves.toEqual([
-      'El nombre de la mesa es muy largo. Usa máximo 50 caracteres.',
+      'Usa máximo 10 caracteres en el identificador de la mesa.',
     ]);
     await expect(
-      validate({ identifier: ` ${'x'.repeat(50)} `, capacity: 4 }),
-    ).resolves.toEqual({ identifier: 'x'.repeat(50), capacity: 4 });
+      validate({ identifier: ` ${'x'.repeat(10)} `, capacity: 4 }),
+    ).resolves.toEqual({ identifier: 'x'.repeat(10), capacity: 4 });
   });
 
   it('rejects restaurantId, status and isActive in Spanish', async () => {
