@@ -20,7 +20,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - No hay conversión implícita: en un body, `"4"` no es un número. Un `@Param('x') x: number` sí se convierte, pero las propiedades numéricas de un DTO de query necesitan `@Type(() => Number)`.
   - Un `:id` de ruta no se valida solo: usa `ParseUUIDPipe` con un mensaje propio. Si no, un id mal formado llega a Postgres y responde `500`.
 - **Forma de los errores de toda la API:** `{ statusCode, message, error }`. En los `400` de validación `message` es una **lista** (un mensaje por problema); en los demás errores es un **texto**. El DTO para Swagger es `src/common/dto/error-response.dto.ts`: impórtalo, no lo dupliques.
-  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 10, "API"). Hoy existe uno: `RESTAURANT_REQUIRED`.
+  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 10, "API"). Hoy existen `RESTAURANT_REQUIRED` y `EMAIL_NOT_VERIFIED`.
 - **Código compartido entre módulos:** va en `src/common/`, solo si de verdad lo usan varios módulos y no es de ningún dominio. Nada de lógica de negocio (regla en el CLAUDE.md, sección 10).
 - **Los mensajes de error que puede ver el usuario siguen la sección 14 del manual de identidad v1.1:**
   - Tuteo, frases cortas y sin culpar, qué pasó + qué hacer.
@@ -57,6 +57,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Jacobo
 - La columna `firebase_uid` (`varchar(128)`, NULL, `UQ_users_firebase_uid`) quedó aplicada en Neon con la migración `1791268910540-AddFirebaseUidToUsers` (2026-10-06). `UsersService` está registrado y exportado desde `identity-access`.
+- **Antes de fusionar el PR de autenticación, configura `FIREBASE_PROJECT_ID` en Render.** Es el ID público del proyecto Firebase, no una credencial privada.
+- **Pendiente en el seed, a cargo de Elizabeth:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`. No cambies el seed desde esta tarea.
 - Día 3, al conectar Firebase: **encadenar, no reemplazar.** En local debe seguir funcionando el usuario de desarrollo: un `useFactory` que elija entre los dos resolvers, no un `useClass` que sustituya a `DevUserResolver`.
 - Pendiente de decidir: ¿se crea la fila en `users` automáticamente en el primer inicio de sesión? Cambia cuánto cuesta probar el onboarding.
 - Lo global de validación te toca en cualquier endpoint de `identity-access` que reciba body: campos de más dan `400`, los mensajes van en español en cada decorador y en Swagger documentas los errores con el `ErrorResponseDto` de `src/common/dto/`.
@@ -72,7 +74,6 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - **401 y 500** funcionan igual que en el resto de la API.
   - **Los datos para mostrar en la pantalla los da Santiago**, con la consulta del restaurante (PBI 3). Se espera en `GET /v1/restaurants/me`, con la misma forma de respuesta que el `PATCH`.
   - **Hoy solo se puede editar el nombre.** Categoría y dirección aparecerán cuando Santiago las agregue al DTO y a la respuesta (las columnas ya existen); los horarios, cuando decida cómo se guardan. Llegarán como campos nuevos en el body y en la respuesta, sin cambiar la ruta ni los campos que ya existen, así que tu pantalla no debería fallar si la respuesta trae un campo que todavía no muestra.
-- **Swagger, cuando exista la autenticación real:** agrega `addBearerAuth()` al `DocumentBuilder` en `src/app.setup.ts` y marca las rutas protegidas con `@ApiBearerAuth()`. Así Swagger muestra el candado y se puede probar con un token desde `/docs`. Hoy no tiene sentido porque no hay tokens.
 - **Pendientes de tus PR** (lista de revisión, en tono neutro: son ajustes, no reproches):
   - **PR #16 (ya fusionado):**
     - Corre `npm run format` sobre `user.entity.ts`: el `@Column` de `firebaseUid` pasa de 80 columnas.
@@ -87,7 +88,6 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - Devolver a la sección 8 de `CLAUDE.md` la frase "El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente".
     - Documentar `FIREBASE_PROJECT_ID` en `.env.example` como obligatoria cuando el usuario de desarrollo está apagado, y que `FIREBASE_AUTH_EMULATOR_HOST` no debe definirse en Render.
     - No correr `npm audit fix` en ese PR.
-  - Las líneas de arriba sobre decidir si se crea la fila en `users` en el primer inicio de sesión y sobre `addBearerAuth()` se mantienen hasta que ese PR se fusione.
 
 ### Santiago y Sergio
 - `restaurants` ya tiene `name`, `category` y `address`. Sergio agrega su columna con su propia migración de `ALTER`. Nadie recrea la tabla.
