@@ -40,6 +40,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 ## Por persona
 
 ### Elizabeth
+- **Migración `1791342586330-AddRestaurantIsOpen` lista para aplicar en Neon antes del merge** (Sergio, PBI 8, rama `feat/sprint1-estado-restaurante-backend`). Una sola sentencia: `ALTER TABLE "restaurants" ADD "is_open" boolean NOT NULL DEFAULT true` (el `down` la borra). Los restaurantes que ya existen quedan en `true`. **Orden:** este PR se fusiona después de `feat/sprint1-bitacora-estructura`, y en Neon se aplica primero `1791340136261-CreateTableLogs` y después `1791342586330-AddRestaurantIsOpen`. Aplicarla antes no afecta al código desplegado (tiene valor por defecto). **Si el PR se fusiona antes de aplicar la migración**, toda consulta de `restaurants` responde `500` (tu `PATCH /v1/restaurants/me`, el registro de Santiago y cualquier ruta que cargue el restaurante), porque la entidad ya pide `is_open`. Después: `npm run migration:generate -- src/migrations/Check --check` y "Última migración aplicada" en `docs/database.md`.
 - **Cambios de Sebastián en tu crear mesa (PBI 7, rama `feat/sprint1-tables-edit-deactivate`), para que backend y web apliquen las mismas reglas.** Las reglas del identificador quedaron en un solo archivo, `tables/table-identifier.ts`, que usan crear y editar:
   - **Repetidos:** "4", "04" y "Mesa 4" son la misma mesa (también "T1" y "t1"). `create` revisa las mesas del restaurante con esa normalización antes de guardar y responde `409`. El índice `UQ_tables_restaurant_id_identifier` no cambia y sigue cubriendo el caso de dos peticiones iguales al mismo tiempo.
   - **Largo máximo: 10 caracteres** en el DTO, el mismo de la web ("Usa máximo 10 caracteres…"). La columna sigue en `varchar(50)`, así que no hay migración. Las mesas del seed ("Mesa 1"…"Mesa 8") cumplen.
@@ -94,6 +95,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **No corran `migration:generate`:** con la base compartida genera una migración con las tablas de los demás. Usen `npm run migration:create` y escriban el SQL, o pídanle la migración a Elizabeth.
 
 ### Santiago
+- **Agregué `isOpen` en `restaurant.entity.ts`** (Sergio, PBI 8): columna `is_open`, `boolean`, NOT NULL, `DEFAULT true`. Solo esa propiedad, después de `address`; no toqué `category`, `address` ni `restaurant_schedules`. **Falta confirmar contigo el valor por defecto:** con `true`, un restaurante recién registrado queda Abierto sin que tu registro haga nada. Si prefieres que nazca Cerrado, avísame y lo cambio con otra migración. Tu registro no tiene que mandar `isOpen`, y `RestaurantResponseDto` no lo incluye: el estado tiene sus propios endpoints (`/v1/restaurants/me/status`).
 - **La librería de validación es `class-validator` con `class-transformer`**, con decoradores sobre el DTO.
 - **El archivo de las validaciones del restaurante ya existe, y tus validaciones del registro van ahí.** Es `src/modules/restaurant-operations/restaurants/dto/restaurant-fields.dto.ts`, con la clase `RestaurantFieldsDto`. Elizabeth lo empezó solo con el nombre: obligatorio, sin espacios sobrantes y de 1 a 120 caracteres. `category` y `address` ya existen en la tabla, pero todavía no están en ese archivo. La edición del restaurante (`PATCH /v1/restaurants/me`) se deriva de esa misma clase con `PartialType`, así que cada regla que escribas ahí vale a la vez para tu registro y para la edición. Por eso no las pegues a tu formulario ni a tu servicio: si una regla no está en ese archivo, la edición no la tiene. Tu DTO de registro puede ser esa clase tal cual, o una que extienda de ella si el registro necesita algo más.
 - **Qué hacer para que tus campos funcionen también en la edición.** Son tres pasos para categoría, dirección y horarios (el primero ya está hecho: las columnas y la entidad existen), y con ellos el `PATCH` acepta, valida, guarda y devuelve tus campos sin que nadie toque la edición:
@@ -170,6 +172,20 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Historial
 
+- **2026-10-06 · Sergio · PBI 8 · Implementar estado operativo en backend.** Cambia el esquema.
+  - **Qué quedó listo:**
+    - la columna `restaurants.is_open` (`boolean`, NOT NULL, `DEFAULT true`; propiedad `isOpen` de `Restaurant`), con la migración `1791342586330-AddRestaurantIsOpen`;
+    - `GET /v1/restaurants/me/status` → `200 { "isOpen": boolean }`;
+    - `PATCH /v1/restaurants/me/status` con `{ "isOpen": boolean }` → `200 { "isOpen": boolean }`. El restaurante sale de la sesión; `401` sin sesión, `403 RESTAURANT_REQUIRED` sin restaurante y `400` si `isOpen` no es booleano o hay campos de más. Detalle en el `CLAUDE.md` (sección 10, "Estado abierto/cerrado del restaurante") y en Swagger;
+    - el cambio es manual: no mira los horarios. El conteo de mesas reservadas para confirmar el cierre lo hace la web; el endpoint no lo devuelve.
+  - **Para quién / qué deben hacer:**
+    - **Elizabeth:** aplicar la migración en Neon antes del merge (ver tu sección).
+    - **Santiago:** confirmar el valor por defecto de `is_open` (ver tu sección).
+    - **Todos:** quien cree un objeto `Restaurant` completo en una prueba tiene que agregar `isOpen` (ya está en `stored` de `restaurant-edit.service.spec.ts`).
+  - **Rama / PR:** `feat/sprint1-estado-restaurante-backend` → `develop` (PR por abrir).
+  - **Pendiente o conocido:**
+    - la migración está sin aplicar en Neon: no se fusiona hasta que Elizabeth confirme en el grupo que la aplicó;
+    - el valor por defecto (`true`) está pendiente de confirmar con Santiago.
 - **2026-10-06 · Limpieza de documentación y pruebas (Elizabeth, rama `chore/sprint1-docs-and-tests-cleanup`).** Solo documentación y pruebas, sin cambios de comportamiento ni de la API. Migraciones aplicadas al día en `docs/database.md` y en este archivo; los textos de la mesa dicen "identificador" en todo `AVISOS.md`; `CLAUDE.md` (sección 10), `README.md` y `AGENTS.md` al día con el código. Pruebas nuevas: 404 de `deactivate` y `reactivate`, `identifier: null` en `PATCH /v1/tables/:id` y `table-identifier.spec.ts`.
 - **2026-10-06 · PR de editar, desactivar y reactivar mesas (Sebastián, PBI 7).**
   - **Rutas nuevas:** `PATCH /v1/tables/:id` (identificador y/o capacidad, al menos uno), `POST /v1/tables/:id/deactivate` y `POST /v1/tables/:id/reactivate` (vuelve como `available`).

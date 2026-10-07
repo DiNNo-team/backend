@@ -5,6 +5,8 @@ import { RestaurantEditController } from './restaurants/restaurant-edit.controll
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
 import { Restaurant } from './restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './restaurants/restaurant-schedule.entity.js';
+import { RestaurantStatusController } from './restaurants/restaurant-status.controller.js';
+import { RestaurantStatusService } from './restaurants/restaurant-status.service.js';
 import { NoopTableStatusLog } from './tables/noop-table-status-log.js';
 import { Table } from './tables/table.entity.js';
 import { TableStatusLog } from './tables/table-status-log.js';
@@ -16,10 +18,15 @@ import { TablesService } from './tables/tables.service.js';
     TypeOrmModule.forFeature([Restaurant, RestaurantSchedule, Table]),
     IdentityAccessModule,
   ],
-  controllers: [TablesController, RestaurantEditController],
+  controllers: [
+    TablesController,
+    RestaurantEditController,
+    RestaurantStatusController,
+  ],
   providers: [
     TablesService,
     RestaurantEditService,
+    RestaurantStatusService,
     // Table log: replace NoopTableStatusLog with the table-logs/ implementation.
     { provide: TableStatusLog, useClass: NoopTableStatusLog },
   ],
