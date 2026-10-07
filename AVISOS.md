@@ -35,6 +35,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - **Columna nueva en una entidad** (por ejemplo, en `Restaurant`): agrégala a los objetos de prueba que declaran ese tipo completo. Para `Restaurant` hoy es uno, `stored` en `restaurants/restaurant-edit.service.spec.ts`; si falta, `npm run typecheck` falla. Una columna NULL va con `null`.
   - **Entidad nueva en el `TypeOrmModule.forFeature([...])` del módulo:** agrega `.overrideProvider(getRepositoryToken(TuEntidad)).useValue({})` en cada e2e que monta `RestaurantOperationsModule` (hoy `test/tables.e2e-spec.ts`, `test/tables-edit.e2e-spec.ts` y `test/restaurant-edit.e2e-spec.ts`). Si falta, `npm run test:e2e` falla con "Nest can't resolve dependencies of the TuEntidadRepository".
   - **La migración se aplica en Neon antes de fusionar el PR, nunca después.** `develop` se despliega solo a Render y nadie corre las migraciones al desplegar: si el código llega primero, el backend pide columnas que todavía no existen y esas consultas responden `500`. En el orden contrario no pasa nada, siempre que las columnas nuevas acepten NULL o tengan valor por defecto. Lo mismo en local: todos usamos la misma base, así que una rama con columnas que Neon todavía no tiene falla en esas consultas hasta que se aplique su migración.
+- **E2e con el usuario de desarrollo apagado (`DEV_USER_ENABLED: 'false'`, por ejemplo para probar el `401`):** agrega `FIREBASE_PROJECT_ID: 'firebase-project-example'` al `load` de tu `ConfigModule.forRoot`, como `test/tables-edit.e2e-spec.ts`. Desde el login con Firebase, con el usuario de desarrollo apagado se usa el resolver de Firebase, que hace `getOrThrow('FIREBASE_PROJECT_ID')` al arrancar: sin esa clave el módulo no inicia y la prueba falla en el CI (que no tiene `.env`), aunque en local pase con tu `.env`. Es un valor de ejemplo: una petición sin token responde `401` antes de llamar a Firebase, así que no hay red ni credenciales.
 - **Las migraciones `AddRestaurantProfile` y `AddFirebaseUidToUsers` ya están aplicadas en Neon:** puedes hacer pull de `develop` sin riesgo.
 
 ## Por persona
@@ -185,7 +186,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - **Elizabeth:** aplicar la migración en Neon antes del merge (ver tu sección).
     - **Santiago:** confirmar el valor por defecto de `is_open` (ver tu sección).
     - **Todos:** quien cree un objeto `Restaurant` completo en una prueba tiene que agregar `isOpen` (ya está en `stored` de `restaurant-edit.service.spec.ts`).
-  - **Rama / PR:** `feat/sprint1-estado-restaurante-backend` → `develop` (PR por abrir).
+  - **Rama / PR:** `feat/sprint1-estado-restaurante-backend` → `develop` (PR abierto). Ya incluye `develop` con la bitácora y el login con Firebase: los endpoints llevan `@ApiBearerAuth()` y el `401` documenta `EMAIL_NOT_VERIFIED`, como los demás controllers.
   - **Pendiente o conocido:**
     - la migración está sin aplicar en Neon: no se fusiona hasta que Elizabeth confirme en el grupo que la aplicó;
     - el valor por defecto (`true`) está pendiente de confirmar con Santiago.
