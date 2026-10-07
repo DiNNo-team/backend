@@ -28,7 +28,9 @@ import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
   CurrentUser,
   CurrentUserGuard,
+  Roles,
   type CurrentUserData,
+  UserRole,
 } from '../../identity-access/index.js';
 import { CAPACITY_RANGE, CreateTableDto } from './dto/create-table.dto.js';
 import { TableResponseDto } from './dto/table-response.dto.js';
@@ -100,15 +102,29 @@ const TableIdParam = () =>
 })
 @ApiForbiddenResponse({
   description:
-    'El usuario todavía no registra su restaurante (errorCode: RESTAURANT_REQUIRED): hay que llevarlo al registro del restaurante.',
+    'El usuario no tiene acceso por rol, o todavía no registra su restaurante (errorCode: RESTAURANT_REQUIRED).',
   type: ErrorResponseDto,
-  example: {
-    statusCode: 403,
-    message: RESTAURANT_REQUIRED_MESSAGE,
-    error: 'Forbidden',
-    errorCode: RESTAURANT_REQUIRED_CODE,
+  examples: {
+    insufficientRole: {
+      summary: 'El rol no permite acceder a mesas',
+      value: {
+        statusCode: 403,
+        message: 'No tienes acceso a esta sección.',
+        error: 'Forbidden',
+      },
+    },
+    restaurantRequired: {
+      summary: 'El usuario todavía no registra su restaurante',
+      value: {
+        statusCode: 403,
+        message: RESTAURANT_REQUIRED_MESSAGE,
+        error: 'Forbidden',
+        errorCode: RESTAURANT_REQUIRED_CODE,
+      },
+    },
   },
 })
+@Roles(UserRole.RESTAURANT_ADMIN)
 @UseGuards(CurrentUserGuard)
 @Controller('tables')
 export class TablesController {
