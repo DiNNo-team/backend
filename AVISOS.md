@@ -20,7 +20,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - No hay conversión implícita: en un body, `"4"` no es un número. Un `@Param('x') x: number` sí se convierte, pero las propiedades numéricas de un DTO de query necesitan `@Type(() => Number)`.
   - Un `:id` de ruta no se valida solo: usa `ParseUUIDPipe` con un mensaje propio. Si no, un id mal formado llega a Postgres y responde `500`.
 - **Forma de los errores de toda la API:** `{ statusCode, message, error }`. En los `400` de validación `message` es una **lista** (un mensaje por problema); en los demás errores es un **texto**. El DTO para Swagger es `src/common/dto/error-response.dto.ts`: impórtalo, no lo dupliques.
-  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 10, "API"). Hoy existe uno: `RESTAURANT_REQUIRED`.
+  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 10, "API"). Hoy existen `RESTAURANT_REQUIRED` y `EMAIL_NOT_VERIFIED`.
 - **Código compartido entre módulos:** va en `src/common/`, solo si de verdad lo usan varios módulos y no es de ningún dominio. Nada de lógica de negocio (regla en el CLAUDE.md, sección 10).
 - **Los mensajes de error que puede ver el usuario siguen la sección 14 del manual de identidad v1.1:**
   - Tuteo, frases cortas y sin culpar, qué pasó + qué hacer.
@@ -40,7 +40,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 ## Por persona
 
 ### Elizabeth
-- **Migración `1791342586330-AddRestaurantIsOpen` lista para aplicar en Neon antes del merge** (Sergio, PBI 8, rama `feat/sprint1-estado-restaurante-backend`). Una sola sentencia: `ALTER TABLE "restaurants" ADD "is_open" boolean NOT NULL DEFAULT true` (el `down` la borra). Los restaurantes que ya existen quedan en `true`. **Orden:** este PR se fusiona después de `feat/sprint1-bitacora-estructura`, y en Neon se aplica primero `1791340136261-CreateTableLogs` y después `1791342586330-AddRestaurantIsOpen`. Aplicarla antes no afecta al código desplegado (tiene valor por defecto). **Si el PR se fusiona antes de aplicar la migración**, toda consulta de `restaurants` responde `500` (tu `PATCH /v1/restaurants/me`, el registro de Santiago y cualquier ruta que cargue el restaurante), porque la entidad ya pide `is_open`. Después: `npm run migration:generate -- src/migrations/Check --check` y "Última migración aplicada" en `docs/database.md`.
+- **Migración `1791342586330-AddRestaurantIsOpen` lista para aplicar en Neon antes del merge** (Sergio, PBI 8, rama `feat/sprint1-estado-restaurante-backend`). Una sola sentencia: `ALTER TABLE "restaurants" ADD "is_open" boolean NOT NULL DEFAULT true` (el `down` la borra). Los restaurantes que ya existen quedan en `true`. **Orden:** `feat/sprint1-bitacora-estructura` ya está en `develop` y esta rama ya la incluye; en Neon se aplica primero `1791340136261-CreateTableLogs` y después `1791342586330-AddRestaurantIsOpen`. Aplicarla antes no afecta al código desplegado (tiene valor por defecto). **Si el PR se fusiona antes de aplicar la migración**, toda consulta de `restaurants` responde `500` (tu `PATCH /v1/restaurants/me`, el registro de Santiago y cualquier ruta que cargue el restaurante), porque la entidad ya pide `is_open`. Después: `npm run migration:generate -- src/migrations/Check --check` y "Última migración aplicada" en `docs/database.md`.
+- **Migración CreateTableLogs lista para aplicar en Neon antes del merge** (Sergio, PBI 9, rama `feat/sprint1-bitacora-estructura`). Es `1791340136261-CreateTableLogs`: crea `table_logs` con sus dos `CHECK` (incluyen `inactive`), el índice `IDX_table_logs_table_id_changed_at` y las FK a `tables` y `users`. Es una tabla nueva y nadie la lee todavía, así que aplicarla antes no afecta al código desplegado. **Si el PR se fusiona primero**, cambiar el estado, desactivar y reactivar una mesa responden `500` (y no cambian nada), porque la bitácora ya escribe de verdad. Después: `npm run migration:generate -- src/migrations/Check --check` y "Última migración aplicada" en `docs/database.md`.
 - **Cambios de Sebastián en tu crear mesa (PBI 7, rama `feat/sprint1-tables-edit-deactivate`), para que backend y web apliquen las mismas reglas.** Las reglas del identificador quedaron en un solo archivo, `tables/table-identifier.ts`, que usan crear y editar:
   - **Repetidos:** "4", "04" y "Mesa 4" son la misma mesa (también "T1" y "t1"). `create` revisa las mesas del restaurante con esa normalización antes de guardar y responde `409`. El índice `UQ_tables_restaurant_id_identifier` no cambia y sigue cubriendo el caso de dos peticiones iguales al mismo tiempo.
   - **Largo máximo: 10 caracteres** en el DTO, el mismo de la web ("Usa máximo 10 caracteres…"). La columna sigue en `varchar(50)`, así que no hay migración. Las mesas del seed ("Mesa 1"…"Mesa 8") cumplen.
@@ -58,6 +59,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Jacobo
 - La columna `firebase_uid` (`varchar(128)`, NULL, `UQ_users_firebase_uid`) quedó aplicada en Neon con la migración `1791268910540-AddFirebaseUidToUsers` (2026-10-06). `UsersService` está registrado y exportado desde `identity-access`.
+- **Antes de fusionar el PR de autenticación, configura `FIREBASE_PROJECT_ID` en Render.** Es el ID público del proyecto Firebase, no una credencial privada.
+- **Pendiente en el seed, a cargo de Elizabeth:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`. No cambies el seed desde esta tarea.
 - Día 3, al conectar Firebase: **encadenar, no reemplazar.** En local debe seguir funcionando el usuario de desarrollo: un `useFactory` que elija entre los dos resolvers, no un `useClass` que sustituya a `DevUserResolver`.
 - Pendiente de decidir: ¿se crea la fila en `users` automáticamente en el primer inicio de sesión? Cambia cuánto cuesta probar el onboarding.
 - Lo global de validación te toca en cualquier endpoint de `identity-access` que reciba body: campos de más dan `400`, los mensajes van en español en cada decorador y en Swagger documentas los errores con el `ErrorResponseDto` de `src/common/dto/`.
@@ -73,7 +76,6 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - **401 y 500** funcionan igual que en el resto de la API.
   - **Los datos para mostrar en la pantalla los da Santiago**, con la consulta del restaurante (PBI 3). Se espera en `GET /v1/restaurants/me`, con la misma forma de respuesta que el `PATCH`.
   - **Hoy solo se puede editar el nombre.** Categoría y dirección aparecerán cuando Santiago las agregue al DTO y a la respuesta (las columnas ya existen); los horarios, cuando decida cómo se guardan. Llegarán como campos nuevos en el body y en la respuesta, sin cambiar la ruta ni los campos que ya existen, así que tu pantalla no debería fallar si la respuesta trae un campo que todavía no muestra.
-- **Swagger, cuando exista la autenticación real:** agrega `addBearerAuth()` al `DocumentBuilder` en `src/app.setup.ts` y marca las rutas protegidas con `@ApiBearerAuth()`. Así Swagger muestra el candado y se puede probar con un token desde `/docs`. Hoy no tiene sentido porque no hay tokens.
 - **Pendientes de tus PR** (lista de revisión, en tono neutro: son ajustes, no reproches):
   - **PR #16 (ya fusionado):**
     - Corre `npm run format` sobre `user.entity.ts`: el `@Column` de `firebaseUid` pasa de 80 columnas.
@@ -88,7 +90,6 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - Devolver a la sección 8 de `CLAUDE.md` la frase "El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente".
     - Documentar `FIREBASE_PROJECT_ID` en `.env.example` como obligatoria cuando el usuario de desarrollo está apagado, y que `FIREBASE_AUTH_EMULATOR_HOST` no debe definirse en Render.
     - No correr `npm audit fix` en ese PR.
-  - Las líneas de arriba sobre decidir si se crea la fila en `users` en el primer inicio de sesión y sobre `addBearerAuth()` se mantienen hasta que ese PR se fusione.
 
 ### Santiago y Sergio
 - `restaurants` ya tiene `name`, `category` y `address`. Sergio agrega su columna con su propia migración de `ALTER`. Nadie recrea la tabla.
@@ -118,6 +119,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Para que tu PR compile:** tu columna nueva en `Restaurant` va también en `stored` de `restaurants/restaurant-edit.service.spec.ts`, y tu entidad de bitácora, al registrarla en `forFeature`, necesita su `.overrideProvider(getRepositoryToken(...)).useValue({})` en los tres e2e que montan el módulo. Detalle y lista en "Acciones pendientes de todos". Tu migración también se aplica en Neon antes de fusionar tu PR.
 - **El `403` del usuario sin restaurante ya existe, y tu endpoint de abierto/cerrado lo debe reutilizar.** Si el usuario de la sesión todavía no registró su restaurante, no puede abrirlo ni cerrarlo. Para ese caso no escribas tu propio error: llama a `requireRestaurant(user.restaurantId)` de `src/modules/restaurant-operations/shared/restaurant-required.ts`, que te devuelve el id del restaurante o lanza el `403` con el texto "Primero registra tu restaurante." y el `errorCode: "RESTAURANT_REQUIRED"`. Así la respuesta es igual en todo el módulo y la web lleva al usuario al registro sin casos especiales.
 - Lo global de validación también te toca: el body de abrir/cerrar el restaurante solo puede traer lo que diga tu DTO (un campo de más da `400`), y en Swagger documentas los errores con el `ErrorResponseDto` de `src/common/dto/`. Un booleano en el body tiene que llegar como `true`/`false`, no como `"true"`.
+- **Bitácora (PBI 9.1 y 9.2): implementada en `feat/sprint1-bitacora-estructura`.** Cómo funciona y cómo se usa quedó en el `CLAUDE.md` (sección 10, "Bitácora de mesas"). Cuando se fusione, los puntos de abajo sobre el contrato se pueden borrar. Falta la consulta para la pantalla (`GET /v1/table-logs`, máximo 200 filas, sin paginación).
 - **Bitácora de cambios de estado de las mesas (PBI 9): el contrato ya existe y te toca implementarlo.** Desde el Día 3, cuando alguien cambia el estado de una mesa con `PATCH /v1/tables/:id/status`, el backend llama a la bitácora a través de una interfaz que definió Elizabeth. Por ahora esa interfaz tiene una implementación de relleno que no guarda nada y que, al arrancar el servidor, avisa en el log que la bitácora todavía no está implementada. Tu trabajo es reemplazarla por la real.
   - **Qué tienes que implementar.** La interfaz es la clase abstracta `TableStatusLog`, en `src/modules/restaurant-operations/tables/table-status-log.ts`. Tiene un solo método, `record(change, manager)`, que devuelve `Promise<void>`: no tiene que devolver ningún dato, solo guardar el registro o lanzar un error. `change` trae los cinco datos que acordaron: `tableId` (el id de la mesa), `previousStatus` y `newStatus` (cada uno es `available`, `reserved`, `occupied` **o `inactive`**, ver el punto siguiente), `userId` (el usuario de la sesión que hizo el cambio) y `changedAt` (la fecha y hora del cambio).
   - **Cambio de Sebastián (PBI 7): la bitácora también recibe desactivar y reactivar, con el estado `inactive`.**
@@ -133,6 +135,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - **Decisión tomada: crear una mesa no se registra en la bitácora.** La bitácora es de cambios de estado, y una mesa que se crea no cambia de estado: nace Disponible. Así lo dice el nombre del PBI 9, "Registrar cambios de estado de mesas". Además, el contrato pide `previousStatus`, que en una creación no existe, así que incluirla obligaría a cambiar la forma del contrato para un caso que nadie pidió. Ni el plan del sprint ni tu acuerdo con Sebastián la mencionan: ahí solo aparecen cambiar el estado, editar, desactivar y reactivar. Si ves una razón para registrar también la creación, plantéasela a Elizabeth y lo revisan. Conviene hacerlo antes de implementar, porque cambiar el contrato ahora es barato y después de que lo implementes no.
 
 ### Sebastián
+- **Desactivar y reactivar ya escriben en la bitácora de verdad** (PBI 9, Sergio). No tienes que cambiar nada: `changeActive` ya llama a `TableStatusLog.record(...)` con el `manager` de su transacción. Lo nuevo es que, si el insert en `table_logs` falla, la petición responde `500` y la mesa no cambia, igual que el cambio de estado.
 - **Decisión (Sebastián, 2026-10-06): el campo se llama "Identificador", no "Nombre".** Lo dice el manual en 12.4, y la regla de mostrar "Mesa 04" (14.1) supone un identificador corto. Backend y web usan los mismos textos (ver la sección de Elizabeth). Esto reemplaza los puntos de abajo que hablan de "nombre" y de 50 caracteres.
 - **El horario admite "Abierto 24 horas" (`is_open_24h`).** El HoursEditor del manual no tiene esa opción; hace falta agregarla al kit antes de que Santiago y Jacobo armen sus formularios (registro y edición del restaurante), porque los dos usan el `HoursEditor`.
 - Estados de mesa en el backend: `available`, `reserved` y `occupied`. `is_active` va aparte: es una mesa desactivada, no un estado.
@@ -186,6 +189,20 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - **Pendiente o conocido:**
     - la migración está sin aplicar en Neon: no se fusiona hasta que Elizabeth confirme en el grupo que la aplicó;
     - el valor por defecto (`true`) está pendiente de confirmar con Santiago.
+- **2026-10-06 · Sergio · PBI 9 · Crear estructura de bitácora en base de datos + Registrar cambios desde la lógica de mesas.** Cambia el esquema.
+  - **Qué quedó listo:**
+    - la tabla `table_logs` (entidad `TableLog`), con la migración `1791340136261-CreateTableLogs`;
+    - `DbTableStatusLog`, la implementación real de `TableStatusLog`, que reemplaza a `NoopTableStatusLog` (borrado). Cambiar el estado, desactivar y reactivar una mesa ya guardan su registro en la misma transacción.
+    - con el visto bueno de Elizabeth, el comentario de `tables/table-status-log.ts` ya apunta a `DbTableStatusLog` (solo el comentario).
+    - `table_logs` queda sin `restaurant_id` (confirmado con Elizabeth): toda consulta filtra por el restaurante de la sesión con un join a `tables` (reglas en el `CLAUDE.md`).
+  - **Para quién / qué deben hacer:**
+    - **Elizabeth:** aplicar la migración en Neon antes del merge (ver tu sección).
+    - **Elizabeth y Sebastián:** nada que cambiar. Sus servicios ya llaman a `TableStatusLog.record(change, manager)` dentro de su transacción, y ahora guarda de verdad.
+    - **Todos:** si montan `RestaurantOperationsModule` en un e2e nuevo, agreguen `.overrideProvider(getRepositoryToken(TableLog)).useValue({})`.
+  - **Rama / PR:** `feat/sprint1-bitacora-estructura` → `develop` (PR por abrir).
+  - **Pendiente o conocido:**
+    - la migración está sin aplicar en Neon: no se fusiona hasta que Elizabeth confirme en el grupo que la aplicó;
+    - la consulta de la bitácora para la pantalla (`GET /v1/table-logs`) llega en otro PR.
 - **2026-10-06 · Limpieza de documentación y pruebas (Elizabeth, rama `chore/sprint1-docs-and-tests-cleanup`).** Solo documentación y pruebas, sin cambios de comportamiento ni de la API. Migraciones aplicadas al día en `docs/database.md` y en este archivo; los textos de la mesa dicen "identificador" en todo `AVISOS.md`; `CLAUDE.md` (sección 10), `README.md` y `AGENTS.md` al día con el código. Pruebas nuevas: 404 de `deactivate` y `reactivate`, `identifier: null` en `PATCH /v1/tables/:id` y `table-identifier.spec.ts`.
 - **2026-10-06 · PR de editar, desactivar y reactivar mesas (Sebastián, PBI 7).**
   - **Rutas nuevas:** `PATCH /v1/tables/:id` (identificador y/o capacidad, al menos uno), `POST /v1/tables/:id/deactivate` y `POST /v1/tables/:id/reactivate` (vuelve como `available`).

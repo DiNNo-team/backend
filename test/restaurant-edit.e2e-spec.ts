@@ -9,6 +9,7 @@ import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
+import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
@@ -68,6 +69,8 @@ describe('Restaurant edit (e2e)', () => {
       .overrideProvider(getRepositoryToken(RestaurantSchedule))
       .useValue({})
       .overrideProvider(getRepositoryToken(Table))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableLog))
       .useValue({})
       .compile();
 

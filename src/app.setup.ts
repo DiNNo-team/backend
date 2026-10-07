@@ -77,6 +77,7 @@ export function configureApp(app: INestApplication): void {
         'Contrato de la API de DiNNo entre backend, plataforma web y app móvil.',
       )
       .setVersion('1.0')
+      .addBearerAuth()
       .build(),
   );
   SwaggerModule.setup(DOCS_PATH, app, document);

@@ -5,7 +5,7 @@ Cómo crear y correr migraciones, y quién las corre: sección 10 del [CLAUDE.md
 
 Última migración aplicada: `1791268910540-AddFirebaseUidToUsers` (2026-10-06).
 
-> Las tres migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05) y `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06). Lo que se documenta abajo existe en Neon.
+> Las tres migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05) y `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06). Lo que se documenta abajo existe en Neon, **salvo `table_logs`**: `1791340136261-CreateTableLogs` (Sergio, PBI 9) está pendiente de aplicar.
 
 > **Pendiente de aplicar en Neon:** `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`). La aplica Elizabeth antes de fusionar el PR `feat/sprint1-estado-restaurante-backend`. Hasta entonces, `is_open` está documentada abajo pero no existe en Neon.
 
@@ -65,7 +65,28 @@ Horario de atención: una fila por cada día que el restaurante **abre**. Un dí
 
 Estados en la interfaz: `available` = Disponible, `reserved` = Reservada, `occupied` = Ocupada. `is_active = false` = Inactiva.
 
-Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaurante que tenga mesas o usuarios.
+### `table_logs` · entidad `TableLog`
+
+> **Pendiente de aplicar en Neon:** migración `1791340136261-CreateTableLogs` (Sergio, PBI 9). Elizabeth la aplica **antes de fusionar el PR**: desde ese PR, cambiar el estado, desactivar y reactivar una mesa escriben en esta tabla, y si no existe responden `500`.
+
+Bitácora de cambios de estado de las mesas: una fila por cambio. Solo se insertan filas, nunca se editan ni se borran.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `table_id` | `uuid` | NOT NULL, FK → `tables.id` |
+| `previous_status` | `varchar(20)` | NOT NULL; solo `'available'`, `'reserved'`, `'occupied'` o `'inactive'` (`CHK_table_logs_previous_status`) |
+| `new_status` | `varchar(20)` | NOT NULL; mismos valores (`CHK_table_logs_new_status`) |
+| `user_id` | `uuid` | NOT NULL, FK → `users.id`. El usuario de la sesión que hizo el cambio |
+| `changed_at` | `timestamptz` | NOT NULL. Fecha y hora del cambio |
+
+- Índice `IDX_table_logs_table_id_changed_at` sobre `(table_id, changed_at)`: consulta por mesa, de lo más reciente a lo más antiguo.
+- Los valores de los checks son `TABLE_LOG_STATUSES` (`tables/table-status-log.ts`): los tres de `tables.status` más `'inactive'`, que solo existe aquí. Desactivar registra `<estado>` → `inactive`; reactivar, `inactive` → `available`.
+- **Sin `restaurant_id` (decisión confirmada con Elizabeth):** el restaurante sale de la mesa (`table_logs.table_id` → `tables.restaurant_id`), así que las consultas de la bitácora filtran con un join a `tables`.
+- Las dos FK (`table_id` → `tables.id` y `user_id` → `users.id`) son `ON DELETE NO ACTION ON UPDATE NO ACTION`, la misma regla que todas las FK del esquema. Las mesas no se borran, se desactivan; y si alguna vez se intentara borrar una mesa o un usuario con registros, la base lo rechaza en vez de borrar la bitácora.
+- `changed_at` no tiene `DEFAULT`: lo pone el servicio que cambia la mesa (`changedAt` del contrato `TableStatusChange`). `created_at` y `updated_at` sí los pone la base, como en las demás tablas.
+- La escribe solo `DbTableStatusLog` (`table-logs/table-logs.recorder.ts`), dentro de la transacción que cambia la mesa.
+
+Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaurante que tenga mesas o usuarios, ni una mesa o un usuario que tenga registros en la bitácora.
 
 ## Quién es dueño de qué
 
@@ -75,7 +96,7 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 | `restaurant_schedules` | Santiago | Tabla nueva para los horarios del restaurante |
 | `users` | Elizabeth (esquema base) | Jacobo: `firebase_uid` (ya aplicada) y lo que más necesite para enlazar con Firebase |
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
-| `table_logs` (aún no existe) | Sergio | Tabla nueva para la bitácora de cambios de mesas |
+| `table_logs` | Sergio | Tabla nueva para la bitácora de cambios de mesas (`CreateTableLogs`, pendiente de aplicar en Neon) |
 
 Nadie recrea una tabla ni toca columnas de otra persona.
 
