@@ -223,6 +223,15 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 - `UQ_tables_restaurant_id_identifier` está sobre `(restaurant_id, lower(trim(identifier)))` y vive escrito a mano en la migración `CreateInitialTables`, porque `@Index` no acepta expresiones.
 - Por eso la entidad `Table` lo declara con `{ synchronize: false }`. **No quites esa línea:** si falta, el próximo `migration:generate` genera un `DROP INDEX` y se pierde la regla de identificadores únicos sin que nadie lo note.
 
+### Bitácora de mesas (`restaurant-operations/table-logs/`, Sergio)
+- **Contrato:** la clase abstracta `TableStatusLog` (`tables/table-status-log.ts`), con un método `record(change, manager)`. `change` es `TableStatusChange`: `tableId`, `previousStatus`, `newStatus` (`TableLogStatus`: `available`, `reserved`, `occupied` o `inactive`), `userId` y `changedAt`. El contrato vive en `tables/` y `table-logs/` lo implementa, así que `tables/` nunca importa de `table-logs/`.
+- **Implementación real:** `DbTableStatusLog` (`table-logs/table-logs.recorder.ts`), registrada en `restaurant-operations.module.ts` como `{ provide: TableStatusLog, useClass: DbTableStatusLog }`. Inserta una fila en `table_logs` (entidad `TableLog`, `table-logs/table-log.entity.ts`). Ya no existe `NoopTableStatusLog`.
+- **Cómo usarla desde otro servicio de mesas:** inyecta `TableStatusLog` (nunca `DbTableStatusLog` ni el repositorio de `TableLog`) y llama a `record(...)` **dentro de la misma transacción** que cambia la mesa, pasándole el `manager` de esa transacción. No atrapes su error: si el insert falla, la transacción se revierte y la mesa queda como estaba. Ejemplo completo: `updateStatus` y `changeActive` en `tables.service.ts`.
+- **Qué se registra:** cambiar el estado (`<anterior>` → `<nuevo>`), desactivar (`<estado real>` → `inactive`) y reactivar (`inactive` → `available`). **Qué no:** crear una mesa, editar identificador o capacidad, y pedir el estado que la mesa ya tiene (responde 200 sin escribir nada).
+- **`inactive` solo existe en la bitácora**, nunca en `tables.status`. Si cambia `TABLE_LOG_STATUSES`, hace falta una migración escrita a mano que borre y vuelva a crear `CHK_table_logs_previous_status` y `CHK_table_logs_new_status` (TypeORM compara los checks solo por nombre).
+- **Requisitos de toda consulta sobre `table_logs`** (acordado con Elizabeth): (a) filtra siempre por el restaurante del usuario de la sesión, con un join a `tables` (`tables.restaurant_id`), nunca por un dato que mande el cliente (`table_logs` no tiene `restaurant_id`); (b) tiene una prueba e2e que confirma que el usuario de un restaurante no ve los registros de las mesas de otro.
+- **Pruebas e2e:** toda prueba que monte `RestaurantOperationsModule` necesita `.overrideProvider(getRepositoryToken(TableLog)).useValue({})`. Las que prueban mesas además reemplazan `TableStatusLog` por un mock.
+
 ### Redis (Upstash)
 Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDIS_CLIENT`. No se usa en el Sprint 1 salvo que una tarea lo pida.
 

@@ -10,6 +10,7 @@ import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
+import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 
@@ -102,6 +103,8 @@ describe('Tables (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(Table))
       .useValue(tables)
+      .overrideProvider(getRepositoryToken(TableLog))
+      .useValue({})
       .overrideProvider(TableStatusLog)
       .useValue(statusLog)
       .compile();

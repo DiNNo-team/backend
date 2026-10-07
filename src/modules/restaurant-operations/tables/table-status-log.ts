@@ -23,8 +23,8 @@ export interface TableStatusChange {
 }
 
 // Port owned by tables/: the table log (table-logs/) implements it, so tables/
-// never depends on table-logs/. Swap point: today NoopTableStatusLog, later the
-// real implementation, changing only the useClass line in the module.
+// never depends on table-logs/. The real implementation is DbTableStatusLog
+// (table-logs/table-logs.recorder.ts), wired by the useClass line in the module.
 export abstract class TableStatusLog {
   // Must write through `manager`: it is the status change transaction, so if
   // this throws, the status change is rolled back too.
