@@ -48,6 +48,19 @@ describe('UsersService', () => {
     });
   });
 
+  describe('findByEmail', () => {
+    it('normalizes the email before searching', async () => {
+      usersRepository.findOneBy.mockResolvedValue(null);
+
+      await expect(
+        usersService.findByEmail('  Owner@Example.COM  '),
+      ).resolves.toBeNull();
+      expect(usersRepository.findOneBy).toHaveBeenCalledWith({
+        email: 'owner@example.com',
+      });
+    });
+  });
+
   describe('findById', () => {
     it('returns the user matching the id', async () => {
       const user = { id: 'user-id' } as User;
@@ -75,17 +88,20 @@ describe('UsersService', () => {
     it('creates and persists a user', async () => {
       const input = {
         firebaseUid: 'firebase-uid',
-        email: 'owner@example.com',
+        email: '  Owner@Example.COM  ',
         role: 'restaurant',
         restaurantId: null,
       };
-      const newUser = { ...input } as User;
+      const newUser = { ...input, email: 'owner@example.com' } as User;
       const savedUser = { ...newUser, id: 'user-id' } as User;
       usersRepository.create.mockReturnValue(newUser);
       usersRepository.save.mockResolvedValue(savedUser);
 
       await expect(usersService.create(input)).resolves.toBe(savedUser);
-      expect(usersRepository.create).toHaveBeenCalledWith(input);
+      expect(usersRepository.create).toHaveBeenCalledWith({
+        ...input,
+        email: 'owner@example.com',
+      });
       expect(usersRepository.save).toHaveBeenCalledWith(newUser);
     });
 

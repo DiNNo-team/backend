@@ -114,7 +114,7 @@ Estos cambios rompen el trabajo de otras personas si no se comunican. Cuando los
 ---
 
 ## 8. Decisiones del equipo (no se cambian sin acordarlo)
-- **Autenticación:** Firebase Authentication está confirmado. El usuario actual se obtiene siempre de la sesión, nunca de lo que envía el cliente.
+- **Autenticación:** Firebase Authentication está confirmado. El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente.
 - **Estados de mesa:** Disponible, Reservada y Ocupada. *Inactiva* es una mesa desactivada, no un estado del control. “Pocas mesas” es disponibilidad del restaurante para el comensal, no un estado de mesa.
 - **Estado del restaurante:** Abierto o Cerrado.
 - **Diseño:** el manual de identidad v1.1 manda sobre cualquier otra preferencia. Un solo kit de componentes; nadie crea estilos propios.

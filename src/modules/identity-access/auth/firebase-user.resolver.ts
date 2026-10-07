@@ -80,12 +80,19 @@ export class FirebaseUserResolver extends CurrentUserResolver {
 
     const userByEmail = await this.usersService.findByEmail(decodedToken.email);
     if (userByEmail) {
-      if (decodedToken.email_verified !== true) {
+      if (
+        decodedToken.email_verified !== true ||
+        userByEmail.firebaseUid !== null
+      ) {
         throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
       }
       return toCurrentUser(
         await this.usersService.linkFirebaseUid(userByEmail, decodedToken.uid),
       );
+    }
+
+    if (decodedToken.email_verified !== true) {
+      throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
     }
 
     try {

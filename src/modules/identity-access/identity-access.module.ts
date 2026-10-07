@@ -8,6 +8,7 @@ import {
   createFirebaseAuthFactory,
   FIREBASE_AUTH,
 } from './auth/firebase-admin.provider.js';
+import { selectCurrentUserResolver } from './auth/current-user-resolver.factory.js';
 import { FirebaseUserResolver } from './auth/firebase-user.resolver.js';
 import { User } from './users/user.entity.js';
 import { UsersService } from './users/users.service.js';
@@ -24,11 +25,8 @@ import { UsersService } from './users/users.service.js';
     },
     {
       provide: CurrentUserResolver,
-      inject: [DevUserResolver, FirebaseUserResolver],
-      useFactory: (
-        devUserResolver: DevUserResolver,
-        firebaseUserResolver: FirebaseUserResolver,
-      ) => (devUserResolver.enabled ? devUserResolver : firebaseUserResolver),
+      inject: [DevUserResolver, FirebaseUserResolver, ConfigService],
+      useFactory: selectCurrentUserResolver,
     },
     CurrentUserGuard,
     UsersService,

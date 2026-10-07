@@ -45,6 +45,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Jacobo
 - `users` no tiene cómo enlazarse con Firebase: falta `firebase_uid` (`varchar`, único). Va en tu propia migración (`users` es de tu módulo).
+- **Antes de fusionar el PR de autenticación, configura `FIREBASE_PROJECT_ID` en Render.** Es el ID público del proyecto Firebase, no una credencial privada.
+- **Pendiente en el seed, a cargo de Elizabeth:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`. No cambies el seed desde esta tarea.
 - Día 3, al conectar Firebase: **encadenar, no reemplazar.** En local debe seguir funcionando el usuario de desarrollo: un `useFactory` que elija entre los dos resolvers, no un `useClass` que sustituya a `DevUserResolver`.
 - Pendiente de decidir: ¿se crea la fila en `users` automáticamente en el primer inicio de sesión? Cambia cuánto cuesta probar el onboarding.
 - Lo global de validación te toca en cualquier endpoint de `identity-access` que reciba body: campos de más dan `400`, los mensajes van en español en cada decorador y en Swagger documentas los errores con el `ErrorResponseDto` de `src/common/dto/`.
@@ -61,7 +63,6 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - **401 y 500** funcionan igual que en el resto de la API.
   - **Los datos para mostrar en la pantalla los da Santiago**, con la consulta del restaurante (PBI 3). Se espera en `GET /v1/restaurants/me`, con la misma forma de respuesta que el `PATCH`.
   - **Hoy solo se puede editar el nombre.** Categoría, dirección y horarios aparecerán cuando Santiago cree sus columnas. Llegarán como campos nuevos en el body y en la respuesta, sin cambiar la ruta ni los campos que ya existen, así que tu pantalla no debería fallar si la respuesta trae un campo que todavía no muestra.
-- **Swagger, cuando exista la autenticación real:** agrega `addBearerAuth()` al `DocumentBuilder` en `src/app.setup.ts` y marca las rutas protegidas con `@ApiBearerAuth()`. Así Swagger muestra el candado y se puede probar con un token desde `/docs`. Hoy no tiene sentido porque no hay tokens.
 
 ### Santiago y Sergio
 - `restaurants` tiene solo `name`. Cada uno agrega sus columnas con su propia migración de `ALTER`. Nadie recrea la tabla.

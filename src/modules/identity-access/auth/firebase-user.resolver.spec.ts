@@ -173,6 +173,40 @@ describe('FirebaseUserResolver', () => {
     expect(usersService.create).not.toHaveBeenCalled();
   });
 
+  it('does not overwrite a different Firebase UID linked to the email', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    const existingUser = {
+      id: USER_ID,
+      firebaseUid: 'another-firebase-uid',
+      email: EMAIL,
+    } as User;
+    auth.verifyIdToken.mockResolvedValue(decodedToken());
+    usersService.findByEmail.mockResolvedValue(existingUser);
+
+    await expect(
+      resolver.resolve(requestWith('Bearer valid-token')),
+    ).rejects.toMatchObject({
+      response: { message: SESSION_EXPIRED_MESSAGE },
+    });
+    expect(usersService.linkFirebaseUid).not.toHaveBeenCalled();
+    expect(usersService.create).not.toHaveBeenCalled();
+  });
+
+  it('does not create a user when the token email is unverified', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    auth.verifyIdToken.mockResolvedValue(
+      decodedToken({ email_verified: false }),
+    );
+
+    await expect(
+      resolver.resolve(requestWith('Bearer valid-token')),
+    ).rejects.toMatchObject({
+      response: { message: SESSION_EXPIRED_MESSAGE },
+    });
+    expect(usersService.findByEmail).toHaveBeenCalledWith(EMAIL);
+    expect(usersService.create).not.toHaveBeenCalled();
+  });
+
   it('rechecks by UID after a unique conflict while creating', async () => {
     const { auth, resolver, usersService } = createResolver();
     const user = {
@@ -192,5 +226,17 @@ describe('FirebaseUserResolver', () => {
       resolver.resolve(requestWith('Bearer valid-token')),
     ).resolves.toMatchObject({ userId: USER_ID });
     expect(usersService.findByFirebaseUid).toHaveBeenCalledTimes(2);
+  });
+
+  it('propagates creation errors other than unique violations', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    const error = new Error('database unavailable');
+    auth.verifyIdToken.mockResolvedValue(decodedToken());
+    usersService.create.mockRejectedValue(error);
+
+    await expect(
+      resolver.resolve(requestWith('Bearer valid-token')),
+    ).rejects.toBe(error);
+    expect(usersService.findByFirebaseUid).toHaveBeenCalledTimes(1);
   });
 });
