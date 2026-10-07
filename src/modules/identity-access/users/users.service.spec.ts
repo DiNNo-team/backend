@@ -89,7 +89,7 @@ describe('UsersService', () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: '  Owner@Example.COM  ',
-        role: 'restaurant',
+        role: 'restaurant_admin',
         restaurantId: null,
       };
       const newUser = { ...input, email: 'owner@example.com' } as User;
@@ -109,7 +109,7 @@ describe('UsersService', () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: 'owner@example.com',
-        role: 'restaurant',
+        role: 'restaurant_admin',
         restaurantId: null,
       };
       const error = new Error('Unique constraint violation');
@@ -123,7 +123,7 @@ describe('UsersService', () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: 'owner@example.com',
-        role: 'restaurant',
+        role: 'restaurant_admin',
         restaurantId: null,
         unexpected: 'must not be persisted',
       };
