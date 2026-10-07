@@ -18,7 +18,12 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   email: string;
 
-  @Column({ name: 'firebase_uid', type: 'varchar', length: 128, nullable: true })
+  @Column({
+    name: 'firebase_uid',
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+  })
   firebaseUid: string | null;
 
   @Column({ type: 'varchar', length: 50 })

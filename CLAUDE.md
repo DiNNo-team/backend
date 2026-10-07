@@ -114,7 +114,7 @@ Estos cambios rompen el trabajo de otras personas si no se comunican. Cuando los
 ---
 
 ## 8. Decisiones del equipo (no se cambian sin acordarlo)
-- **Autenticación:** se propone Firebase Authentication, **pendiente de confirmar** (lo define Jacobo). No instales ni configures un proveedor de autenticación hasta que el equipo lo confirme. El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente.
+- **Autenticación:** Firebase Authentication está confirmado. El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente.
 - **Estados de mesa:** Disponible, Reservada y Ocupada. *Inactiva* es una mesa desactivada, no un estado del control. “Pocas mesas” es disponibilidad del restaurante para el comensal, no un estado de mesa.
 - **Estado del restaurante:** Abierto o Cerrado.
 - **Diseño:** el manual de identidad v1.1 manda sobre cualquier otra preferencia. Un solo kit de componentes; nadie crea estilos propios.
@@ -180,7 +180,7 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 
 ### Configuración y variables de entorno
 - **Nunca leas `process.env` en el código de una funcionalidad:** usa `ConfigService` (`getOrThrow` para lo obligatorio).
-- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local), `DEV_USER_ENABLED`, `DEV_USER_ID`, `RENDER`, `NODE_ENV` y `RENDER_GIT_COMMIT`. Las de autenticación se agregan en la tarea de Jacobo, cuando se confirme el proveedor.
+- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID` y `PORT` (solo local).
   - **Obligatorias:** `DATABASE_URL` y `REDIS_URL`; si faltan, la app no arranca (`getOrThrow`). Las demás son opcionales.
   - `DEV_USER_ENABLED=true` activa el usuario de desarrollo y `DEV_USER_ID` es el uuid del usuario por defecto. Solo local: sin ellas, toda ruta protegida responde `401`.
   - `RENDER` (la define Render) y `NODE_ENV=production` apagan el usuario de desarrollo aunque `DEV_USER_ENABLED` sea `true`. No se definen a mano.
@@ -232,7 +232,7 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - Rutas en inglés, sustantivos en plural y `kebab-case` (por ejemplo `/v1/restaurants/me`, `/v1/tables/:id/status`).
 - **Toda entrada se valida en el backend**, aunque la web también valide, con `class-validator` y `class-transformer`: decoradores sobre el DTO, cada uno con su `message` en español que diga cómo corregir. El `ValidationPipe` es global (en `app.setup.ts`, con `whitelist`, `forbidNonWhitelisted` y `transform`): **cualquier campo que no esté en el DTO se rechaza con 400**, en todos los endpoints.
 - Errores con las excepciones HTTP de Nest (`BadRequestException`, `NotFoundException`, `ForbiddenException`…) y un mensaje claro. Nunca se devuelve un error interno, una consulta SQL ni un stack trace.
-- Forma de los errores: `{ statusCode, message, error }` y, a veces, `errorCode` (`src/common/dto/error-response.dto.ts`). **Lleva `errorCode` el error donde el front tiene que ramificar según el motivo; los demás no lo llevan.** Hoy solo `RESTAURANT_REQUIRED` (403 del usuario sin restaurante). Se usa la opción nativa de Nest 12 (`HttpExceptionOptions.errorCode`): `new ForbiddenException(mensaje, { errorCode: '...' })`. No se arma el cuerpo a mano ni se crea un campo propio.
+- Forma de los errores: `{ statusCode, message, error }` y, a veces, `errorCode` (`src/common/dto/error-response.dto.ts`). **Lleva `errorCode` el error donde el front tiene que ramificar según el motivo; los demás no lo llevan.** Hoy existen `RESTAURANT_REQUIRED` (403 del usuario sin restaurante) y `EMAIL_NOT_VERIFIED` (401 del correo sin verificar). Se usa la opción nativa de Nest 12 (`HttpExceptionOptions.errorCode`): `new ForbiddenException(mensaje, { errorCode: '...' })`. No se arma el cuerpo a mano ni se crea un campo propio.
 - **Un error no controlado** (no es una excepción HTTP: se cae la base, un bug) responde `500` con la forma de Nest y el mensaje en español "No pudimos completar la acción. Intenta de nuevo en un momento.", sin `errorCode`. El detalle real (mensaje, stack) **solo va al log del servidor, nunca al cliente**. Lo hace el filtro global `src/common/filters/unhandled-exception.filter.ts`, registrado en `app.setup.ts`: nadie monta su propio manejo de errores genéricos, y las excepciones HTTP que lanzamos pasan sin cambios.
 - No cambies la forma de una respuesta existente sin avisar (sección 7).
 

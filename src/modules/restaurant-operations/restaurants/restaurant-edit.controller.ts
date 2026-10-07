@@ -1,6 +1,7 @@
 import { Body, Controller, Patch, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
@@ -25,6 +26,7 @@ import {
 } from './restaurant-edit.service.js';
 
 @ApiTags('restaurants')
+@ApiBearerAuth()
 @UseGuards(CurrentUserGuard)
 @Controller('restaurants')
 export class RestaurantEditController {
@@ -51,8 +53,15 @@ export class RestaurantEditController {
     },
   })
   @ApiUnauthorizedResponse({
-    description: 'No hay una sesión activa.',
+    description:
+      'No hay una sesión activa o el correo no está verificado (errorCode: EMAIL_NOT_VERIFIED).',
     type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Verifica tu correo para continuar.',
+      error: 'Unauthorized',
+      errorCode: 'EMAIL_NOT_VERIFIED',
+    },
   })
   @ApiForbiddenResponse({
     description:

@@ -3,6 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity.js';
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export interface CreateUserInput {
   firebaseUid: string;
   email: string;
@@ -21,13 +25,22 @@ export class UsersService {
     return this.usersRepository.findOneBy({ firebaseUid });
   }
 
+  findByEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOneBy({ email: normalizeEmail(email) });
+  }
+
   findById(id: string): Promise<User | null> {
     return this.usersRepository.findOneBy({ id });
   }
 
+  linkFirebaseUid(user: User, firebaseUid: string): Promise<User> {
+    user.firebaseUid = firebaseUid;
+    return this.usersRepository.save(user);
+  }
+
   create(input: CreateUserInput): Promise<User> {
     const user = this.usersRepository.create({
-      email: input.email,
+      email: normalizeEmail(input.email),
       firebaseUid: input.firebaseUid,
       role: input.role,
       restaurantId: input.restaurantId,
