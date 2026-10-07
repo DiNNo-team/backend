@@ -12,6 +12,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Usuario actual:** `@UseGuards(CurrentUserGuard)` y `@CurrentUser() user: CurrentUserData`, importados solo desde `src/modules/identity-access/index.ts`, nunca desde carpetas internas.
   - `restaurantId` puede ser `null`: usuario que aún no registró su restaurante.
   - `restaurantId` sale siempre de ahí, nunca del body, query ni parámetros de ruta.
+- **Control de acceso por rol:** toda ruta nueva de restaurante lleva `@Roles(UserRole.RESTAURANT_ADMIN)` (importado de `identity-access/index.ts`) encima de `@UseGuards(CurrentUserGuard)`, en ese orden. Rol insuficiente responde `403` con "No tienes acceso a esta sección." y sin `errorCode`. Afecta a las rutas nuevas de Sergio (abrir/cerrar restaurante y `GET /v1/table-logs`) y de Santiago (registro y consulta del restaurante).
 - **Corre `npm install` después del pull del Día 2:** entraron `class-validator` y `class-transformer`. Sin eso, `build`, `test` y `start:dev` fallan.
 - **Corre `npm run typecheck` antes de dar una tarea por terminada**, junto con `npm run lint`, `npm run test` y `npm run build`. Es nuevo del Día 3. `lint` no revisa tipos y `build` no compila las pruebas, así que hasta ahora un error de tipos en un archivo de pruebas podía quedarse sin que nadie lo viera. `typecheck` revisa todo el proyecto, pruebas incluidas.
 - **Validación global (`ValidationPipe` en `src/app.setup.ts`), aplica a TODOS los endpoints, no solo a mesas:**
