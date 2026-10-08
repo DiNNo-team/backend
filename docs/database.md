@@ -7,6 +7,8 @@ Cómo crear y correr migraciones, y quién las corre: sección 10 del [CLAUDE.md
 
 > Las tres migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05) y `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06). Lo que se documenta abajo existe en Neon, **salvo `table_logs`**: `1791340136261-CreateTableLogs` (Sergio, PBI 9) está pendiente de aplicar.
 
+> **Pendiente de aplicar en Neon:** `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`). La aplica Elizabeth antes de fusionar el PR `feat/sprint1-estado-restaurante-backend`. Hasta entonces, `is_open` está documentada abajo pero no existe en Neon.
+
 ## Tablas
 
 Todas las tablas tienen `id`, `created_at` y `updated_at`:
@@ -24,6 +26,7 @@ Todas las tablas tienen `id`, `created_at` y `updated_at`:
 | `name` | `varchar(120)` | NOT NULL |
 | `category` | `varchar(50)` | NULL. Solo uno de los valores de la lista de categorías (`CHK_restaurants_category`); ver "Decisiones" |
 | `address` | `varchar(255)` | NULL |
+| `is_open` | `boolean` | NOT NULL, por defecto `true`. Estado Abierto/Cerrado del restaurante (PBI 8); ver "Decisiones". **Migración pendiente de aplicar** |
 
 ### `restaurant_schedules` · entidad `RestaurantSchedule`
 
@@ -89,7 +92,7 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 
 | Tabla | Dueño | Qué agrega (cada uno con su propia migración de `ALTER`) |
 |---|---|---|
-| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: estado abierto/cerrado |
+| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: `is_open` (estado abierto/cerrado) |
 | `restaurant_schedules` | Santiago | Tabla nueva para los horarios del restaurante |
 | `users` | Elizabeth (esquema base) | Jacobo: `firebase_uid` (ya aplicada) y lo que más necesite para enlazar con Firebase |
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
@@ -122,6 +125,7 @@ Nadie recrea una tabla ni toca columnas de otra persona.
   Como `status` en `tables`, es `varchar` con check y no `enum` de Postgres. **Para agregar o quitar una categoría hace falta una migración escrita a mano** que borre y vuelva a crear `CHK_restaurants_category`: TypeORM compara los checks solo por su nombre, así que `migration:generate` no detecta que cambió la lista.
 - **`category` y `address` son NULL en la base a propósito:** ya hay restaurantes creados solo con nombre (el del seed, y `src/seed.ts` sigue creándolos así). Que sean obligatorios lo impone el endpoint de registro, no la base. No tienen valor por defecto.
 - **Un día cerrado es un día sin fila** en `restaurant_schedules`; no hay columna de "cerrado".
+- **`restaurants.is_open` es un interruptor manual**, independiente de `restaurant_schedules`: en el Sprint 1 no se calcula a partir de los horarios. Nace en `true` (el restaurante recién registrado queda abierto), y los restaurantes que ya existen quedan en `true` al aplicar la migración. El valor por defecto está pendiente de confirmar con Santiago (registro): si cambia a `false`, es otra migración.
 - **"Abierto 24 horas" es explícito, con `is_open_24h = true`** y sin horas. Una apertura igual al cierre no es válida, para que "24 horas" no tenga dos formas de escribirse.
 - **Un cierre menor que la apertura significa que cierra al día siguiente** (por ejemplo, abre a las 18:00 y cierra a las 02:00). Por eso no hay un check `closes_at > opens_at`.
 

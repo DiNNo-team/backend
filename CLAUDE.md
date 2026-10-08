@@ -245,6 +245,14 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - **Un error no controlado** (no es una excepción HTTP: se cae la base, un bug) responde `500` con la forma de Nest y el mensaje en español "No pudimos completar la acción. Intenta de nuevo en un momento.", sin `errorCode`. El detalle real (mensaje, stack) **solo va al log del servidor, nunca al cliente**. Lo hace el filtro global `src/common/filters/unhandled-exception.filter.ts`, registrado en `app.setup.ts`: nadie monta su propio manejo de errores genéricos, y las excepciones HTTP que lanzamos pasan sin cambios.
 - No cambies la forma de una respuesta existente sin avisar (sección 7).
 
+### Estado abierto/cerrado del restaurante (`restaurant-operations/restaurants/restaurant-status.*`, Sergio)
+- **Columna:** `restaurants.is_open` (`boolean`, NOT NULL, por defecto `true`), propiedad `isOpen` de `Restaurant`. Migración `1791342586330-AddRestaurantIsOpen`.
+- **`GET /v1/restaurants/me/status`:** no recibe nada. Responde `200` con `{ "isOpen": boolean }` (`RestaurantStatusResponseDto`).
+- **`PATCH /v1/restaurants/me/status`:** recibe `{ "isOpen": boolean }` (`UpdateRestaurantStatusDto`; un texto `"true"`, `null`, un campo faltante o un campo de más dan `400`). Responde `200` con `{ "isOpen": boolean }`, el estado después del cambio. Enviar el estado que ya tiene responde `200` igual.
+- Los dos: el restaurante sale siempre de la sesión (no hay id en la ruta ni en el body); `401` sin sesión (sin `Authorization: Bearer` válido) o con el correo sin verificar (`EMAIL_NOT_VERIFIED`), y `403` con `errorCode: "RESTAURANT_REQUIRED"` si el usuario no tiene restaurante (`requireRestaurant`).
+- **Es manual en el Sprint 1:** no depende de `restaurant_schedules`. La confirmación de cerrar con mesas reservadas (y el conteo de esas mesas) la hace la web con `GET /v1/tables`; el endpoint no la pide ni la devuelve.
+- Es independiente de `GET`/`PATCH /v1/restaurants/me`: `RestaurantResponseDto` no incluye `isOpen`.
+
 ### Pruebas
 - Vitest. Pruebas unitarias junto al código (`*.spec.ts`) y e2e en `test/`.
 - Cada servicio nuevo con pruebas de casos felices y de error (por ejemplo: mesa de otro restaurante, datos inválidos, mesa inactiva).

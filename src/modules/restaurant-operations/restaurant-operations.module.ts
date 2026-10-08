@@ -5,6 +5,8 @@ import { RestaurantEditController } from './restaurants/restaurant-edit.controll
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
 import { Restaurant } from './restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './restaurants/restaurant-schedule.entity.js';
+import { RestaurantStatusController } from './restaurants/restaurant-status.controller.js';
+import { RestaurantStatusService } from './restaurants/restaurant-status.service.js';
 import { TableLog } from './table-logs/table-log.entity.js';
 import { DbTableStatusLog } from './table-logs/table-logs.recorder.js';
 import { Table } from './tables/table.entity.js';
@@ -17,10 +19,15 @@ import { TablesService } from './tables/tables.service.js';
     TypeOrmModule.forFeature([Restaurant, RestaurantSchedule, Table, TableLog]),
     IdentityAccessModule,
   ],
-  controllers: [TablesController, RestaurantEditController],
+  controllers: [
+    TablesController,
+    RestaurantEditController,
+    RestaurantStatusController,
+  ],
   providers: [
     TablesService,
     RestaurantEditService,
+    RestaurantStatusService,
     // Table log (PBI 9): table-logs/ implements the tables/ port.
     { provide: TableStatusLog, useClass: DbTableStatusLog },
   ],
