@@ -286,6 +286,11 @@ describe('Restaurant registration (e2e)', () => {
     expect(
       Object.keys(res.body.paths['/v1/restaurants/me'].get.responses).sort(),
     ).toEqual(['200', '401', '403']);
+    // Same bearer token as the other protected routes, so /docs can send it.
+    const bearer = res.body.paths['/v1/restaurants/me'].patch.security;
+    expect(bearer).toBeDefined();
+    expect(res.body.paths['/v1/restaurants'].post.security).toEqual(bearer);
+    expect(res.body.paths['/v1/restaurants/me'].get.security).toEqual(bearer);
     expect(res.body.components.schemas.RegisterRestaurantDto.required).toEqual([
       'name',
       'category',

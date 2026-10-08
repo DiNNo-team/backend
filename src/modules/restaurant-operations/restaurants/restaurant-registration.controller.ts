@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
@@ -27,6 +28,7 @@ import {
 } from './restaurant-registration.service.js';
 
 @ApiTags('restaurants')
+@ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description: 'No hay una sesión activa.',
   type: ErrorResponseDto,
