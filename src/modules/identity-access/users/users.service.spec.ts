@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { EntityManager, IsNull, QueryFailedError, Repository } from 'typeorm';
 import { User } from './user.entity.js';
 import { UsersService } from './users.service.js';
 
@@ -81,6 +81,141 @@ describe('UsersService', () => {
       usersRepository.findOneBy.mockRejectedValue(error);
 
       await expect(usersService.findById('user-id')).rejects.toBe(error);
+    });
+  });
+
+  describe('assignRestaurantIfNone', () => {
+    const userId = 'user-id';
+    const restaurantId = 'restaurant-id';
+
+    function createManager(affected: number) {
+      return {
+        update: vi.fn().mockResolvedValue({ affected }),
+      } as unknown as EntityManager & { update: ReturnType<typeof vi.fn> };
+    }
+
+    it('assigns a restaurant when the user has none and returns true', async () => {
+      const manager = createManager(1);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(true);
+
+      expect(manager.update).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(
+        User,
+        { id: userId, restaurantId: IsNull() },
+        { restaurantId },
+      );
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('returns false and does not overwrite an existing restaurant', async () => {
+      const manager = createManager(0);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(false);
+
+      expect(manager.update).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(
+        User,
+        { id: userId, restaurantId: IsNull() },
+        { restaurantId },
+      );
+    });
+
+    it('returns false when the user does not exist', async () => {
+      const manager = createManager(0);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(false);
+      expect(manager.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('propagates manager errors without swallowing them', async () => {
+      const driverError = Object.assign(new Error('foreign key violation'), {
+        code: '23503',
+        constraint: 'FK_users_restaurant_id',
+      });
+      const error = new QueryFailedError('UPDATE users', [], driverError);
+      const manager = {
+        update: vi.fn().mockRejectedValue(error),
+      } as unknown as EntityManager & { update: ReturnType<typeof vi.fn> };
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).rejects.toBe(error);
+    });
+  });
+
+  describe('linkFirebaseUid', () => {
+    const firebaseUid = 'firebase-uid';
+    const originalUser = {
+      id: 'user-id',
+      firebaseUid: null,
+      email: 'owner@example.com',
+      role: 'restaurant_admin',
+      restaurantId: null,
+    } as User;
+
+    function uniqueViolation(constraint: string): QueryFailedError {
+      const driverError = Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint,
+      });
+      return new QueryFailedError('UPDATE users', [], driverError);
+    }
+
+    it('returns the user found by Firebase UID after a matching unique conflict', async () => {
+      const linkedUser = { ...originalUser, firebaseUid } as User;
+      usersRepository.save.mockRejectedValueOnce(
+        uniqueViolation('UQ_users_firebase_uid'),
+      );
+      usersRepository.findOneBy.mockResolvedValueOnce(linkedUser);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).resolves.toBe(linkedUser);
+      expect(usersRepository.findOneBy).toHaveBeenCalledWith({ firebaseUid });
+    });
+
+    it('rethrows the original unique error when no linked user is found', async () => {
+      const error = uniqueViolation('UQ_users_firebase_uid');
+      usersRepository.save.mockRejectedValueOnce(error);
+      usersRepository.findOneBy.mockResolvedValueOnce(null);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).rejects.toBe(error);
+    });
+
+    it('rethrows a unique error from a different constraint without searching', async () => {
+      const error = uniqueViolation('UQ_users_email');
+      usersRepository.save.mockRejectedValueOnce(error);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).rejects.toBe(error);
+      expect(usersRepository.findOneBy).not.toHaveBeenCalled();
+    });
+
+    it('propagates errors that are not unique violations', async () => {
+      const error = new QueryFailedError(
+        'UPDATE users',
+        [],
+        Object.assign(new Error('foreign key violation'), {
+          code: '23503',
+          constraint: 'FK_users_restaurant_id',
+        }),
+      );
+      usersRepository.save.mockRejectedValueOnce(error);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).rejects.toBe(error);
+      expect(usersRepository.findOneBy).not.toHaveBeenCalled();
     });
   });
 

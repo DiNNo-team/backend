@@ -21,6 +21,7 @@ function createService() {
     name: 'Nombre anterior',
     category: null,
     address: null,
+    isOpen: true,
     createdAt: new Date('2026-10-04T12:00:00Z'),
     updatedAt: new Date('2026-10-04T12:00:00Z'),
   };

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
+import { isUniqueViolation } from './unique-violation.js';
 import { User } from './user.entity.js';
 
 function normalizeEmail(email: string): string {
@@ -33,9 +34,38 @@ export class UsersService {
     return this.usersRepository.findOneBy({ id });
   }
 
-  linkFirebaseUid(user: User, firebaseUid: string): Promise<User> {
+  // userId must come from the session, never the request body. Returns true
+  // when assigned, false when the user is missing or already has a restaurant.
+  // Call with the transaction manager that creates the restaurant.
+  async assignRestaurantIfNone(
+    userId: string,
+    restaurantId: string,
+    manager: EntityManager,
+  ): Promise<boolean> {
+    const result = await manager.update(
+      User,
+      { id: userId, restaurantId: IsNull() },
+      { restaurantId },
+    );
+
+    return (result.affected ?? 0) > 0;
+  }
+
+  async linkFirebaseUid(user: User, firebaseUid: string): Promise<User> {
     user.firebaseUid = firebaseUid;
-    return this.usersRepository.save(user);
+    try {
+      return await this.usersRepository.save(user);
+    } catch (error) {
+      if (!isUniqueViolation(error, 'UQ_users_firebase_uid')) {
+        throw error;
+      }
+
+      const linkedUser = await this.findByFirebaseUid(firebaseUid);
+      if (linkedUser?.firebaseUid === firebaseUid) {
+        return linkedUser;
+      }
+      throw error;
+    }
   }
 
   create(input: CreateUserInput): Promise<User> {

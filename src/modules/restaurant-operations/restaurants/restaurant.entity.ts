@@ -48,6 +48,11 @@ export class Restaurant {
   @Column({ type: 'varchar', length: 255, nullable: true })
   address: string | null;
 
+  // Open/closed switch of the restaurant (PBI 8), changed by hand from the
+  // dashboard. It does not follow restaurant_schedules in Sprint 1.
+  @Column({ name: 'is_open', type: 'boolean', default: true })
+  isOpen: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
