@@ -149,6 +149,16 @@ describe('Restaurant status (e2e)', () => {
     expect(res.body).toEqual({ isOpen: true });
   });
 
+  it('answers 200 when asked for the state it already has', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: true })
+      .expect(200);
+
+    expect(res.body).toEqual({ isOpen: true });
+    expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
+  });
+
   it('does not change the restaurant of another user', async () => {
     await request(app.getHttpServer())
       .patch('/v1/restaurants/me/status')

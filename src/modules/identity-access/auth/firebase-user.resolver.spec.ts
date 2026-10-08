@@ -23,7 +23,7 @@ function decodedToken(overrides: Partial<DecodedIdToken> = {}): DecodedIdToken {
 
 function requestWith(authorization?: string | string[]): Request {
   return {
-    headers: authorization ? { authorization } : {},
+    headers: authorization === undefined ? {} : { authorization },
   } as unknown as Request;
 }
 
@@ -114,6 +114,7 @@ describe('FirebaseUserResolver', () => {
   });
 
   it.each<[string, string | string[]]>([
+    ['an empty Authorization header', ''],
     ['a different authorization scheme', 'Basic valid-token'],
     ['Bearer without a token', 'Bearer'],
     ['Bearer followed only by extra spaces', 'Bearer   '],

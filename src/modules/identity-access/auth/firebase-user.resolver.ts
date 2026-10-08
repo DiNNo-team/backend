@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import type { CurrentUserData } from '../current-user/current-user-data.js';
 import { CurrentUserResolver } from '../current-user/current-user.resolver.js';
+import { isUniqueViolation } from '../users/unique-violation.js';
 import type { User } from '../users/user.entity.js';
 import { UsersService } from '../users/users.service.js';
 import {
@@ -13,18 +14,6 @@ import {
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión terminó. Inicia sesión de nuevo.';
 const EMAIL_NOT_VERIFIED_MESSAGE = 'Verifica tu correo para continuar.';
 const CREATE_ROLE = 'restaurant_admin';
-
-function isUniqueViolation(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) {
-    return false;
-  }
-
-  const candidate = error as {
-    code?: unknown;
-    driverError?: { code?: unknown };
-  };
-  return candidate.code === '23505' || candidate.driverError?.code === '23505';
-}
 
 function toCurrentUser(user: User): CurrentUserData {
   return {
