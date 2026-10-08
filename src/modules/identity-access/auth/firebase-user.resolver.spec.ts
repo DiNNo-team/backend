@@ -21,7 +21,7 @@ function decodedToken(overrides: Partial<DecodedIdToken> = {}): DecodedIdToken {
   } as DecodedIdToken;
 }
 
-function requestWith(authorization?: string): Request {
+function requestWith(authorization?: string | string[]): Request {
   return {
     headers: authorization ? { authorization } : {},
   } as unknown as Request;
@@ -58,9 +58,7 @@ async function expectUnauthorized(
   }
 
   expect(caughtError).toBeInstanceOf(UnauthorizedException);
-  expect(
-    (caughtError as UnauthorizedException).getResponse(),
-  ).toEqual({
+  expect((caughtError as UnauthorizedException).getResponse()).toEqual({
     statusCode: 401,
     message,
     error: 'Unauthorized',
@@ -113,6 +111,60 @@ describe('FirebaseUserResolver', () => {
       SESSION_EXPIRED_MESSAGE,
     );
     expect(auth.verifyIdToken).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, string | string[]]>([
+    ['a different authorization scheme', 'Basic valid-token'],
+    ['Bearer without a token', 'Bearer'],
+    ['Bearer followed only by extra spaces', 'Bearer   '],
+    [
+      'a repeated Authorization header',
+      ['Bearer token-one', 'Bearer token-two'],
+    ],
+  ])('rejects %s with the generic 401', async (_case, authorization) => {
+    const { auth, resolver } = createResolver();
+
+    await expectUnauthorized(
+      resolver.resolve(requestWith(authorization)),
+      SESSION_EXPIRED_MESSAGE,
+    );
+    expect(auth.verifyIdToken).not.toHaveBeenCalled();
+  });
+
+  it('accepts a case-insensitive Bearer scheme', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    const user = {
+      id: USER_ID,
+      firebaseUid: FIREBASE_UID,
+      email: EMAIL,
+      role: 'restaurant_admin',
+      restaurantId: null,
+    } as User;
+    auth.verifyIdToken.mockResolvedValue(decodedToken());
+    usersService.findByFirebaseUid.mockResolvedValue(user);
+
+    await expect(
+      resolver.resolve(requestWith('bEaReR valid-token')),
+    ).resolves.toMatchObject({ userId: USER_ID });
+    expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
+  });
+
+  it('accepts surrounding and repeated whitespace around a valid Bearer token', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    const user = {
+      id: USER_ID,
+      firebaseUid: FIREBASE_UID,
+      email: EMAIL,
+      role: 'restaurant_admin',
+      restaurantId: null,
+    } as User;
+    auth.verifyIdToken.mockResolvedValue(decodedToken());
+    usersService.findByFirebaseUid.mockResolvedValue(user);
+
+    await expect(
+      resolver.resolve(requestWith('  Bearer   valid-token  ')),
+    ).resolves.toMatchObject({ userId: USER_ID });
+    expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
   });
 
   it('rejects a token that has no email', async () => {
