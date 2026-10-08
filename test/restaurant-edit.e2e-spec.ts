@@ -153,13 +153,13 @@ describe('Restaurant edit (e2e)', () => {
     expect(restaurants.save).not.toHaveBeenCalled();
   });
 
-  it('documents the route in Swagger, and there is no GET of its own', async () => {
+  it('documents the route in Swagger, next to the GET of the registration', async () => {
     const res = await request(app.getHttpServer())
       .get('/docs-json')
       .expect(200);
     const route = res.body.paths['/v1/restaurants/me'];
 
-    expect(Object.keys(route)).toEqual(['patch']);
+    expect(Object.keys(route).sort()).toEqual(['get', 'patch']);
     expect(Object.keys(route.patch.responses).sort()).toEqual([
       '200',
       '400',
@@ -168,7 +168,7 @@ describe('Restaurant edit (e2e)', () => {
     ]);
     expect(
       Object.keys(res.body.components.schemas.UpdateRestaurantDto.properties),
-    ).toEqual(['name']);
+    ).toEqual(['name', 'category', 'address']);
     expect(
       res.body.components.schemas.UpdateRestaurantDto.required ?? [],
     ).toEqual([]);
