@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, IsNull, QueryFailedError, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
+import { isUniqueViolation } from './unique-violation.js';
 import { User } from './user.entity.js';
 
 function normalizeEmail(email: string): string {
@@ -55,11 +56,7 @@ export class UsersService {
     try {
       return await this.usersRepository.save(user);
     } catch (error) {
-      if (
-        !(error instanceof QueryFailedError) ||
-        error.driverError.code !== '23505' ||
-        error.driverError.constraint !== 'UQ_users_firebase_uid'
-      ) {
+      if (!isUniqueViolation(error, 'UQ_users_firebase_uid')) {
         throw error;
       }
 

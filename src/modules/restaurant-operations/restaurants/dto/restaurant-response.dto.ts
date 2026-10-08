@@ -8,6 +8,8 @@ import {
 // The restaurant as the web sees it. Meant to be shared by the restaurant
 // GET (Santiago) and PATCH (Elizabeth): new columns are added here as new
 // fields, so the response only grows and existing fields never change.
+// Exception on purpose: isOpen is not here, because the open/closed state has
+// its own endpoints (GET and PATCH /v1/restaurants/me/status).
 export class RestaurantResponseDto {
   @ApiProperty({
     format: 'uuid',
