@@ -60,10 +60,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Jacobo
 - La columna `firebase_uid` (`varchar(128)`, NULL, `UQ_users_firebase_uid`) quedó aplicada en Neon con la migración `1791268910540-AddFirebaseUidToUsers` (2026-10-06). `UsersService` está registrado y exportado desde `identity-access`.
-- **Antes de fusionar el PR de autenticación, configura `FIREBASE_PROJECT_ID` en Render.** Es el ID público del proyecto Firebase, no una credencial privada.
 - **Pendiente en el seed, a cargo de Elizabeth:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`. No cambies el seed desde esta tarea.
-- Día 3, al conectar Firebase: **encadenar, no reemplazar.** En local debe seguir funcionando el usuario de desarrollo: un `useFactory` que elija entre los dos resolvers, no un `useClass` que sustituya a `DevUserResolver`.
-- Pendiente de decidir: ¿se crea la fila en `users` automáticamente en el primer inicio de sesión? Cambia cuánto cuesta probar el onboarding.
 - Lo global de validación te toca en cualquier endpoint de `identity-access` que reciba body: campos de más dan `400`, los mensajes van en español en cada decorador y en Swagger documentas los errores con el `ErrorResponseDto` de `src/common/dto/`.
 - **Decisión tomada: cómo responde la API cuando un usuario no puede acceder a algo.** Hay tres situaciones distintas, y cada una tiene ya su respuesta para que tu control de acceso por rol no choque con lo que existe:
   - **Usuario sin restaurante:** responde `403` con `errorCode: "RESTAURANT_REQUIRED"`. Ya está implementado en las rutas de mesas, y la web ramifica por ese código para llevar al usuario al registro del restaurante, así que no debe cambiar.
@@ -77,26 +74,12 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - **401 y 500** funcionan igual que en el resto de la API.
   - **Los datos para mostrar en la pantalla los da Santiago**, con la consulta del restaurante (PBI 3). Se espera en `GET /v1/restaurants/me`, con la misma forma de respuesta que el `PATCH`.
   - **Hoy solo se puede editar el nombre.** Categoría y dirección aparecerán cuando Santiago las agregue al DTO y a la respuesta (las columnas ya existen); los horarios, cuando decida cómo se guardan. Llegarán como campos nuevos en el body y en la respuesta, sin cambiar la ruta ni los campos que ya existen, así que tu pantalla no debería fallar si la respuesta trae un campo que todavía no muestra.
-- **Pendientes de tus PR** (lista de revisión, en tono neutro: son ajustes, no reproches):
-  - **PR #16 (ya fusionado):**
-    - Corre `npm run format` sobre `user.entity.ts`: el `@Column` de `firebaseUid` pasa de 80 columnas.
-    - Agrega `name = 'AddFirebaseUidToUsers1791268910540'` a la migración. No cambia el SQL ni el timestamp; no modifiques el SQL, porque la migración ya está aplicada.
-    - Confirma el valor definitivo de `role`: `'restaurant'` en las pruebas y `'restaurant_admin'` en el seed.
-  - **PR de login con Firebase (todavía sin fusionar), cambios pedidos:**
-    - Enlazar por correo solo si `firebaseUid` es `null` (hoy sobrescribe uno existente).
-    - Exigir `email_verified` también al crear la fila.
-    - `getOrThrow` de `FIREBASE_PROJECT_ID` al arrancar cuando el usuario de desarrollo está apagado.
-    - Normalizar el correo con `trim().toLowerCase()` al buscar y al crear.
-    - Pruebas faltantes: que un error distinto de `23505` se propague, que el `useFactory` elija Firebase si `RENDER` o `NODE_ENV=production` están definidos, y los casos anteriores.
-    - Devolver a la sección 8 de `CLAUDE.md` la frase "El restaurante y el usuario actual se obtienen siempre de la sesión, nunca de lo que envía el cliente".
-    - Documentar `FIREBASE_PROJECT_ID` en `.env.example` como obligatoria cuando el usuario de desarrollo está apagado, y que `FIREBASE_AUTH_EMULATOR_HOST` no debe definirse en Render.
-    - No correr `npm audit fix` en ese PR.
-
 ### Santiago y Sergio
 - `restaurants` ya tiene `name`, `category` y `address`. Sergio agrega su columna con su propia migración de `ALTER`. Nadie recrea la tabla.
 - **No corran `migration:generate`:** con la base compartida genera una migración con las tablas de los demás. Usen `npm run migration:create` y escriban el SQL, o pídanle la migración a Elizabeth.
 
 ### Santiago
+- Asignar el restaurante al usuario: dentro de tu transacción, primero crea el restaurante y después llama a `usersService.assignRestaurantIfNone(user.userId, restaurant.id, manager)`. Si devuelve `false`, lanza `ConflictException("Ya tienes un restaurante registrado.")` dentro de la transacción para que se revierta el restaurante recién creado. Impórtalo desde `identity-access/index.ts`.
 - **Agregué `isOpen` en `restaurant.entity.ts`** (Sergio, PBI 8): columna `is_open`, `boolean`, NOT NULL, `DEFAULT true`. Solo esa propiedad, después de `address`; no toqué `category`, `address` ni `restaurant_schedules`. **Falta confirmar contigo el valor por defecto:** con `true`, un restaurante recién registrado queda Abierto sin que tu registro haga nada. Si prefieres que nazca Cerrado, avísame y lo cambio con otra migración. Tu registro no tiene que mandar `isOpen`, y `RestaurantResponseDto` no lo incluye: el estado tiene sus propios endpoints (`/v1/restaurants/me/status`).
 - **La librería de validación es `class-validator` con `class-transformer`**, con decoradores sobre el DTO.
 - **El archivo de las validaciones del restaurante ya existe, y tus validaciones del registro van ahí.** Es `src/modules/restaurant-operations/restaurants/dto/restaurant-fields.dto.ts`, con la clase `RestaurantFieldsDto`. Elizabeth lo empezó solo con el nombre: obligatorio, sin espacios sobrantes y de 1 a 120 caracteres. `category` y `address` ya existen en la tabla, pero todavía no están en ese archivo. La edición del restaurante (`PATCH /v1/restaurants/me`) se deriva de esa misma clase con `PartialType`, así que cada regla que escribas ahí vale a la vez para tu registro y para la edición. Por eso no las pegues a tu formulario ni a tu servicio: si una regla no está en ese archivo, la edición no la tiene. Tu DTO de registro puede ser esa clase tal cual, o una que extienda de ella si el registro necesita algo más.
@@ -144,7 +127,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Desactivar una mesa Ocupada o Reservada:** hoy el backend lo permite. Es una decisión de producto pendiente de confirmar por el equipo; hasta entonces sigue permitido.
 - **Login con Firebase (PR de Jacobo, todavía sin fusionar: no lo implementes hasta que se fusione).** Esto es lo que se espera y puede cambiar antes del merge:
   - Las rutas protegidas aceptarán `Authorization: Bearer <ID token de Firebase>` (`getIdToken()`, que se renueva solo).
-  - `401` con "Tu sesión terminó. Inicia sesión de nuevo.": sin token, token inválido o correo sin verificar. Llévalo al login.
+  - `401` con "Tu sesión terminó. Inicia sesión de nuevo.": sin token o token inválido/vencido. Llévalo al login.
   - `403` con `errorCode: "RESTAURANT_REQUIRED"`: la cuenta no tiene restaurante. Llévalo al registro del restaurante.
   - El correo debe estar verificado: al registrarse, llama a `sendEmailVerification`, muestra "Revisa tu correo y verifícalo para continuar" y refresca el token (`getIdToken(true)`) o inicia sesión de nuevo.
   - **Decisión (Sebastián y Jacobo, 2026-10-07):** el `401` del correo sin verificar lleva `errorCode: "EMAIL_NOT_VERIFIED"` y el mensaje "Verifica tu correo para continuar." (`new UnauthorizedException(mensaje, { errorCode: 'EMAIL_NOT_VERIFIED' })`; agrégalo al `enum` de `ErrorResponseDto`). Los demás `401` siguen sin `errorCode`. La web ya lo distingue (`EMAIL_NOT_VERIFIED_EVENT` en `@/lib/api-client`).
