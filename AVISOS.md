@@ -91,7 +91,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - Responde `201` con `{ id, name, category, address, schedules }`, igual que `GET /v1/restaurants/me`.
   - `400`: `message` es una lista, y los errores de horario dicen el día ("El lunes: …").
   - `409`: el usuario ya tiene restaurante ("Ya registraste tu restaurante. Para cambiar sus datos, entra a Restaurante."). Llévalo a mesas.
-- **Agregué `isOpen` en `restaurant.entity.ts`** (Sergio, PBI 8): columna `is_open`, `boolean`, NOT NULL, `DEFAULT true`. Solo esa propiedad, después de `address`; no toqué `category`, `address` ni `restaurant_schedules`. **Falta confirmar contigo el valor por defecto:** con `true`, un restaurante recién registrado queda Abierto sin que tu registro haga nada. Si prefieres que nazca Cerrado, avísame y lo cambio con otra migración. Tu registro no tiene que mandar `isOpen`, y `RestaurantResponseDto` no lo incluye: el estado tiene sus propios endpoints (`/v1/restaurants/me/status`).
+- **Agregué `isOpen` en `restaurant.entity.ts`** (Sergio, PBI 8): columna `is_open`, `boolean`, NOT NULL, `DEFAULT true`. Solo esa propiedad, después de `address`; no toqué `category`, `address` ni `restaurant_schedules`. **Decisión (Santiago, 2026-10-08): un restaurante recién registrado nace Abierto.** Se queda el `DEFAULT true`; no hace falta otra migración. Tu registro no tiene que mandar `isOpen`, y `RestaurantResponseDto` no lo incluye: el estado tiene sus propios endpoints (`/v1/restaurants/me/status`).
 - **La librería de validación es `class-validator` con `class-transformer`**, con decoradores sobre el DTO.
 - **El archivo de las validaciones del restaurante ya existe, y tus validaciones del registro van ahí.** Es `src/modules/restaurant-operations/restaurants/dto/restaurant-fields.dto.ts`, con la clase `RestaurantFieldsDto`. Elizabeth lo empezó solo con el nombre: obligatorio, sin espacios sobrantes y de 1 a 120 caracteres. `category` y `address` ya existen en la tabla, pero todavía no están en ese archivo. La edición del restaurante (`PATCH /v1/restaurants/me`) se deriva de esa misma clase con `PartialType`, así que cada regla que escribas ahí vale a la vez para tu registro y para la edición. Por eso no las pegues a tu formulario ni a tu servicio: si una regla no está en ese archivo, la edición no la tiene. Tu DTO de registro puede ser esa clase tal cual, o una que extienda de ella si el registro necesita algo más.
 - **Qué hacer para que tus campos funcionen también en la edición.** Son tres pasos para categoría, dirección y horarios (el primero ya está hecho: las columnas y la entidad existen), y con ellos el `PATCH` acepta, valida, guarda y devuelve tus campos sin que nadie toque la edición:
@@ -182,12 +182,12 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - el cambio es manual: no mira los horarios. El conteo de mesas reservadas para confirmar el cierre lo hace la web; el endpoint no lo devuelve.
   - **Para quién / qué deben hacer:**
     - **Elizabeth:** aplicar la migración en Neon antes del merge (ver tu sección).
-    - **Santiago:** confirmar el valor por defecto de `is_open` (ver tu sección).
+    - **Santiago:** confirmó el valor por defecto de `is_open`: nace Abierto (2026-10-08).
     - **Todos:** quien cree un objeto `Restaurant` completo en una prueba tiene que agregar `isOpen` (ya está en `stored` de `restaurant-edit.service.spec.ts`).
   - **Rama / PR:** `feat/sprint1-estado-restaurante-backend` → `develop` (PR abierto). Ya incluye `develop` con la bitácora y el login con Firebase: los endpoints llevan `@ApiBearerAuth()` y el `401` documenta `EMAIL_NOT_VERIFIED`, como los demás controllers.
   - **Pendiente o conocido:**
     - la migración está sin aplicar en Neon: no se fusiona hasta que Elizabeth confirme en el grupo que la aplicó;
-    - el valor por defecto (`true`) está pendiente de confirmar con Santiago.
+    - el valor por defecto (`true`) quedó confirmado por Santiago el 2026-10-08.
 - **2026-10-06 · Sergio · PBI 9 · Crear estructura de bitácora en base de datos + Registrar cambios desde la lógica de mesas.** Cambia el esquema.
   - **Qué quedó listo:**
     - la tabla `table_logs` (entidad `TableLog`), con la migración `1791340136261-CreateTableLogs`;
