@@ -12,6 +12,7 @@ import { selectCurrentUserResolver } from './auth/current-user-resolver.factory.
 import { FirebaseUserResolver } from './auth/firebase-user.resolver.js';
 import { User } from './users/user.entity.js';
 import { UsersService } from './users/users.service.js';
+import { RolesGuard } from './roles/roles.guard.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
@@ -29,8 +30,9 @@ import { UsersService } from './users/users.service.js';
       useFactory: selectCurrentUserResolver,
     },
     CurrentUserGuard,
+    RolesGuard,
     UsersService,
   ],
-  exports: [CurrentUserResolver, CurrentUserGuard, UsersService],
+  exports: [CurrentUserResolver, CurrentUserGuard, RolesGuard, UsersService],
 })
 export class IdentityAccessModule {}
