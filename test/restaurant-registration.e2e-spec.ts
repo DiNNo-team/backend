@@ -18,10 +18,19 @@ const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const NEW_RESTAURANT_ID = '6e5d4c3b-2a19-4807-b6a5-948372615049';
 
+const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
+
 const users = [
   { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
   { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
+  { id: INVALID_ROLE_USER_ID, role: 'unknown-role', restaurantId: null },
 ];
+
+const ROLE_FORBIDDEN_BODY = {
+  statusCode: 403,
+  error: 'Forbidden',
+  message: 'No tienes acceso a esta sección.',
+};
 
 const REGISTRATION = {
   name: '  La Esquina de Ana ',
@@ -46,6 +55,45 @@ describe('Restaurant registration (e2e)', () => {
     save: ReturnType<typeof vi.fn>;
   };
   let usersService: { assignRestaurantIfNone: ReturnType<typeof vi.fn> };
+
+  async function createApp(devUserEnabled: boolean) {
+    const moduleFixture = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true,
+          load: [
+            () => ({
+              DEV_USER_ENABLED: String(devUserEnabled),
+              DEV_USER_ID: OWNER_ID,
+              FIREBASE_PROJECT_ID: 'firebase-project-example',
+            }),
+          ],
+        }),
+        RestaurantOperationsModule,
+      ],
+    })
+      .overrideProvider(getRepositoryToken(User))
+      .useValue({
+        findOneBy: ({ id }: { id: string }) =>
+          Promise.resolve(users.find((user) => user.id === id) ?? null),
+      })
+      .overrideProvider(getRepositoryToken(Restaurant))
+      .useValue(restaurants)
+      .overrideProvider(getRepositoryToken(RestaurantSchedule))
+      .useValue(schedules)
+      .overrideProvider(getRepositoryToken(Table))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableLog))
+      .useValue({})
+      .overrideProvider(UsersService)
+      .useValue(usersService)
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    configureApp(app);
+    await app.init();
+  }
 
   beforeEach(async () => {
     txManager = {
@@ -86,36 +134,7 @@ describe('Restaurant registration (e2e)', () => {
     };
     usersService = { assignRestaurantIfNone: vi.fn().mockResolvedValue(true) };
 
-    const moduleFixture = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          ignoreEnvFile: true,
-          load: [() => ({ DEV_USER_ENABLED: 'true', DEV_USER_ID: OWNER_ID })],
-        }),
-        RestaurantOperationsModule,
-      ],
-    })
-      .overrideProvider(getRepositoryToken(User))
-      .useValue({
-        findOneBy: ({ id }: { id: string }) =>
-          Promise.resolve(users.find((user) => user.id === id) ?? null),
-      })
-      .overrideProvider(getRepositoryToken(Restaurant))
-      .useValue(restaurants)
-      .overrideProvider(getRepositoryToken(RestaurantSchedule))
-      .useValue(schedules)
-      .overrideProvider(getRepositoryToken(Table))
-      .useValue({})
-      .overrideProvider(getRepositoryToken(TableLog))
-      .useValue({})
-      .overrideProvider(UsersService)
-      .useValue(usersService)
-      .compile();
-
-    app = moduleFixture.createNestApplication();
-    configureApp(app);
-    await app.init();
+    await createApp(true);
   });
 
   afterEach(async () => {
@@ -220,6 +239,22 @@ describe('Restaurant registration (e2e)', () => {
       expect(restaurants.manager.transaction).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['id', NEW_RESTAURANT_ID],
+      ['isOpen', false],
+    ])('rejects %s in the body', async (field, value) => {
+      const res = await request(app.getHttpServer())
+        .post('/v1/restaurants')
+        .set('x-dev-user-id', NEWCOMER_ID)
+        .send({ ...REGISTRATION, [field]: value })
+        .expect(400);
+
+      expect(res.body.message).toEqual([
+        `El campo "${field}" no se permite. Quítalo de la solicitud.`,
+      ]);
+      expect(restaurants.manager.transaction).not.toHaveBeenCalled();
+    });
+
     it('answers the generic 500 if the restaurant cannot be linked to the user', async () => {
       usersService.assignRestaurantIfNone.mockRejectedValue(
         new Error('assign failed'),
@@ -257,7 +292,14 @@ describe('Restaurant registration (e2e)', () => {
           },
         ],
       });
+      // Both queries use the session restaurant, never a value from the client.
+      expect(restaurants.findOneBy).toHaveBeenCalledTimes(1);
       expect(restaurants.findOneBy).toHaveBeenCalledWith({ id: RESTAURANT_ID });
+      expect(schedules.find).toHaveBeenCalledTimes(1);
+      expect(schedules.find).toHaveBeenCalledWith({
+        where: { restaurantId: RESTAURANT_ID },
+        order: { dayOfWeek: 'ASC' },
+      });
     });
 
     it('returns 403 with errorCode RESTAURANT_REQUIRED for a user without a restaurant', async () => {
@@ -272,8 +314,47 @@ describe('Restaurant registration (e2e)', () => {
         message: 'Primero registra tu restaurante.',
         errorCode: 'RESTAURANT_REQUIRED',
       });
+      expect(restaurants.findOneBy).not.toHaveBeenCalled();
+      expect(schedules.find).not.toHaveBeenCalled();
     });
   });
+
+  const sendToEachRoute = [
+    [
+      'POST /v1/restaurants',
+      () =>
+        request(app.getHttpServer()).post('/v1/restaurants').send(REGISTRATION),
+    ],
+    [
+      'GET /v1/restaurants/me',
+      () => request(app.getHttpServer()).get('/v1/restaurants/me'),
+    ],
+  ] as const;
+
+  it.each(sendToEachRoute)(
+    '%s returns 403 without errorCode for an invalid role',
+    async (_route, send) => {
+      const res = await send()
+        .set('x-dev-user-id', INVALID_ROLE_USER_ID)
+        .expect(403);
+
+      expect(res.body).toEqual(ROLE_FORBIDDEN_BODY);
+      expect(restaurants.manager.transaction).not.toHaveBeenCalled();
+      expect(restaurants.findOneBy).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(sendToEachRoute)(
+    '%s returns 401 without a session (development user turned off)',
+    async (_route, send) => {
+      await app.close();
+      await createApp(false);
+
+      await send().expect(401);
+      expect(restaurants.manager.transaction).not.toHaveBeenCalled();
+      expect(restaurants.findOneBy).not.toHaveBeenCalled();
+    },
+  );
 
   it('documents both routes in Swagger', async () => {
     const res = await request(app.getHttpServer())
@@ -282,7 +363,7 @@ describe('Restaurant registration (e2e)', () => {
 
     expect(
       Object.keys(res.body.paths['/v1/restaurants'].post.responses).sort(),
-    ).toEqual(['201', '400', '401', '409']);
+    ).toEqual(['201', '400', '401', '403', '409']);
     expect(
       Object.keys(res.body.paths['/v1/restaurants/me'].get.responses).sort(),
     ).toEqual(['200', '401', '403']);

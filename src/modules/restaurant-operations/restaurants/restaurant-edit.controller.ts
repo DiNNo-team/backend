@@ -39,7 +39,7 @@ export class RestaurantEditController {
   @ApiOperation({
     summary: 'Editar los datos del restaurante del usuario',
     description:
-      'Actualiza solo los campos que se envían; los demás no cambian. Todos son opcionales, pero hay que enviar al menos uno. Hoy solo existe name: los demás datos del restaurante (categoría, dirección, horarios) se podrán editar aquí cuando existan, sin cambiar la ruta. Cualquier campo que no esté en el DTO se rechaza con 400. El restaurante es siempre el del usuario de la sesión.',
+      'Actualiza solo los campos que se envían; los demás no cambian. Todos son opcionales, pero hay que enviar al menos uno. Se pueden editar el nombre, la categoría y la dirección; los horarios todavía no se editan con esta ruta (enviar schedules da 400). Cualquier campo que no esté en el DTO se rechaza con 400. El restaurante es siempre el del usuario de la sesión.',
   })
   @ApiOkResponse({
     description: 'Restaurante con sus datos actualizados.',
@@ -47,7 +47,7 @@ export class RestaurantEditController {
   })
   @ApiBadRequestResponse({
     description:
-      'Body vacío (nada que actualizar), un campo inválido (por ejemplo, nombre vacío o de más de 120 caracteres) o un campo que no existe. message es una lista.',
+      'Body vacío (nada que actualizar), un campo inválido (nombre vacío o de más de 120 caracteres, categoría fuera de la lista, dirección vacía o de más de 255 caracteres, o cualquiera de ellos en null) o un campo que no existe (por ejemplo, schedules). message es una lista.',
     type: ErrorResponseDto,
     example: {
       statusCode: 400,

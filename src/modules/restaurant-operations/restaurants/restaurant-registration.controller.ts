@@ -14,7 +14,9 @@ import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
   CurrentUser,
   CurrentUserGuard,
+  Roles,
   type CurrentUserData,
+  UserRole,
 } from '../../identity-access/index.js';
 import {
   RESTAURANT_REQUIRED_CODE,
@@ -30,9 +32,17 @@ import {
 @ApiTags('restaurants')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
-  description: 'No hay una sesión activa.',
+  description:
+    'No hay una sesión activa o el correo no está verificado (errorCode: EMAIL_NOT_VERIFIED).',
   type: ErrorResponseDto,
+  example: {
+    statusCode: 401,
+    message: 'Verifica tu correo para continuar.',
+    error: 'Unauthorized',
+    errorCode: 'EMAIL_NOT_VERIFIED',
+  },
 })
+@Roles(UserRole.RESTAURANT_ADMIN)
 @UseGuards(CurrentUserGuard)
 @Controller('restaurants')
 export class RestaurantRegistrationController {
@@ -61,6 +71,15 @@ export class RestaurantRegistrationController {
         'El lunes: escribe la hora de apertura en formato HH:MM, por ejemplo 09:30.',
       ],
       error: 'Bad Request',
+    },
+  })
+  @ApiForbiddenResponse({
+    description: 'El usuario no tiene acceso por rol.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 403,
+      message: 'No tienes acceso a esta sección.',
+      error: 'Forbidden',
     },
   })
   @ApiConflictResponse({
@@ -96,13 +115,26 @@ export class RestaurantRegistrationController {
   })
   @ApiForbiddenResponse({
     description:
-      'El usuario todavía no registra su restaurante (errorCode: RESTAURANT_REQUIRED): hay que llevarlo al registro del restaurante.',
+      'El usuario no tiene acceso por rol, o todavía no registra su restaurante (errorCode: RESTAURANT_REQUIRED): en ese caso hay que llevarlo al registro del restaurante.',
     type: ErrorResponseDto,
-    example: {
-      statusCode: 403,
-      message: RESTAURANT_REQUIRED_MESSAGE,
-      error: 'Forbidden',
-      errorCode: RESTAURANT_REQUIRED_CODE,
+    examples: {
+      insufficientRole: {
+        summary: 'El rol no permite consultar el restaurante',
+        value: {
+          statusCode: 403,
+          message: 'No tienes acceso a esta sección.',
+          error: 'Forbidden',
+        },
+      },
+      restaurantRequired: {
+        summary: 'El usuario todavía no registra su restaurante',
+        value: {
+          statusCode: 403,
+          message: RESTAURANT_REQUIRED_MESSAGE,
+          error: 'Forbidden',
+          errorCode: RESTAURANT_REQUIRED_CODE,
+        },
+      },
     },
   })
   async findMine(

@@ -96,6 +96,70 @@ describe('Restaurant edit (e2e)', () => {
     expect(restaurants.findOneBy).toHaveBeenCalledWith({ id: RESTAURANT_ID });
   });
 
+  it('saves and returns the category and the trimmed address', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me')
+      .send({ category: 'italian', address: '  Calle 72 # 10-34, Bogotá ' })
+      .expect(200);
+
+    expect(res.body).toEqual({
+      id: RESTAURANT_ID,
+      name: 'Nombre anterior',
+      category: 'italian',
+      address: 'Calle 72 # 10-34, Bogotá',
+    });
+    expect(restaurants.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: RESTAURANT_ID,
+        category: 'italian',
+        address: 'Calle 72 # 10-34, Bogotá',
+      }),
+    );
+  });
+
+  it('keeps the category and the address when only the name is sent', async () => {
+    restaurants.findOneBy.mockResolvedValueOnce({
+      id: RESTAURANT_ID,
+      name: 'Nombre anterior',
+      category: 'grill',
+      address: 'Carrera 7 # 72-10',
+      createdAt: new Date('2026-10-04T12:00:00Z'),
+      updatedAt: new Date('2026-10-04T12:00:00Z'),
+    });
+
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me')
+      .send({ name: 'La Esquina de Ana' })
+      .expect(200);
+
+    expect(res.body).toEqual({
+      id: RESTAURANT_ID,
+      name: 'La Esquina de Ana',
+      category: 'grill',
+      address: 'Carrera 7 # 72-10',
+    });
+    expect(restaurants.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: 'grill',
+        address: 'Carrera 7 # 72-10',
+      }),
+    );
+  });
+
+  it.each([
+    ['a category outside the list', { category: 'pizza' }],
+    ['a null category', { category: null }],
+    ['an empty address', { address: '   ' }],
+    ['a null address', { address: null }],
+    ['schedules, which this route does not edit yet', { schedules: [] }],
+  ])('returns 400 for %s and updates nothing', async (_case, body) => {
+    await request(app.getHttpServer())
+      .patch('/v1/restaurants/me')
+      .send(body)
+      .expect(400);
+    expect(restaurants.save).not.toHaveBeenCalled();
+  });
+
   it('returns 400 for an empty body, with a clear message', async () => {
     const res = await request(app.getHttpServer())
       .patch('/v1/restaurants/me')
