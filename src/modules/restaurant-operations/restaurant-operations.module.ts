@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { IdentityAccessModule } from '../identity-access/index.js';
 import { RestaurantEditController } from './restaurants/restaurant-edit.controller.js';
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
+import { RestaurantRegistrationController } from './restaurants/restaurant-registration.controller.js';
+import { RestaurantRegistrationService } from './restaurants/restaurant-registration.service.js';
 import { Restaurant } from './restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './restaurants/restaurant-schedule.entity.js';
 import { RestaurantStatusController } from './restaurants/restaurant-status.controller.js';
@@ -24,12 +26,14 @@ import { TablesService } from './tables/tables.service.js';
   controllers: [
     TablesController,
     RestaurantEditController,
+    RestaurantRegistrationController,
     RestaurantStatusController,
     TableLogsController,
   ],
   providers: [
     TablesService,
     RestaurantEditService,
+    RestaurantRegistrationService,
     RestaurantStatusService,
     // Table log (PBI 9): table-logs/ implements the tables/ port.
     { provide: TableStatusLog, useClass: DbTableStatusLog },
