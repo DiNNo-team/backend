@@ -16,6 +16,7 @@ import { TableStatusLog } from './../src/modules/restaurant-operations/tables/ta
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
+const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const TABLE_ID = '3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f';
 
@@ -30,6 +31,7 @@ const RESTAURANT_REQUIRED_BODY = {
 const users = [
   { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
   { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
+  { id: INVALID_ROLE_USER_ID, role: 'unknown-role', restaurantId: RESTAURANT_ID },
 ];
 
 function storedTable(overrides: Partial<Table>): Table {
@@ -116,6 +118,20 @@ describe('Tables (e2e)', () => {
 
   afterEach(async () => {
     await app.close();
+  });
+
+  it('returns 403 without errorCode for an invalid role', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/tables')
+      .set('x-dev-user-id', INVALID_ROLE_USER_ID)
+      .expect(403);
+
+    expect(res.body).toEqual({
+      statusCode: 403,
+      error: 'Forbidden',
+      message: 'No tienes acceso a esta sección.',
+    });
+    expect(tables.find).not.toHaveBeenCalled();
   });
 
   describe('POST /v1/tables', () => {
@@ -446,9 +462,16 @@ describe('Tables (e2e)', () => {
       Object.keys(res.body.components.schemas.CreateTableDto.properties),
     ).toEqual(['identifier', 'capacity']);
     for (const operation of [route.post, route.get]) {
-      expect(
-        operation.responses['403'].content['application/json'].example,
-      ).toEqual(RESTAURANT_REQUIRED_BODY);
+      const forbidden =
+        operation.responses['403'].content['application/json'];
+      expect(forbidden.examples.restaurantRequired.value).toEqual(
+        RESTAURANT_REQUIRED_BODY,
+      );
+      expect(forbidden.examples.insufficientRole.value).toEqual({
+        statusCode: 403,
+        message: 'No tienes acceso a esta sección.',
+        error: 'Forbidden',
+      });
     }
     const errorSchema = res.body.components.schemas.ErrorResponseDto;
     expect(errorSchema.properties).toHaveProperty('errorCode');
