@@ -12,7 +12,9 @@ import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
   CurrentUser,
   CurrentUserGuard,
+  Roles,
   type CurrentUserData,
+  UserRole,
 } from '../../identity-access/index.js';
 import {
   RESTAURANT_REQUIRED_CODE,
@@ -37,20 +39,34 @@ const UNAUTHORIZED_RESPONSE = {
   },
 };
 
-const RESTAURANT_REQUIRED_RESPONSE = {
+const FORBIDDEN_RESPONSE = {
   description:
-    'El usuario todavía no registra su restaurante (errorCode: RESTAURANT_REQUIRED): hay que llevarlo al registro del restaurante.',
+    'El usuario no tiene acceso por rol, o todavía no registra su restaurante (errorCode: RESTAURANT_REQUIRED): en ese caso hay que llevarlo al registro del restaurante.',
   type: ErrorResponseDto,
-  example: {
-    statusCode: 403,
-    message: RESTAURANT_REQUIRED_MESSAGE,
-    error: 'Forbidden',
-    errorCode: RESTAURANT_REQUIRED_CODE,
+  examples: {
+    insufficientRole: {
+      summary: 'El rol no permite abrir ni cerrar el restaurante',
+      value: {
+        statusCode: 403,
+        message: 'No tienes acceso a esta sección.',
+        error: 'Forbidden',
+      },
+    },
+    restaurantRequired: {
+      summary: 'El usuario todavía no registra su restaurante',
+      value: {
+        statusCode: 403,
+        message: RESTAURANT_REQUIRED_MESSAGE,
+        error: 'Forbidden',
+        errorCode: RESTAURANT_REQUIRED_CODE,
+      },
+    },
   },
 };
 
 @ApiTags('restaurants')
 @ApiBearerAuth()
+@Roles(UserRole.RESTAURANT_ADMIN)
 @UseGuards(CurrentUserGuard)
 @Controller('restaurants')
 export class RestaurantStatusController {
@@ -69,7 +85,7 @@ export class RestaurantStatusController {
     type: RestaurantStatusResponseDto,
   })
   @ApiUnauthorizedResponse(UNAUTHORIZED_RESPONSE)
-  @ApiForbiddenResponse(RESTAURANT_REQUIRED_RESPONSE)
+  @ApiForbiddenResponse(FORBIDDEN_RESPONSE)
   async get(
     @CurrentUser() user: CurrentUserData,
   ): Promise<RestaurantStatusResponseDto> {
@@ -100,7 +116,7 @@ export class RestaurantStatusController {
     },
   })
   @ApiUnauthorizedResponse(UNAUTHORIZED_RESPONSE)
-  @ApiForbiddenResponse(RESTAURANT_REQUIRED_RESPONSE)
+  @ApiForbiddenResponse(FORBIDDEN_RESPONSE)
   async update(
     @CurrentUser() user: CurrentUserData,
     @Body() dto: UpdateRestaurantStatusDto,
