@@ -232,6 +232,13 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 - **`inactive` solo existe en la bitácora**, nunca en `tables.status`. Si cambia `TABLE_LOG_STATUSES`, hace falta una migración escrita a mano que borre y vuelva a crear `CHK_table_logs_previous_status` y `CHK_table_logs_new_status` (TypeORM compara los checks solo por nombre).
 - **Requisitos de toda consulta sobre `table_logs`** (acordado con Elizabeth): (a) filtra siempre por el restaurante del usuario de la sesión, con un join a `tables` (`tables.restaurant_id`), nunca por un dato que mande el cliente (`table_logs` no tiene `restaurant_id`); (b) tiene una prueba e2e que confirma que el usuario de un restaurante no ve los registros de las mesas de otro.
 - **Pruebas e2e:** toda prueba que monte `RestaurantOperationsModule` necesita `.overrideProvider(getRepositoryToken(TableLog)).useValue({})`. Las que prueban mesas además reemplazan `TableStatusLog` por un mock.
+- **Consulta: `GET /v1/table-logs`** (`table-logs/table-logs.controller.ts` y `table-logs.service.ts`). Lleva `@Roles(UserRole.RESTAURANT_ADMIN)` + `CurrentUserGuard`.
+  - **Parámetros:** solo `tableId` (uuid, opcional) para filtrar por mesa. Cualquier otro parámetro, incluido `restaurantId`, da `400`; un `tableId` que no es uuid, `400` con "El id de la mesa no es un UUID válido." (`TABLE_ID_INVALID` de `tables.controller.ts`).
+  - **Respuesta:** `200` con `[{ id, tableId, tableIdentifier, previousStatus, newStatus, changedAt, userEmail }]` (`TableLogResponseDto`). `tableIdentifier` es el identificador actual de la mesa; `userEmail`, el correo de quien hizo el cambio (`users` no tiene nombre). Estados de `TABLE_LOG_STATUSES`, incluido `inactive`.
+  - **Orden y límite:** `changed_at DESC` (desempate por `id DESC`), máximo **200 filas**, sin paginación (`TABLE_LOGS_LIMIT`).
+  - **Restaurante:** sale de la sesión, con un join a `tables` (`tables.restaurant_id`); el usuario se une por nombre de entidad (`'User'`), sin importar nada interno de `identity-access`. Un `tableId` de otro restaurante o que no existe responde `[]`, igual que una mesa sin cambios: no revela qué mesas tiene otro restaurante.
+  - **Errores:** `401` sin sesión o con `EMAIL_NOT_VERIFIED`; `403` con `errorCode: "RESTAURANT_REQUIRED"` sin restaurante; `403` sin `errorCode` ("No tienes acceso a esta sección.") con otro rol.
+  - **Pruebas:** `table-logs.service.spec.ts` fija la consulta (join, filtro, orden, límite) y `test/table-logs.e2e-spec.ts` prueba el aislamiento con un query builder simulado que aplica esos filtros a filas de dos restaurantes. Ninguna ejecuta SQL real.
 
 ### Redis (Upstash)
 Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDIS_CLIENT`. No se usa en el Sprint 1 salvo que una tarea lo pida.
@@ -250,7 +257,7 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - **Columna:** `restaurants.is_open` (`boolean`, NOT NULL, por defecto `true`), propiedad `isOpen` de `Restaurant`. Migración `1791342586330-AddRestaurantIsOpen`.
 - **`GET /v1/restaurants/me/status`:** no recibe nada. Responde `200` con `{ "isOpen": boolean }` (`RestaurantStatusResponseDto`).
 - **`PATCH /v1/restaurants/me/status`:** recibe `{ "isOpen": boolean }` (`UpdateRestaurantStatusDto`; un texto `"true"`, `null`, un campo faltante o un campo de más dan `400`). Responde `200` con `{ "isOpen": boolean }`, el estado después del cambio. Enviar el estado que ya tiene responde `200` igual.
-- Los dos: el restaurante sale siempre de la sesión (no hay id en la ruta ni en el body); `401` sin sesión (sin `Authorization: Bearer` válido) o con el correo sin verificar (`EMAIL_NOT_VERIFIED`), y `403` con `errorCode: "RESTAURANT_REQUIRED"` si el usuario no tiene restaurante (`requireRestaurant`).
+- Los dos: llevan `@Roles(UserRole.RESTAURANT_ADMIN)` + `CurrentUserGuard`; el restaurante sale siempre de la sesión (no hay id en la ruta ni en el body); `401` sin sesión (sin `Authorization: Bearer` válido) o con el correo sin verificar (`EMAIL_NOT_VERIFIED`), `403` con `errorCode: "RESTAURANT_REQUIRED"` si el usuario no tiene restaurante (`requireRestaurant`) y `403` sin `errorCode` ("No tienes acceso a esta sección.") con otro rol.
 - **Es manual en el Sprint 1:** no depende de `restaurant_schedules`. La confirmación de cerrar con mesas reservadas (y el conteo de esas mesas) la hace la web con `GET /v1/tables`; el endpoint no la pide ni la devuelve.
 - Es independiente de `GET`/`PATCH /v1/restaurants/me`: `RestaurantResponseDto` no incluye `isOpen`.
 

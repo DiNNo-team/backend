@@ -53,7 +53,7 @@ import {
   TablesService,
 } from './tables.service.js';
 
-const TABLE_ID_INVALID = 'El id de la mesa no es un UUID válido.';
+export const TABLE_ID_INVALID = 'El id de la mesa no es un UUID válido.';
 
 const NOT_FOUND_RESPONSE = {
   description:

@@ -10,7 +10,9 @@ import { RestaurantSchedule } from './restaurants/restaurant-schedule.entity.js'
 import { RestaurantStatusController } from './restaurants/restaurant-status.controller.js';
 import { RestaurantStatusService } from './restaurants/restaurant-status.service.js';
 import { TableLog } from './table-logs/table-log.entity.js';
+import { TableLogsController } from './table-logs/table-logs.controller.js';
 import { DbTableStatusLog } from './table-logs/table-logs.recorder.js';
+import { TableLogsService } from './table-logs/table-logs.service.js';
 import { Table } from './tables/table.entity.js';
 import { TableStatusLog } from './tables/table-status-log.js';
 import { TablesController } from './tables/tables.controller.js';
@@ -26,6 +28,7 @@ import { TablesService } from './tables/tables.service.js';
     RestaurantEditController,
     RestaurantRegistrationController,
     RestaurantStatusController,
+    TableLogsController,
   ],
   providers: [
     TablesService,
@@ -34,6 +37,7 @@ import { TablesService } from './tables/tables.service.js';
     RestaurantStatusService,
     // Table log (PBI 9): table-logs/ implements the tables/ port.
     { provide: TableStatusLog, useClass: DbTableStatusLog },
+    TableLogsService,
   ],
 })
 export class RestaurantOperationsModule {}
