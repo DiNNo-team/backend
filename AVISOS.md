@@ -40,6 +40,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **E2e con el usuario de desarrollo apagado (`DEV_USER_ENABLED: 'false'`, por ejemplo para probar el `401`):** agrega `FIREBASE_PROJECT_ID: 'firebase-project-example'` al `load` de tu `ConfigModule.forRoot`, como `test/tables-edit.e2e-spec.ts`. Desde el login con Firebase, con el usuario de desarrollo apagado se usa el resolver de Firebase, que hace `getOrThrow('FIREBASE_PROJECT_ID')` al arrancar: sin esa clave el módulo no inicia y la prueba falla en el CI (que no tiene `.env`), aunque en local pase con tu `.env`. Es un valor de ejemplo: una petición sin token responde `401` antes de llamar a Firebase, así que no hay red ni credenciales.
 - **Las cinco migraciones de `develop` ya están aplicadas en Neon** (la última, `1791342586330-AddRestaurantIsOpen`, el 2026-10-08): puedes hacer pull de `develop` sin riesgo.
 - **Control de acceso por rol:** toda ruta nueva de restaurante lleva `@Roles(UserRole.RESTAURANT_ADMIN)` (importado de `identity-access/index.ts`) encima de `@UseGuards(CurrentUserGuard)`, en ese orden. Rol insuficiente responde `403` con "No tienes acceso a esta sección." y sin `errorCode`. Afecta a las rutas nuevas de Sergio (abrir y cerrar restaurante y `GET /v1/table-logs`) y de Santiago (registro y consulta del restaurante).
+  - **Jacobo:** las tres rutas de Sergio ya lo llevan, con tu aprobación: `GET` y `PATCH /v1/restaurants/me/status` y `GET /v1/table-logs` (rama `feat/sprint1-consulta-bitacora`). Mismo orden de decoradores y mismo `403` en Swagger que mesas; sus e2e prueban el rol inválido.
 
 ## Por persona
 
@@ -53,6 +54,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - Revisar los PR del backend.
 - **Los horarios no van en `restaurants`, van en otra tabla (`restaurant_schedules`, una fila por día abierto).** La edición no los puede copiar sola. Además, si un campo de horarios entra en `RestaurantFieldsDto` sin una propiedad con el mismo nombre en `Restaurant`, `npm run typecheck` falla en `restaurant-edit.service.ts` (el `Pick` de `RestaurantChanges`). Santiago lo coordina contigo antes de su endpoint de registro.
 - **Carrera conocida en el identificador de mesa:** el índice `UQ_tables_restaurant_id_identifier` compara `lower(trim(identifier))`, así que no cubre que "4" y "04" lleguen a la vez en dos peticiones simultáneas. El chequeo de repetidos de la aplicación (`assertIdentifierAvailable`, en `tables.service.ts`) lo cubre salvo en esa carrera. Es un riesgo bajo y aceptado (hay un dueño por restaurante). Solución futura posible: un índice sobre la clave normalizada.
+- **Toqué una línea de tu `tables/tables.controller.ts` (Sergio, PBI 9):** `TABLE_ID_INVALID` ("El id de la mesa no es un UUID válido.") ahora se exporta. Lo reutiliza `GET /v1/table-logs` para el `?tableId` inválido, así el texto vive en un solo lugar. No cambia nada más en tu archivo.
 
 ### Jacobo
 - **Ya en `develop`:** el login con Firebase (PR #23: un usuario nuevo se crea con rol `restaurant_admin` y `restaurantId` en `null`) y `assignRestaurantIfNone` (PR #24), exportado desde `identity-access/index.ts`.
@@ -96,20 +98,16 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Sergio
 - **Ya en `develop`:** el estado abierto/cerrado (PBI 8: `GET` y `PATCH /v1/restaurants/me/status` y la columna `is_open`) y la bitácora (PBI 9: tabla `table_logs` y `DbTableStatusLog`, que ya registra cambiar el estado, desactivar y reactivar una mesa). Cómo funcionan y cómo se usan: `CLAUDE.md`, sección 10 ("Bitácora de mesas" y "Estado abierto/cerrado del restaurante").
-- **Te falta la consulta de la bitácora para la pantalla: `GET /v1/table-logs`** (todavía no existe; máximo 200 filas, sin paginación). Las condiciones están en el `CLAUDE.md` ("Bitácora de mesas"): la consulta filtra siempre por el restaurante del usuario de la sesión, con un join a `tables`, nunca por un dato que mande el cliente; y lleva una prueba e2e que confirma que el usuario de un restaurante no ve los registros de las mesas de otro.
-- **Te toca en la web (PBI 8, estado del restaurante):**
-  - Switch Abierto/Cerrado en el topbar, en el espacio que deja Sebastián en el AppShell, con la palabra siempre visible, y un aviso arriba del contenido cuando el restaurante está cerrado. Usa el switch y la alerta del kit de Sebastián. Abierto en verde con punto; Cerrado en gris con raya; nunca naranja (manual, 3.3).
-  - Conéctalo a `GET` y `PATCH /v1/restaurants/me/status` (ya existen).
-  - Al cerrar: sin mesas reservadas, cierra de una vez con un toast y "Deshacer"; con mesas reservadas, pide confirmación con el diálogo del kit. El conteo de mesas reservadas lo haces en la web con `GET /v1/tables`: el endpoint de estado no lo devuelve. Textos del manual, sección 14.2.
-  - Prueba que el estado persiste al volver a entrar.
+- **Ya en `develop` y en `main` (web, PR #21):** el switch Abierto/Cerrado del topbar, el aviso de cerrado y el cambio de estado con "Deshacer" y confirmación con mesas reservadas. Pendiente en la web: la variante de estado del `Switch` del kit (Sebastián) y probar que el estado persiste en el ambiente desplegado, que necesita el login web.
+- **En PR (rama `feat/sprint1-consulta-bitacora`):** `GET /v1/table-logs` (contrato en el `CLAUDE.md`, "Bitácora de mesas") y `@Roles` en tus rutas de estado.
 - **Te toca en la web (PBI 9, bitácora):**
   - Pantalla en `/bitacora`: tabla con fecha y hora, mesa, cambio (estado anterior → estado nuevo, con los mismos chips de mesas) y usuario; filtro por mesa; lo más reciente primero; estado vacío "Aún no hay cambios"; fecha con el formato "30 sept · 7:30 p. m.".
-  - **Depende de `GET /v1/table-logs`, que todavía no existe** (tu siguiente PR de backend, punto anterior).
+  - Usa `GET /v1/table-logs` (con `?tableId=` para el filtro por mesa) cuando se fusione el PR; mientras tanto, datos de ejemplo con la misma forma.
   - Verifica que cada cambio de estado, desactivación y reactivación genera su registro. Pedir el estado que la mesa ya tiene no genera registro (`CLAUDE.md`, "Bitácora de mesas").
 
 ### Sebastián
 - **Te toca en la web:** el kit visual del manual (`components/ui`), el AppShell (sidebar con Mesas, Restaurante y Bitácora; topbar con el espacio para el switch Abierto/Cerrado de Sergio) y las pantallas de mesas (crear, cambiar estado, editar y desactivar). Sergio usa del kit el switch, la alerta, el diálogo y el toast.
-- **Endpoints que ya puedes consumir** (contrato en Swagger, `/docs`): los de mesas (`POST` y `GET /v1/tables`, `PATCH /v1/tables/:id/status`, `PATCH /v1/tables/:id`, `POST /v1/tables/:id/deactivate` y `POST /v1/tables/:id/reactivate`), `PATCH /v1/restaurants/me` (detalle en la sección de Jacobo) y `GET` y `PATCH /v1/restaurants/me/status`, que reciben y devuelven `{ "isOpen": boolean }` (detalle en el `CLAUDE.md`, sección 10). **Todavía no existen** `GET /v1/restaurants/me` ni el registro del restaurante (Santiago), ni `GET /v1/table-logs` (Sergio): no dependas de ellos todavía y usa datos de ejemplo.
+- **Endpoints que ya puedes consumir** (contrato en Swagger, `/docs`): los de mesas (`POST` y `GET /v1/tables`, `PATCH /v1/tables/:id/status`, `PATCH /v1/tables/:id`, `POST /v1/tables/:id/deactivate` y `POST /v1/tables/:id/reactivate`), `PATCH /v1/restaurants/me` (detalle en la sección de Jacobo) y `GET` y `PATCH /v1/restaurants/me/status`, que reciben y devuelven `{ "isOpen": boolean }` (detalle en el `CLAUDE.md`, sección 10). **Todavía no existen** `GET /v1/restaurants/me` ni el registro del restaurante (Santiago): no dependas de ellos todavía y usa datos de ejemplo. `GET /v1/table-logs` (Sergio) está en PR (`feat/sprint1-consulta-bitacora`).
 - **Desactivar y reactivar ya escriben en la bitácora de verdad** (PBI 9, Sergio). No tienes que cambiar nada: `changeActive` ya llama a `TableStatusLog.record(...)` con el `manager` de su transacción. Lo nuevo es que, si el insert en `table_logs` falla, la petición responde `500` y la mesa no cambia, igual que el cambio de estado.
 - **Decisión (Sebastián, 2026-10-06): el campo se llama "Identificador", no "Nombre".** Lo dice el manual en 12.4, y la regla de mostrar "Mesa 04" (14.1) supone un identificador corto. Los mensajes del backend dicen "identificador", igual que la web: "Escribe el identificador de la mesa.", "Usa máximo 10 caracteres en el identificador de la mesa." y "Ya tienes una Mesa 04. Usa otro identificador.". En el código y en la API el campo sigue siendo `identifier`.
 - **El horario admite "Abierto 24 horas" (`is_open_24h`).** El HoursEditor del manual no tiene esa opción; hace falta agregarla al kit antes de que Santiago y Jacobo armen sus formularios (registro y edición del restaurante), porque los dos usan el `HoursEditor`.
@@ -149,6 +147,19 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Historial
 
+- **2026-10-08 · Sergio · PBI 9 · Crear pantalla de bitácora (parte backend): `GET /v1/table-logs`.** Sin cambios de esquema.
+  - **Qué quedó listo:**
+    - `GET /v1/table-logs?tableId=<uuid opcional>` → `200` con `[{ id, tableId, tableIdentifier, previousStatus, newStatus, changedAt, userEmail }]`, del más reciente al más antiguo, máximo 200 filas, sin paginación. Contrato completo en el `CLAUDE.md` ("Bitácora de mesas") y en Swagger (tag `table-logs`).
+    - Filtra siempre por el restaurante de la sesión con un join a `tables`. Un `tableId` de otro restaurante o que no existe responde `[]`. Cualquier otro parámetro de la consulta (por ejemplo `restaurantId`) da `400`.
+    - `@Roles(UserRole.RESTAURANT_ADMIN)` en `GET /v1/table-logs` y en `GET` y `PATCH /v1/restaurants/me/status` (aprobado por Jacobo).
+  - **Para quién / qué deben hacer:**
+    - **Sebastián (web):** la pantalla `/bitacora` la hace Sergio; si necesitas los registros en otra pantalla, usa este endpoint.
+    - **Elizabeth:** se exporta `TABLE_ID_INVALID` de `tables/tables.controller.ts` (ver tu sección).
+    - **Todos:** toda e2e que monte `RestaurantOperationsModule` ya tenía `.overrideProvider(getRepositoryToken(TableLog)).useValue({})`; no hace falta nada nuevo.
+  - **Rama / PR:** `feat/sprint1-consulta-bitacora` → `develop`.
+  - **Pendiente o conocido:**
+    - Las pruebas no ejecutan SQL real (no hay base en las pruebas): la unitaria fija la consulta y la e2e prueba el aislamiento con un repositorio simulado. Sergio la verifica a mano en local contra Neon, solo con `GET`.
+    - Índices: `IDX_table_logs_table_id_changed_at` cubre el filtro por mesa; sin filtro, con el volumen del Sprint 1 no hace falta un índice nuevo.
 - **2026-10-08 · Documentos al día con `develop` (Elizabeth, rama `chore/sprint1-pending-fixes`).** Sin cambios de esquema ni de la API. Las cinco migraciones constan como aplicadas en Neon (`AddRestaurantIsOpen` el 2026-10-08), el login con Firebase como fusionado y el valor por defecto de `is_open` como decidido (`true`); se borraron los avisos ya cumplidos (migraciones pendientes y contrato de la bitácora), y cada sección por persona quedó con lo que ya existe, lo que le falta y sus reglas. En `identity-access`, la detección del `23505` quedó en una sola función (`users/unique-violation.ts`), sin cambiar el comportamiento. Pruebas nuevas, entre ellas `test/table-status-log-wiring.e2e-spec.ts`, que comprueba que el módulo usa `DbTableStatusLog`.
 - **2026-10-06 · Sergio · PBI 8 · Implementar estado operativo en backend.** Cambia el esquema.
   - **Qué quedó listo:**

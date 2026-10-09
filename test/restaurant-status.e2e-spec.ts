@@ -15,6 +15,7 @@ import { Table } from './../src/modules/restaurant-operations/tables/table.entit
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const OTHER_OWNER_ID = '7c6b5a49-3827-4615-a4b3-c2d1e0f9a8b7';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
+const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const OTHER_RESTAURANT_ID = '1d2c3b4a-5f6e-4d7c-8b9a-0a1b2c3d4e5f';
 
@@ -26,6 +27,11 @@ const users = [
     restaurantId: OTHER_RESTAURANT_ID,
   },
   { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
+  {
+    id: INVALID_ROLE_USER_ID,
+    role: 'unknown-role',
+    restaurantId: RESTAURANT_ID,
+  },
 ];
 
 const IS_OPEN_MESSAGE = 'Elige si el restaurante está Abierto o Cerrado.';
@@ -234,6 +240,36 @@ describe('Restaurant status (e2e)', () => {
         errorCode: 'RESTAURANT_REQUIRED',
       });
       expect(restaurants.save).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      'GET',
+      () => request(app.getHttpServer()).get('/v1/restaurants/me/status'),
+    ],
+    [
+      'PATCH',
+      () =>
+        request(app.getHttpServer())
+          .patch('/v1/restaurants/me/status')
+          .send({ isOpen: false }),
+    ],
+  ])(
+    '%s returns 403 without errorCode for an invalid role',
+    async (_method, send) => {
+      const res = await send()
+        .set('x-dev-user-id', INVALID_ROLE_USER_ID)
+        .expect(403);
+
+      expect(res.body).toEqual({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'No tienes acceso a esta sección.',
+      });
+      expect(restaurants.findOneBy).not.toHaveBeenCalled();
+      expect(restaurants.save).not.toHaveBeenCalled();
+      expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
     },
   );
 
