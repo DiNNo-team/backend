@@ -39,8 +39,8 @@ Edita `.env` con los valores reales (ver siguiente sección). **Nunca subas `.en
 repositorio** — ya está en `.gitignore`.
 
 > ⚠️ **Sin `DEV_USER_ENABLED=true` en tu `.env`, toda ruta protegida responde `401`.**
-> Mientras llega la autenticación real (PBI 2), el usuario actual lo da el *usuario de
-> desarrollo*. Ver [sección 10](#10-usuario-de-desarrollo).
+> En local, el usuario actual lo da el *usuario de desarrollo*; en Render se usa el login con
+> Firebase. Ver [sección 10](#10-usuario-de-desarrollo).
 
 ## 3. Variables de entorno
 
@@ -52,11 +52,14 @@ Todas están documentadas con placeholders en [`.env.example`](.env.example):
 | `CORS_ORIGINS` | No (por defecto `http://localhost:5173`) | Lista de orígenes permitidos para peticiones cross-origin, separados por comas y **sin `/` final**. | La defines tú: el o los orígenes del frontend/mobile que van a consumir la API. | `http://localhost:5173,https://frontend-rose-gamma-96.vercel.app` |
 | `DATABASE_URL` | **Sí** | Cadena de conexión de PostgreSQL. | Panel de **Neon** → tu proyecto → "Connection string". | `postgresql://usuario:password@host/nombre_db?sslmode=require` |
 | `REDIS_URL` | **Sí** | Cadena de conexión de Redis. | Panel de **Upstash** → tu base de datos → "Connect" (usar la URL `rediss://...` con TLS). | `redis://default:password@host:puerto` |
+| `FIREBASE_PROJECT_ID` | **Sí**, si el usuario de desarrollo está apagado (siempre en Render) | ID del proyecto de Firebase con el que se verifican los ID tokens. No es un secreto. | Consola de **Firebase** → configuración del proyecto. | `mi-proyecto-firebase` |
 | `DEV_USER_ENABLED` | No (por defecto apagado) | Activa el usuario de desarrollo. **Solo local:** se apaga solo en Render aunque esté en `true`. | La defines tú en tu `.env`. **No la definas en Render.** | `true` |
 | `DEV_USER_ID` | Si `DEV_USER_ENABLED=true` | UUID (tabla `users`) del usuario de desarrollo por defecto. | Lo imprime `npm run seed`. | `3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f` |
 
 La app usa `ConfigService.getOrThrow()` para leer `DATABASE_URL` y `REDIS_URL`: si falta
-cualquiera de las dos, **no arranca**.
+cualquiera de las dos, **no arranca**. Lo mismo pasa con `FIREBASE_PROJECT_ID` cuando el
+usuario de desarrollo está apagado. `FIREBASE_AUTH_EMULATOR_HOST` es opcional, solo para el
+emulador de Firebase en local, y nunca se define en Render.
 
 ## 4. Arquitectura
 
@@ -162,9 +165,11 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 - Desplegado en **Render** como *Web Service*.
 - **Auto-deploy activado**: cada push a la rama `develop` dispara un nuevo despliegue.
 - **URL de producción:** https://dinno-backend.onrender.com
-- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`) se configuran
-  directamente en el dashboard de Render — **no viven en el repositorio**. `PORT` no se define
-  ahí: Render lo asigna en tiempo de ejecución.
+- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS` y `FIREBASE_PROJECT_ID`)
+  se configuran directamente en el dashboard de Render — **no viven en el repositorio**.
+  `FIREBASE_PROJECT_ID` es obligatoria porque en Render el usuario de desarrollo está apagado:
+  si falta, la app no arranca. `PORT` no se define ahí: Render lo asigna en tiempo de ejecución.
+  `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` **no se definen en Render**.
 - **Health Check Path:** `/v1/health`.
 - Además del despliegue en sí (gestionado por Render), el workflow de GitHub Actions en
   [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) tiene dos jobs:
@@ -207,10 +212,13 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 
 ## 10. Usuario de desarrollo
 
-Hasta que la autenticación real esté lista (PBI 2), el usuario actual de cada petición lo
-resuelve un usuario de desarrollo que se lee **de la base** en cada petición.
+El login con Firebase ya está integrado: con el usuario de desarrollo apagado (siempre en
+Render), `FirebaseUserResolver` toma el usuario de `Authorization: Bearer <ID token de
+Firebase>`, y sin token válido la ruta protegida responde `401`. Para trabajar en local sin
+Firebase, el usuario actual de cada petición lo puede resolver un usuario de desarrollo que se
+lee **de la base** en cada petición.
 
-- `DEV_USER_ENABLED=true` lo activa. **Sin esto, toda ruta protegida responde `401`.**
+- `DEV_USER_ENABLED=true` lo activa. **Sin esto (y sin un token de Firebase), toda ruta protegida responde `401`.**
 - `DEV_USER_ID` es el UUID del usuario por defecto.
 - La cabecera `x-dev-user-id` cambia de usuario en una petición, sin reiniciar el servidor. Recibe
   un UUID; si tiene mal formato, la respuesta es `401`:

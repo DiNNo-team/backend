@@ -12,8 +12,7 @@ import type {
 // Repositories are looked up by entity name so this script shares the class
 // instances loaded by the data source entity glob.
 
-// Jacobo (PBI 2): replace these emails and the role with the real Firebase
-// test users and the confirmed role name when they are available.
+// Same role the Firebase login gives to new users (restaurant_admin).
 const SEED_ROLE = 'restaurant_admin';
 const ONBOARDING_USER_EMAIL = 'onboarding@example.com';
 const OWNER_USER_EMAIL = 'casa72@example.com';
