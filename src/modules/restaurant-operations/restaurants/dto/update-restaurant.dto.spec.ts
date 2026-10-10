@@ -55,6 +55,39 @@ describe('UpdateRestaurantDto', () => {
     ]);
   });
 
+  describe('length in code points, like the varchar columns', () => {
+    const NAME_TOO_LONG =
+      'El nombre del restaurante es muy largo. Usa máximo 120 caracteres.';
+
+    it('accepts 120 emoji in the name (120 code points)', async () => {
+      const name = '🍕'.repeat(120);
+
+      await expect(validate({ name })).resolves.toEqual({ name });
+    });
+
+    it('accepts a name with variation selectors that fits in 120 code points', async () => {
+      const name = 'a\uFE0F'.repeat(60);
+
+      await expect(validate({ name })).resolves.toEqual({ name });
+    });
+
+    it('rejects "a" + U+FE0F × 120: 240 code points do not fit in varchar(120)', async () => {
+      await expect(
+        messagesFor({ name: 'a\uFE0F'.repeat(120) }),
+      ).resolves.toEqual([NAME_TOO_LONG]);
+    });
+
+    it('rejects an address of 256 code points and accepts 255', async () => {
+      await expect(
+        messagesFor({ address: 'a\uFE0F'.repeat(128) }),
+      ).resolves.toEqual([
+        'La dirección es muy larga. Usa máximo 255 caracteres.',
+      ]);
+      const address = '🍕'.repeat(255);
+      await expect(validate({ address })).resolves.toEqual({ address });
+    });
+  });
+
   describe('schedules (same rules as registration)', () => {
     const MONDAY = {
       dayOfWeek: 1,

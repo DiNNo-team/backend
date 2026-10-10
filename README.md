@@ -161,6 +161,13 @@ curl http://localhost:3000/v1/health
 
 También puedes abrir `http://localhost:3000/docs` para ver el contrato de la API en Swagger UI.
 
+> **En local el servidor escucha solo en `127.0.0.1`**: se llega a él desde tu propio equipo
+> (`localhost`), no desde otro equipo ni desde el celular. Es a propósito: en local el usuario de
+> desarrollo no pide credenciales y la base es la compartida, que es producción, así que abrir el
+> puerto a la red dejaría esa base expuesta a cualquiera en tu misma red. Si necesitas probar desde
+> otro dispositivo, avísale al equipo antes. En Render escucha en `0.0.0.0` (todas las interfaces),
+> como exige la plataforma (`resolveListenHost` en `src/app.setup.ts`).
+
 ## 7. Despliegue
 
 - Desplegado en **Render** como *Web Service*.
@@ -174,6 +181,7 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
   **En un entorno desplegado (`RENDER` definida o `NODE_ENV=production`) la app no arranca** si
   `FIREBASE_AUTH_EMULATOR_HOST` está definida o `DEV_USER_ENABLED` es `true`: el error del log
   nombra la variable (nunca su valor). Quítala del panel y vuelve a desplegar.
+- **Host:** en Render el servidor escucha en `0.0.0.0`; en local, solo en `127.0.0.1` (sección 6).
 - **Health Check Path:** `/v1/health`.
 - Además del despliegue en sí (gestionado por Render), el workflow de GitHub Actions en
   [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) tiene dos jobs:

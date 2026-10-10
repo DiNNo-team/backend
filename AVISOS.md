@@ -7,6 +7,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo: en local la API ahora escucha solo en `127.0.0.1`.** Desde tu equipo todo sigue igual (`http://localhost:3000`). Si necesitas probar desde el celular u otro equipo, dilo en el grupo antes de abrirlo: con el usuario de desarrollo la API no pide credenciales y la base es la de producción, así que quedaría expuesta a toda la red. En Render nada cambia.
 - **Agrega a tu `.env`:** `DEV_USER_ENABLED=true` y `DEV_USER_ID=<uuid>`. **Sin eso, toda ruta protegida responde `401`.** Los uuid están en el chat del equipo.
 - **Los ids de la base son UUID (`string`), no enteros.**
 - **Usuario actual:** `@UseGuards(CurrentUserGuard)` y `@CurrentUser() user: CurrentUserData`, importados solo desde `src/modules/identity-access/index.ts`, nunca desde carpetas internas.
@@ -145,8 +146,20 @@ Riesgos aceptados para el Sprint 1, a revisar más adelante:
 - **TLS con Neon:** la conexión no verifica el certificado del servidor (`rejectUnauthorized: false`).
 - **Sin rate limiting:** ninguna ruta limita las peticiones por IP ni por usuario.
 - **`npm audit`:** hay vulnerabilidades reportadas en dependencias; falta revisar y aplicar `npm audit fix`.
+- **Cuenta bloqueada por otro UID:** cuando el correo ya está vinculado a otro UID de Firebase (por ejemplo, una cuenta borrada y vuelta a crear), la API responde el mismo `401` "Tu sesión terminó" y la web entra en un bucle de login. Un `errorCode` propio necesita acordarse con la web; mientras tanto, el soporte está en `docs/database.md`.
+- **Firebase caído o lento:** no hay timeout propio; si Firebase no responde, la API contesta `401` en vez de `503`, y la web lo trata como sesión vencida.
+- **`/v1/health` no revisa la base:** responde `ok` aunque Neon no conteste. Agregarlo con Neon gratuito (que se duerme) puede hacer que Render reinicie el servicio en bucle.
+- **Consola de Firebase:** revisar que solo estén habilitados Email/Password y Google, y que la vinculación de cuentas por correo esté activa (una cuenta por correo).
 
 ## Historial
+
+- **2026-10-09 · Arreglos de la revisión adversarial (Elizabeth).** Sin cambios de esquema, de la API ni dependencias nuevas.
+  - **Local:** la API escucha solo en `127.0.0.1` fuera de Render (ver "Acciones pendientes de todos").
+  - **Datos:** editar una mesa (identificador o capacidad) corre en una transacción con lock y escribe solo esas columnas; abrir o cerrar el restaurante escribe solo `isOpen`. Antes, un `save()` podía revertir en silencio un cambio de estado de mesa hecho al mismo tiempo, sin dejarlo en la bitácora.
+  - **Validación:** el nombre, la dirección y el identificador miden su largo en caracteres Unicode, como Postgres, así que un texto con emojis o selectores de variante ya no termina en `500`. El identificador rechaza caracteres invisibles ("El identificador no puede incluir caracteres invisibles."). Los emojis con unión (por ejemplo, familias) también se rechazan en el identificador, porque llevan un carácter invisible.
+  - **Login:** si el correo ya está vinculado a otro UID, el log del servidor lo registra sin datos personales; la respuesta no cambia. SQL de soporte en `docs/database.md`.
+  - **Base:** espera máximo 10 s para conectarse a Neon, en vez de esperar sin límite.
+  - **Pruebas:** e2e de `401` y `403` por rol en `PATCH /v1/restaurants/me`, de `403` por rol al editar una mesa, y de que el `404` de una mesa ajena consulta solo el restaurante de la sesión.
 
 - **2026-10-09 · Endurecimiento e integración del backend (Elizabeth).** Sin cambios de esquema ni dependencias nuevas.
   - **Arranque:** en un ambiente desplegado (`RENDER` o `NODE_ENV=production`), la app no arranca si `FIREBASE_AUTH_EMULATOR_HOST` está definida o `DEV_USER_ENABLED` es `true`. El error nombra la variable, nunca su valor.

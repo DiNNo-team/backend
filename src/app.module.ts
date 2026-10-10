@@ -43,6 +43,10 @@ const logger = new Logger('Database');
           ssl: databaseUrl.includes('sslmode=require')
             ? { rejectUnauthorized: false }
             : false,
+          // Passed to pg as connectionTimeoutMillis: without it a request
+          // waits forever for a connection. 10 s because free Neon takes a
+          // few seconds to wake up; less would fail healthy requests.
+          connectTimeoutMS: 10_000,
         };
       },
     }),

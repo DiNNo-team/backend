@@ -92,6 +92,11 @@ export class FirebaseUserResolver extends CurrentUserResolver {
     const userByEmail = await this.usersService.findByEmail(decodedToken.email);
     if (userByEmail) {
       if (userByEmail.firebaseUid !== null) {
+        // Typically a Firebase account deleted and created again: support
+        // must unlink it (docs/database.md). No email, UID or token here.
+        this.logger.warn(
+          'Firebase account rejected: email already linked to another UID',
+        );
         throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
       }
       return toCurrentUser(

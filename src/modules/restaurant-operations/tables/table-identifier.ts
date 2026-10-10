@@ -34,5 +34,7 @@ export function formatTableName(identifier: string): string {
 // User-facing texts: the same ones the web shows (sprint plan, section 10).
 export const IDENTIFIER_REQUIRED = 'Escribe el identificador de la mesa.';
 export const IDENTIFIER_TOO_LONG = `Usa máximo ${TABLE_IDENTIFIER_MAX_LENGTH} caracteres en el identificador de la mesa.`;
+export const IDENTIFIER_INVISIBLE_CHARACTERS =
+  'El identificador no puede incluir caracteres invisibles.';
 export const identifierTakenMessage = (identifier: string): string =>
   `Ya tienes una ${formatTableName(identifier)}. Usa otro identificador.`;

@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsString } from 'class-validator';
+import { MaxCodePoints } from '../../shared/max-code-points.js';
 import {
   RESTAURANT_CATEGORIES,
   type RestaurantCategory,
@@ -33,9 +34,10 @@ export class RestaurantFieldsDto {
   @Transform(trim)
   @IsString({ message: NAME_REQUIRED })
   @IsNotEmpty({ message: NAME_REQUIRED })
-  // MaxLength also fails on non-strings; there the only useful message is
-  // NAME_REQUIRED (the pipe drops the repeated one).
-  @MaxLength(RESTAURANT_NAME_MAX_LENGTH, {
+  // MaxCodePoints also fails on non-strings; there the only useful message
+  // is NAME_REQUIRED (the pipe drops the repeated one). The limit is the
+  // column size, varchar(120).
+  @MaxCodePoints(RESTAURANT_NAME_MAX_LENGTH, {
     message: ({ value }) =>
       typeof value === 'string'
         ? `El nombre del restaurante es muy largo. Usa máximo ${RESTAURANT_NAME_MAX_LENGTH} caracteres.`
@@ -62,7 +64,8 @@ export class RestaurantFieldsDto {
   @Transform(trim)
   @IsString({ message: ADDRESS_REQUIRED })
   @IsNotEmpty({ message: ADDRESS_REQUIRED })
-  @MaxLength(RESTAURANT_ADDRESS_MAX_LENGTH, {
+  // Column size: varchar(255).
+  @MaxCodePoints(RESTAURANT_ADDRESS_MAX_LENGTH, {
     message: ({ value }) =>
       typeof value === 'string'
         ? `La dirección es muy larga. Usa máximo ${RESTAURANT_ADDRESS_MAX_LENGTH} caracteres.`

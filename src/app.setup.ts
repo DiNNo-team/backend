@@ -7,10 +7,18 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { UnhandledExceptionFilter } from './common/filters/unhandled-exception.filter.js';
+import { isDeployedEnvironment } from './modules/identity-access/index.js';
 
 export const API_PREFIX = 'v1';
 export const DOCS_PATH = 'docs';
 const DEFAULT_CORS_ORIGINS = 'http://localhost:5173';
+
+// Render needs every interface. Locally the development user asks for no
+// credentials and the database is the shared (production) one, so only this
+// machine may reach the API, not the rest of the network.
+export function resolveListenHost(config: ConfigService): string {
+  return isDeployedEnvironment(config) ? '0.0.0.0' : '127.0.0.1';
+}
 
 export function parseCorsOrigins(value: string | undefined): string[] {
   return (value || DEFAULT_CORS_ORIGINS)

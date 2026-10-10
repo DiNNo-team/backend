@@ -14,12 +14,18 @@ import { Table } from './../src/modules/restaurant-operations/tables/table.entit
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
+const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const OTHER_RESTAURANT_ID = '1d2c3b4a-5f6e-4d7c-8b9a-0a1b2c3d4e5f';
 
 const users = [
   { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
   { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
+  {
+    id: INVALID_ROLE_USER_ID,
+    role: 'unknown-role',
+    restaurantId: RESTAURANT_ID,
+  },
 ];
 
 type ScheduleRow = Partial<RestaurantSchedule>;
@@ -40,6 +46,7 @@ function scheduleRow(restaurantId: string, dayOfWeek: number): ScheduleRow {
 describe('Restaurant edit (e2e)', () => {
   let app: INestApplication<App>;
   let scheduleRows: ScheduleRow[];
+  let restaurants: { manager: { transaction: ReturnType<typeof vi.fn> } };
   let storedRestaurant: Partial<Restaurant> | null;
   let manager: {
     findOne: ReturnType<typeof vi.fn>;
@@ -98,19 +105,32 @@ describe('Restaurant edit (e2e)', () => {
           ),
       ),
     };
-    const restaurants = {
+    restaurants = {
       manager: {
-        transaction: (work: (transactionManager: unknown) => unknown) =>
+        transaction: vi.fn((work: (transactionManager: unknown) => unknown) =>
           work(manager),
+        ),
       },
     };
 
+    await createApp();
+  });
+
+  // devUserEnabled 'false' turns on the Firebase resolver, so a request
+  // without a Bearer token gets the 401.
+  async function createApp(devUserEnabled = 'true') {
     const moduleFixture = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
           ignoreEnvFile: true,
-          load: [() => ({ DEV_USER_ENABLED: 'true', DEV_USER_ID: OWNER_ID })],
+          load: [
+            () => ({
+              DEV_USER_ENABLED: devUserEnabled,
+              DEV_USER_ID: OWNER_ID,
+              FIREBASE_PROJECT_ID: 'firebase-project-example',
+            }),
+          ],
         }),
         RestaurantOperationsModule,
       ],
@@ -133,7 +153,7 @@ describe('Restaurant edit (e2e)', () => {
     app = moduleFixture.createNestApplication();
     configureApp(app);
     await app.init();
-  });
+  }
 
   afterEach(async () => {
     await app.close();
@@ -358,6 +378,40 @@ describe('Restaurant edit (e2e)', () => {
       errorCode: 'RESTAURANT_REQUIRED',
     });
     expect(manager.save).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 without errorCode for an invalid role and touches nothing', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me')
+      .set('x-dev-user-id', INVALID_ROLE_USER_ID)
+      .send({ name: 'Otro nombre', schedules: [savedMonday] })
+      .expect(403);
+
+    expect(res.body).toEqual({
+      statusCode: 403,
+      error: 'Forbidden',
+      message: 'No tienes acceso a esta sección.',
+    });
+    expect(restaurants.manager.transaction).not.toHaveBeenCalled();
+    expect(manager.save).not.toHaveBeenCalled();
+    expect(manager.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 without a session (development user turned off)', async () => {
+    await app.close();
+    await createApp('false');
+
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me')
+      .send({ name: 'Otro nombre' })
+      .expect(401);
+
+    expect(res.body).toEqual({
+      statusCode: 401,
+      error: 'Unauthorized',
+      message: 'Tu sesión terminó. Inicia sesión de nuevo.',
+    });
+    expect(restaurants.manager.transaction).not.toHaveBeenCalled();
   });
 
   it('documents the route in Swagger, next to the GET of the registration', async () => {

@@ -315,6 +315,42 @@ describe('FirebaseUserResolver', () => {
     expect(usersService.create).not.toHaveBeenCalled();
   });
 
+  it('logs the rejected account without the email, the UIDs or the token', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    auth.verifyIdToken.mockResolvedValue(decodedToken());
+    usersService.findByEmail.mockResolvedValue({
+      id: USER_ID,
+      firebaseUid: 'another-firebase-uid',
+      email: EMAIL,
+    } as User);
+
+    try {
+      // Same 401 as before: the log is the only new thing.
+      await expectUnauthorized(
+        resolver.resolve(requestWith('Bearer secret-token-value')),
+        SESSION_EXPIRED_MESSAGE,
+      );
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const logged = JSON.stringify(warn.mock.calls[0]);
+      expect(logged).toContain('email already linked to another UID');
+      for (const secret of [
+        EMAIL,
+        FIREBASE_UID,
+        'another-firebase-uid',
+        USER_ID,
+        'secret-token-value',
+      ]) {
+        expect(logged).not.toContain(secret);
+      }
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('returns EMAIL_NOT_VERIFIED without creating when no email row exists', async () => {
     const { auth, resolver, usersService } = createResolver();
     auth.verifyIdToken.mockResolvedValue(
