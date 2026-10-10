@@ -22,11 +22,10 @@ export class RestaurantStatusService {
     isOpen: boolean,
   ): Promise<Restaurant> {
     const ownerId = requireRestaurant(restaurantId);
-    const restaurant = await this.findSessionRestaurant(ownerId);
-    // id last: the session restaurant is always the one updated.
-    return this.restaurants.save(
-      this.restaurants.merge(restaurant, { isOpen }, { id: ownerId }),
-    );
+    // Only isOpen, always on the session restaurant: save() of a loaded row
+    // would write back stale name, category or address edited meanwhile.
+    await this.restaurants.update({ id: ownerId }, { isOpen });
+    return this.findSessionRestaurant(ownerId);
   }
 
   private async findSessionRestaurant(id: string): Promise<Restaurant> {

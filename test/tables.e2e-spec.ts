@@ -31,7 +31,11 @@ const RESTAURANT_REQUIRED_BODY = {
 const users = [
   { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
   { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
-  { id: INVALID_ROLE_USER_ID, role: 'unknown-role', restaurantId: RESTAURANT_ID },
+  {
+    id: INVALID_ROLE_USER_ID,
+    role: 'unknown-role',
+    restaurantId: RESTAURANT_ID,
+  },
 ];
 
 function storedTable(overrides: Partial<Table>): Table {
@@ -380,6 +384,23 @@ describe('Tables (e2e)', () => {
       });
     });
 
+    it('looks up the table only inside the session restaurant, so a foreign id is a 404', async () => {
+      const foreignTableId = '7d6c5b4a-3e2f-4a1b-9c8d-7e6f5a4b3c2d';
+      txManager.findOne.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .patch(statusUrl(foreignTableId))
+        .send({ status: 'occupied' })
+        .expect(404);
+
+      // The restaurant comes from the session, never from the request.
+      expect(txManager.findOne).toHaveBeenCalledWith(Table, {
+        where: { id: foreignTableId, restaurantId: RESTAURANT_ID },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(statusLog.record).not.toHaveBeenCalled();
+    });
+
     it('returns 409 for an inactive table', async () => {
       txManager.findOne.mockResolvedValueOnce(storedTable({ isActive: false }));
 
@@ -462,8 +483,7 @@ describe('Tables (e2e)', () => {
       Object.keys(res.body.components.schemas.CreateTableDto.properties),
     ).toEqual(['identifier', 'capacity']);
     for (const operation of [route.post, route.get]) {
-      const forbidden =
-        operation.responses['403'].content['application/json'];
+      const forbidden = operation.responses['403'].content['application/json'];
       expect(forbidden.examples.restaurantRequired.value).toEqual(
         RESTAURANT_REQUIRED_BODY,
       );

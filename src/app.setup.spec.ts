@@ -1,7 +1,30 @@
 import { BadRequestException } from '@nestjs/common';
+import type { ConfigService } from '@nestjs/config';
 import { Type } from 'class-transformer';
 import { IsInt, IsString, Max, Min, ValidateNested } from 'class-validator';
-import { createValidationPipe } from './app.setup.js';
+import { createValidationPipe, resolveListenHost } from './app.setup.js';
+
+function configWith(values: Record<string, string>): ConfigService {
+  return { get: (key: string) => values[key] } as ConfigService;
+}
+
+describe('resolveListenHost', () => {
+  it('listens only on this machine locally, even with the development user on', () => {
+    expect(
+      resolveListenHost(
+        configWith({ NODE_ENV: 'development', DEV_USER_ENABLED: 'true' }),
+      ),
+    ).toBe('127.0.0.1');
+    expect(resolveListenHost(configWith({}))).toBe('127.0.0.1');
+  });
+
+  it.each([
+    ['Render', { RENDER: 'true' }],
+    ['production', { NODE_ENV: 'production' }],
+  ])('listens on every interface when deployed (%s)', (_, env) => {
+    expect(resolveListenHost(configWith(env))).toBe('0.0.0.0');
+  });
+});
 
 const HOUR_MESSAGE = 'Escribe la hora en formato HH:MM, por ejemplo 09:30.';
 const GUESTS_MESSAGE = 'Escribe un número de personas entre 1 y 20.';

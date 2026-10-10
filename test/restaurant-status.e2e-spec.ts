@@ -42,8 +42,7 @@ describe('Restaurant status (e2e)', () => {
   let stored: Map<string, Restaurant>;
   let restaurants: {
     findOneBy: ReturnType<typeof vi.fn>;
-    merge: ReturnType<typeof vi.fn>;
-    save: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
   };
 
   async function createApp(devUserEnabled: boolean) {
@@ -103,12 +102,13 @@ describe('Restaurant status (e2e)', () => {
         const found = stored.get(id);
         return Promise.resolve(found ? { ...found } : null);
       }),
-      merge: vi.fn((target: Restaurant, ...sources: Partial<Restaurant>[]) =>
-        Object.assign(target, ...sources),
-      ),
-      save: vi.fn((restaurant: Restaurant) => {
-        stored.set(restaurant.id, { ...restaurant });
-        return Promise.resolve({ ...restaurant });
+      // Writes only the given columns, like Repository.update.
+      update: vi.fn(({ id }: { id: string }, changes: Partial<Restaurant>) => {
+        const found = stored.get(id);
+        if (found) {
+          stored.set(id, { ...found, ...changes });
+        }
+        return Promise.resolve({ affected: found ? 1 : 0 });
       }),
     };
 
@@ -178,9 +178,10 @@ describe('Restaurant status (e2e)', () => {
 
     expect(res.body).toEqual({ isOpen: true });
     expect(stored.get(OTHER_RESTAURANT_ID)?.isOpen).toBe(true);
-    expect(restaurants.save).toHaveBeenCalledTimes(1);
-    expect(restaurants.save).toHaveBeenCalledWith(
-      expect.objectContaining({ id: RESTAURANT_ID }),
+    expect(restaurants.update).toHaveBeenCalledTimes(1);
+    expect(restaurants.update).toHaveBeenCalledWith(
+      { id: RESTAURANT_ID },
+      { isOpen: false },
     );
   });
 
@@ -200,7 +201,7 @@ describe('Restaurant status (e2e)', () => {
       error: 'Bad Request',
       message: [IS_OPEN_MESSAGE],
     });
-    expect(restaurants.save).not.toHaveBeenCalled();
+    expect(restaurants.update).not.toHaveBeenCalled();
   });
 
   it('rejects extra fields, such as a restaurantId, and changes nothing', async () => {
@@ -213,7 +214,7 @@ describe('Restaurant status (e2e)', () => {
       'El campo "restaurantId" no se permite. Quítalo de la solicitud.',
     ]);
     expect(restaurants.findOneBy).not.toHaveBeenCalled();
-    expect(restaurants.save).not.toHaveBeenCalled();
+    expect(restaurants.update).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -239,7 +240,7 @@ describe('Restaurant status (e2e)', () => {
         message: 'Primero registra tu restaurante.',
         errorCode: 'RESTAURANT_REQUIRED',
       });
-      expect(restaurants.save).not.toHaveBeenCalled();
+      expect(restaurants.update).not.toHaveBeenCalled();
     },
   );
 
@@ -268,7 +269,7 @@ describe('Restaurant status (e2e)', () => {
         message: 'No tienes acceso a esta sección.',
       });
       expect(restaurants.findOneBy).not.toHaveBeenCalled();
-      expect(restaurants.save).not.toHaveBeenCalled();
+      expect(restaurants.update).not.toHaveBeenCalled();
       expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
     },
   );
@@ -293,7 +294,7 @@ describe('Restaurant status (e2e)', () => {
 
       await send().expect(401);
       expect(restaurants.findOneBy).not.toHaveBeenCalled();
-      expect(restaurants.save).not.toHaveBeenCalled();
+      expect(restaurants.update).not.toHaveBeenCalled();
     },
   );
 

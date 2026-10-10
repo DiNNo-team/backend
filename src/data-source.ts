@@ -18,6 +18,8 @@ export default new DataSource({
   ssl: databaseUrl.includes('sslmode=require')
     ? { rejectUnauthorized: false }
     : false,
+  // Same as app.module.ts: 10 s leaves room for Neon to wake up.
+  connectTimeoutMS: 10_000,
   entities: ['dist/**/*.entity.js'],
   migrations: ['dist/migrations/*.js'],
 });

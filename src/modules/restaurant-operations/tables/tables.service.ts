@@ -56,7 +56,7 @@ export class TablesService {
       isActive: true,
     });
 
-    return this.saveIdentifier(table);
+    return this.writeIdentifier(() => this.tables.save(table), identifier);
   }
 
   async findAll(restaurantId: string | null): Promise<Table[]> {
@@ -114,8 +114,8 @@ export class TablesService {
     });
   }
 
-  // Edit (PBI 7): identifier and/or capacity. Works on inactive tables too and
-  // never changes the status, so nothing goes to the log.
+  // Edit: identifier and/or capacity. Works on inactive tables too and never
+  // changes the status, so nothing goes to the log.
   async update(
     restaurantId: string | null,
     tableId: string,
@@ -128,21 +128,37 @@ export class TablesService {
       throw new BadRequestException([NO_TABLE_CHANGES_MESSAGE]);
     }
 
-    const table = await this.tables.findOneBy({
-      id: tableId,
-      restaurantId: ownerId,
+    return this.tables.manager.transaction(async (manager) => {
+      // Same row lock as updateStatus: a concurrent status change waits.
+      const table = await manager.findOne(Table, {
+        where: { id: tableId, restaurantId: ownerId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) {
+        throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+      }
+
+      // Only the edited columns: save() would also write back any stale
+      // column of the loaded row, such as status or isActive.
+      const changes: Partial<Pick<Table, 'identifier' | 'capacity'>> = {};
+      if (identifier !== undefined) {
+        await this.assertIdentifierAvailable(ownerId, identifier, table.id);
+        changes.identifier = identifier;
+      }
+      if (dto.capacity !== undefined) {
+        changes.capacity = dto.capacity;
+      }
+      await this.writeIdentifier(
+        () =>
+          manager.update(
+            Table,
+            { id: table.id, restaurantId: ownerId },
+            changes,
+          ),
+        changes.identifier ?? table.identifier,
+      );
+      return { ...table, ...changes };
     });
-    if (!table) {
-      throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
-    }
-    if (identifier !== undefined) {
-      await this.assertIdentifierAvailable(ownerId, identifier, table.id);
-      table.identifier = identifier;
-    }
-    if (dto.capacity !== undefined) {
-      table.capacity = dto.capacity;
-    }
-    return this.saveIdentifier(table);
   }
 
   // Deactivate (PBI 7): keeps its status, stops being operational, and logs
@@ -223,13 +239,17 @@ export class TablesService {
     }
   }
 
-  // Saves a table whose identifier may have changed (create and edit).
-  private async saveIdentifier(table: Table): Promise<Table> {
+  // Runs a write whose identifier may collide (create and edit): the unique
+  // index answers the same 409 as the check above.
+  private async writeIdentifier<T>(
+    write: () => Promise<T>,
+    identifier: string,
+  ): Promise<T> {
     try {
-      return await this.tables.save(table);
+      return await write();
     } catch (error) {
       if (isDuplicateIdentifier(error)) {
-        throw new ConflictException(identifierTakenMessage(table.identifier));
+        throw new ConflictException(identifierTakenMessage(identifier));
       }
       throw error;
     }

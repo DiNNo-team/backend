@@ -76,6 +76,49 @@ describe('CreateTableDto', () => {
     ).resolves.toEqual({ identifier: 'x'.repeat(10), capacity: 4 });
   });
 
+  describe('identifier length in code points and invisible characters', () => {
+    const INVISIBLE =
+      'El identificador no puede incluir caracteres invisibles.';
+
+    it.each([
+      ['a plain number', '04'],
+      ['the table word', 'Mesa 1'],
+      ['an emoji', 'Mesa 🍕'],
+      ['10 emoji (10 code points)', '🍕'.repeat(10)],
+      ['a variation selector (10 code points)', 'a\uFE0F'.repeat(5)],
+    ])('accepts %s', async (_case, identifier) => {
+      await expect(validate({ identifier, capacity: 4 })).resolves.toEqual({
+        identifier,
+        capacity: 4,
+      });
+    });
+
+    it('counts variation selectors: 12 code points are too long', async () => {
+      await expect(
+        messagesFor({ identifier: 'a\uFE0F'.repeat(6), capacity: 4 }),
+      ).resolves.toEqual([
+        'Usa máximo 10 caracteres en el identificador de la mesa.',
+      ]);
+    });
+
+    it.each([
+      ['a zero-width space', '04\u200B'],
+      ['a right-to-left override', '\u202E04'],
+      ['a zero-width joiner', 'T\u200D1'],
+      ['a control character', 'T\u00071'],
+    ])('rejects %s', async (_case, identifier) => {
+      await expect(messagesFor({ identifier, capacity: 4 })).resolves.toEqual([
+        INVISIBLE,
+      ]);
+    });
+
+    it('trims before checking, so outer spaces are not rejected', async () => {
+      await expect(
+        validate({ identifier: '  04  ', capacity: 4 }),
+      ).resolves.toEqual({ identifier: '04', capacity: 4 });
+    });
+  });
+
   it('rejects restaurantId, status and isActive in Spanish', async () => {
     await expect(
       messagesFor({

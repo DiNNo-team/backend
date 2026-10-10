@@ -7,7 +7,7 @@ import {
 } from '../../identity-access/index.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
 import type { RegisterRestaurantDto } from './dto/register-restaurant.dto.js';
-import type { RestaurantScheduleDto } from './dto/restaurant-schedule.dto.js';
+import { toScheduleRow } from './restaurant-schedule-rows.js';
 import { RestaurantSchedule } from './restaurant-schedule.entity.js';
 import { Restaurant } from './restaurant.entity.js';
 
@@ -82,18 +82,4 @@ export class RestaurantRegistrationService {
     });
     return { restaurant, schedules };
   }
-}
-
-// A 24-hour day stores no times, whatever the client sent (the DTO rejects them).
-function toScheduleRow(
-  restaurantId: string,
-  day: RestaurantScheduleDto,
-): Partial<RestaurantSchedule> {
-  return {
-    restaurantId,
-    dayOfWeek: day.dayOfWeek,
-    isOpen24h: day.isOpen24h,
-    opensAt: day.isOpen24h ? null : (day.opensAt ?? null),
-    closesAt: day.isOpen24h ? null : (day.closesAt ?? null),
-  };
 }

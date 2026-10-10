@@ -7,6 +7,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo: en local la API ahora escucha solo en `127.0.0.1`.** Desde tu equipo todo sigue igual (`http://localhost:3000`). Si necesitas probar desde el celular u otro equipo, dilo en el grupo antes de abrirlo: con el usuario de desarrollo la API no pide credenciales y la base es la de producción, así que quedaría expuesta a toda la red. En Render nada cambia.
 - **Agrega a tu `.env`:** `DEV_USER_ENABLED=true` y `DEV_USER_ID=<uuid>`. **Sin eso, toda ruta protegida responde `401`.** Los uuid están en el chat del equipo.
 - **Los ids de la base son UUID (`string`), no enteros.**
 - **Usuario actual:** `@UseGuards(CurrentUserGuard)` y `@CurrentUser() user: CurrentUserData`, importados solo desde `src/modules/identity-access/index.ts`, nunca desde carpetas internas.
@@ -21,6 +22,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - Un `:id` de ruta no se valida solo: usa `ParseUUIDPipe` con un mensaje propio. Si no, un id mal formado llega a Postgres y responde `500`.
 - **Forma de los errores de toda la API:** `{ statusCode, message, error }`. En los `400` de validación `message` es una **lista** (un mensaje por problema); en los demás errores es un **texto**. El DTO para Swagger es `src/common/dto/error-response.dto.ts`: impórtalo, no lo dupliques.
   - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 10, "API"). Hoy existen `RESTAURANT_REQUIRED` y `EMAIL_NOT_VERIFIED`.
+  - **Nuevo: los errores que da Nest antes de llegar a nuestro código ya tienen la misma forma y el mismo idioma.** JSON mal formado: `400` con "El cuerpo de la solicitud no es un JSON válido."; body demasiado grande: `413` con "La solicitud es demasiado grande."; ruta inexistente: `404` con "Ruta no encontrada.". Los tres traen `statusCode`, `message` (texto) y `error`. Lo hace el filtro global (`unhandled-exception.filter.ts`); tus `400`, `403`, `404` y `409` siguen saliendo sin cambios.
   - **Decisión tomada: cómo responde la API cuando un usuario no puede acceder a algo.** Hay tres situaciones distintas, y cada una tiene su respuesta:
     - **Usuario sin restaurante:** responde `403` con `errorCode: "RESTAURANT_REQUIRED"` (`requireRestaurant`, en `restaurant-operations/shared/restaurant-required.ts`). Ya está en las rutas de mesas y de restaurante, y la web ramifica por ese código para llevar al usuario al registro del restaurante, así que no debe cambiar.
     - **Recurso de otro restaurante:** responde `404`, con el mismo mensaje que si el recurso no existiera. Así la API no revela que existe algo de otro restaurante. Ya se aplica en las mesas.
@@ -48,11 +50,10 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Tus pendientes:**
   - **Seed:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`.
   - Probar el login con un token real de Firebase contra Render.
-  - Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 10).
+  - Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 10). **Antes de fusionar esta rama a `develop`:** desde ahora, con `FIREBASE_AUTH_EMULATOR_HOST` definida o `DEV_USER_ENABLED=true`, la app no arranca en Render.
   - Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.
   - Aplicar en Neon la migración de cada rama antes de fusionar su PR (ver "Reglas nuevas de este sprint").
   - Revisar los PR del backend.
-- **Los horarios todavía no se editan con el `PATCH`.** Se guardan en `restaurant_schedules`, así que tu edición no los puede copiar sola. Las reglas de un día ya están en un solo archivo para que las reutilices: `restaurants/dto/restaurant-schedule.dto.ts` (`RestaurantScheduleDto`); la lista con sus reglas está en `RegisterRestaurantDto`. Para responder con horarios usa `RestaurantProfileResponseDto.fromEntities(restaurant, schedules)`: así tu `PATCH` devolverá lo mismo que el `GET` y el registro.
 - **Los horarios no van en `restaurants`, van en otra tabla (`restaurant_schedules`, una fila por día abierto).** La edición no los puede copiar sola. Además, si un campo de horarios entra en `RestaurantFieldsDto` sin una propiedad con el mismo nombre en `Restaurant`, `npm run typecheck` falla en `restaurant-edit.service.ts` (el `Pick` de `RestaurantChanges`).
 - **Carrera conocida en el identificador de mesa:** el índice `UQ_tables_restaurant_id_identifier` compara `lower(trim(identifier))`, así que no cubre que "4" y "04" lleguen a la vez en dos peticiones simultáneas. El chequeo de repetidos de la aplicación (`assertIdentifierAvailable`, en `tables.service.ts`) lo cubre salvo en esa carrera. Es un riesgo bajo y aceptado (hay un dueño por restaurante). Solución futura posible: un índice sobre la clave normalizada.
 
@@ -61,15 +62,16 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Decisión (Jacobo):** el rol de los usuarios de restaurante es `restaurant_admin`, el mismo del seed y del resolver. El control de acceso lo usa en `@Roles(UserRole.RESTAURANT_ADMIN)`.
 - **Te toca en la web:** la pantalla del restaurante en `/restaurante`, con la vista de consulta y la de edición. La edición se integra con `PATCH /v1/restaurants/me` (ya existe, detalle abajo). **La vista de consulta usa `GET /v1/restaurants/me`** (Santiago, ver el punto de abajo).
 - **El registro del restaurante (Santiago, PBI 3) usa tu `UsersService.assignRestaurantIfNone`** dentro de su transacción, después de crear el restaurante y sus horarios. Si devuelve `false`, responde `409` y se revierte todo. Si cambias la firma o el comportamiento de ese método, avísale a Santiago.
-- **Para tu pantalla del restaurante (PBI 4):** `GET /v1/restaurants/me` ya existe (tag `restaurants` en `/docs`). Responde `200` con `{ id, name, category, address, schedules }`; `schedules` trae solo los días que abre, de lunes a domingo: `{ dayOfWeek: 1..7 (1 = lunes), isOpen24h, opensAt: "HH:MM" | null, closesAt: "HH:MM" | null }`. Un cierre menor que la apertura es del día siguiente. `category` y `address` pueden ser `null` en restaurantes viejos (el del seed). Sin restaurante: `403` con `errorCode: "RESTAURANT_REQUIRED"`. El `PATCH` responde lo mismo, pero todavía sin `schedules`.
-- **Editar los datos del restaurante (PBI 4): `PATCH /v1/restaurants/me`.** Ya está disponible y documentado en Swagger (`/docs`, tag `restaurants`). La ruta dice `me` porque siempre se edita el restaurante del usuario de la sesión: no hay forma de pedir otro, y el backend no acepta un id de restaurante en la petición. En el body van solo los datos que cambian, de entre `name`, `category` y `address` (mismas reglas que el registro; los espacios de los extremos se recortan), por ejemplo `{ "name": "La Esquina de Ana" }`. Los campos son opcionales, pero hay que mandar al menos uno; los que no mandes no cambian. Si sale bien, responde 200 con el restaurante actualizado: `{ "id": "uuid", "name": "La Esquina de Ana", "category": "colombian", "address": "Calle 72 # 10-34, Bogotá" }`, sin `schedules`.
+- **Para tu pantalla del restaurante (PBI 4):** `GET /v1/restaurants/me` ya existe (tag `restaurants` en `/docs`). Responde `200` con `{ id, name, category, address, schedules }`; `schedules` trae solo los días que abre, de lunes a domingo: `{ dayOfWeek: 1..7 (1 = lunes), isOpen24h, opensAt: "HH:MM" | null, closesAt: "HH:MM" | null }`. Un cierre menor que la apertura es del día siguiente. `category` y `address` pueden ser `null` en restaurantes viejos (el del seed). Sin restaurante: `403` con `errorCode: "RESTAURANT_REQUIRED"`. El `PATCH` responde exactamente lo mismo, `schedules` incluido.
+- **Editar los datos del restaurante (PBI 4): `PATCH /v1/restaurants/me`.** Ya está disponible y documentado en Swagger (`/docs`, tag `restaurants`). La ruta dice `me` porque siempre se edita el restaurante del usuario de la sesión: no hay forma de pedir otro, y el backend no acepta un id de restaurante en la petición. En el body van solo los datos que cambian, de entre `name`, `category`, `address` y `schedules` (mismas reglas que el registro; los espacios de los extremos se recortan), por ejemplo `{ "name": "La Esquina de Ana" }`. Los campos son opcionales, pero hay que mandar al menos uno; los que no mandes no cambian. Si sale bien, responde 200 con el restaurante actualizado, igual que `GET /v1/restaurants/me`: `{ "id": "uuid", "name": "La Esquina de Ana", "category": "colombian", "address": "Calle 72 # 10-34, Bogotá", "schedules": [...] }`.
   - **Qué hacer en la pantalla con cada error.** Todos traen en `message` un texto en español listo para mostrar.
     - **400:** los datos no son válidos (por ejemplo, un nombre vacío o de más de 120 caracteres, una categoría fuera de la lista o una dirección vacía), el body viene vacío ("No hay cambios para guardar…") o trae un campo que no existe. Aquí `message` es una lista: muestra cada texto. Para no llegar al body vacío, puedes desactivar el botón de guardar mientras no haya cambios.
     - **403 con `errorCode: "RESTAURANT_REQUIRED"`:** el usuario todavía no registró su restaurante. Llévalo al registro del restaurante, igual que en las rutas de mesas.
     - **403 sin `errorCode`** ("No tienes acceso a esta sección."): el rol del usuario no permite la acción. Muestra el mensaje.
     - **401 y 500** funcionan igual que en el resto de la API.
   - **Los datos para mostrar en la pantalla los da `GET /v1/restaurants/me`** (ver el punto de arriba).
-  - **Se pueden editar el nombre, la categoría y la dirección.** Los horarios todavía no: llegarán al `PATCH` cuando Elizabeth adapte la edición, como campos nuevos en el body y en la respuesta, sin cambiar la ruta ni los campos que ya existen.
+  - **Nuevo: `PATCH /v1/restaurants/me` ya edita los horarios.** Acepta `schedules` opcional, con la misma forma y las mismas reglas que el registro (un elemento por día abierto, sin repetir, `HH:MM`, sin horas si `isOpen24h` es `true`). **Es un reemplazo completo:** manda la lista entera de días abiertos, no solo el día que cambió; un día que no mandes queda cerrado. `schedules: []` y `null` dan `400` (el restaurante no puede quedar sin días). Si no mandas `schedules`, los horarios no cambian. Todo se guarda en una transacción.
+  - **La respuesta del `PATCH` ahora es igual a la de `GET /v1/restaurants/me`**, `schedules` incluido (ordenado de lunes a domingo). Después de guardar ya no hace falta volver a pedir el `GET`: usa lo que devuelve el `PATCH`. La ruta y los campos que ya existían no cambiaron.
 
 ### Santiago y Sergio
 - `restaurants` ya tiene `name`, `category`, `address` e `is_open`. Quien agregue una columna lo hace con su propia migración de `ALTER`. Nadie recrea la tabla.
@@ -83,6 +85,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - `403` sin `errorCode` ("No tienes acceso a esta sección."): el rol del usuario no permite registrar. Muestra el mensaje.
 - **Un usuario nuevo nace sin restaurante:** el login con Firebase crea su fila en `users` con `restaurantId` en `null`, así que las rutas de mesas y de restaurante le responden `403` con `errorCode: "RESTAURANT_REQUIRED"` hasta que tu registro le asigne uno.
 - **`restaurants.is_open` ya existe** (Sergio, PBI 8): `boolean`, NOT NULL, `DEFAULT true`. **Decisión tomada:** un restaurante recién registrado nace Abierto, sin que tu registro haga nada. Tu registro no tiene que mandar `isOpen`, y `RestaurantResponseDto` no lo incluye: el estado tiene sus propios endpoints (`/v1/restaurants/me/status`).
+- **Nuevo (Elizabeth): las reglas de horarios y `toScheduleRow` ahora son compartidas con la edición.** Los decoradores de validación de la lista `schedules` pasaron de `RegisterRestaurantDto` a `SchedulesField()`, en `restaurants/dto/restaurant-schedule.dto.ts`, que usan el registro y la edición. `toScheduleRow` pasó de `restaurant-registration.service.ts` a `restaurants/restaurant-schedule-rows.ts`. El registro se comporta igual y sus pruebas pasan sin cambios; si cambias una regla de horarios, cambia también en el `PATCH`.
 - **Te falta en la web:** el formulario del registro del restaurante en `/onboarding`, con sus validaciones: "Tu restaurante" (nombre y categoría), "Ubicación" (dirección) y "Horarios" (con el `HoursEditor` del kit). Registro y edición validan igual, en la web y en el backend (`RestaurantFieldsDto`). Luego, su integración con `POST /v1/restaurants` y la prueba del recorrido con el usuario de onboarding (no con `demo@example.com`).
 
 ### Sergio
@@ -134,8 +137,35 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Migraciones:** solo Elizabeth las aplica en Neon (una sola base, compartida y de producción). Quien necesita una la crea con `npm run migration:create` y escribe el SQL a mano, o se la pide a Elizabeth. **No corran `migration:generate`:** con la base compartida genera una migración con las tablas de los demás. Una migración ya aplicada no se edita: el cambio va en una migración nueva. Se aplica antes de fusionar el PR (ver "Acciones pendientes de todos").
 - `demo@example.com` está reservado para la demo del Día 7: nadie lo usa para probar. Para eso está `onboarding@example.com`, que se reinicia con el SQL de [`docs/database.md`](docs/database.md#reiniciar-los-datos-de-prueba).
 
+## Deuda conocida (no son tareas)
+
+Riesgos aceptados para el Sprint 1, a revisar más adelante:
+
+- **Rol automático:** toda cuenta del proyecto Firebase con correo verificado entra como `restaurant_admin` y puede registrar un restaurante. Revisarlo antes de que la app móvil use login, si comparte el proyecto Firebase.
+- **Sesiones revocadas:** `verifyIdToken` no usa `checkRevoked`, así que un token revocado sirve hasta que vence (máximo 1 hora). Activarlo exige credenciales de cuenta de servicio.
+- **TLS con Neon:** la conexión no verifica el certificado del servidor (`rejectUnauthorized: false`).
+- **Sin rate limiting:** ninguna ruta limita las peticiones por IP ni por usuario.
+- **`npm audit`:** hay vulnerabilidades reportadas en dependencias; falta revisar y aplicar `npm audit fix`.
+- **Cuenta bloqueada por otro UID:** cuando el correo ya está vinculado a otro UID de Firebase (por ejemplo, una cuenta borrada y vuelta a crear), la API responde el mismo `401` "Tu sesión terminó" y la web entra en un bucle de login. Un `errorCode` propio necesita acordarse con la web; mientras tanto, el soporte está en `docs/database.md`.
+- **Firebase caído o lento:** no hay timeout propio; si Firebase no responde, la API contesta `401` en vez de `503`, y la web lo trata como sesión vencida.
+- **`/v1/health` no revisa la base:** responde `ok` aunque Neon no conteste. Agregarlo con Neon gratuito (que se duerme) puede hacer que Render reinicie el servicio en bucle.
+- **Consola de Firebase:** revisar que solo estén habilitados Email/Password y Google, y que la vinculación de cuentas por correo esté activa (una cuenta por correo).
+
 ## Historial
 
+- **2026-10-09 · Arreglos de la revisión adversarial (Elizabeth).** Sin cambios de esquema, de la API ni dependencias nuevas.
+  - **Local:** la API escucha solo en `127.0.0.1` fuera de Render (ver "Acciones pendientes de todos").
+  - **Datos:** editar una mesa (identificador o capacidad) corre en una transacción con lock y escribe solo esas columnas; abrir o cerrar el restaurante escribe solo `isOpen`. Antes, un `save()` podía revertir en silencio un cambio de estado de mesa hecho al mismo tiempo, sin dejarlo en la bitácora.
+  - **Validación:** el nombre, la dirección y el identificador miden su largo en caracteres Unicode, como Postgres, así que un texto con emojis o selectores de variante ya no termina en `500`. El identificador rechaza caracteres invisibles ("El identificador no puede incluir caracteres invisibles."). Los emojis con unión (por ejemplo, familias) también se rechazan en el identificador, porque llevan un carácter invisible.
+  - **Login:** si el correo ya está vinculado a otro UID, el log del servidor lo registra sin datos personales; la respuesta no cambia. SQL de soporte en `docs/database.md`.
+  - **Base:** espera máximo 10 s para conectarse a Neon, en vez de esperar sin límite.
+  - **Pruebas:** e2e de `401` y `403` por rol en `PATCH /v1/restaurants/me`, de `403` por rol al editar una mesa, y de que el `404` de una mesa ajena consulta solo el restaurante de la sesión.
+
+- **2026-10-09 · Endurecimiento e integración del backend (Elizabeth).** Sin cambios de esquema ni dependencias nuevas.
+  - **Arranque:** en un ambiente desplegado (`RENDER` o `NODE_ENV=production`), la app no arranca si `FIREBASE_AUTH_EMULATOR_HOST` está definida o `DEV_USER_ENABLED` es `true`. El error nombra la variable, nunca su valor.
+  - **Login:** si Firebase rechaza un token, el log del servidor registra solo el código del error (por ejemplo `auth/id-token-expired`), sin el token. La respuesta sigue siendo el mismo `401`.
+  - **API:** `PATCH /v1/restaurants/me` acepta `schedules` y responde como `GET /v1/restaurants/me` (ver la sección de Jacobo). JSON mal formado, `413` y ruta inexistente responden en español y con `error` (ver "Acciones pendientes de todos").
+  - **Otros:** el cliente de Redis se cierra al apagar la app, y el ejemplo de Swagger del identificador de mesa es `"04"`.
 - **2026-10-09 · Limpieza tras la auditoría de `develop` (Elizabeth).** Sin cambios de esquema ni de la API.
   - **Código:** `TABLE_ID_INVALID` ("El id de la mesa no es un UUID válido.") pasó a `restaurant-operations/shared/table-id-invalid.ts`, y lo importan `tables.controller.ts` y `GET /v1/table-logs`; ya no se exporta desde el controlador de mesas. `redis.config.ts` registra el error de conexión con el `Logger` de Nest.
   - **Docs:** el README lista `FIREBASE_PROJECT_ID` entre las variables de Render y describe el login con Firebase; el `CLAUDE.md` marca el join de la bitácora a `users` como excepción conocida del Sprint 1.

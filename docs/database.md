@@ -136,6 +136,20 @@ UPDATE users SET restaurant_id = NULL WHERE email = 'onboarding@example.com';
 - No borra nada. El restaurante que creó queda huérfano (ningún usuario apunta a él) y no pasa nada.
 - **`demo@example.com` no se usa para esto:** está reservado para la demo del Día 7 y nadie lo toca.
 
+## Cuenta bloqueada tras recrear el usuario en Firebase
+
+Si alguien borra su cuenta de Firebase y la vuelve a crear con el mismo correo, Firebase le da un UID nuevo, pero su fila de `users` sigue vinculada al UID viejo. Desde entonces cada petición responde `401` "Tu sesión terminó. Inicia sesión de nuevo.", aunque el login en la web funcione, y el log del servidor muestra `Firebase account rejected: email already linked to another UID`.
+
+Para desvincularla, de modo que el próximo login con el correo verificado la vuelva a vincular a su restaurante:
+
+```sql
+UPDATE users SET firebase_uid = NULL WHERE id = '<user-id>';
+```
+
+- **Solo lo ejecuta Elizabeth**, en Neon, que es la base de producción.
+- **Antes, verifica quién es la persona** y que de verdad es la dueña de ese correo y de ese restaurante. Al quitar el UID, quien inicie sesión con ese correo verificado se queda con la cuenta y con su restaurante.
+- Usa el `id` de la fila (uuid), nunca un `WHERE` por correo, para no tocar otra fila.
+
 ## Verificar que las entidades coinciden con la base
 
 Sin escribir nada en la base ni crear archivos:

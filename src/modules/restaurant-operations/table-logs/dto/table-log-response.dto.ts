@@ -53,7 +53,7 @@ export class TableLogResponseDto {
   changedAt: Date;
 
   @ApiProperty({
-    example: 'admin@casa72.co',
+    example: 'admin@example.com',
     description:
       'Correo del usuario que hizo el cambio (users no tiene nombre).',
   })

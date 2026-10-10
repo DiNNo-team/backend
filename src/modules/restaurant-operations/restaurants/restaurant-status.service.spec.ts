@@ -21,11 +21,13 @@ function createService() {
     findOneBy: vi.fn(({ id }: { id: string }) =>
       Promise.resolve(id === stored.id ? { ...stored } : null),
     ),
-    // Same semantics as Repository.merge: later sources win.
-    merge: vi.fn((target: Restaurant, ...sources: Partial<Restaurant>[]) =>
-      Object.assign(target, ...sources),
-    ),
-    save: vi.fn((restaurant: Restaurant) => Promise.resolve({ ...restaurant })),
+    // Same semantics as Repository.update: only the given columns change.
+    update: vi.fn(({ id }: { id: string }, changes: Partial<Restaurant>) => {
+      if (id === stored.id) {
+        Object.assign(stored, changes);
+      }
+      return Promise.resolve({ affected: id === stored.id ? 1 : 0 });
+    }),
   };
   const service = new RestaurantStatusService(
     restaurants as unknown as Repository<Restaurant>,
@@ -73,18 +75,26 @@ describe('RestaurantStatusService', () => {
 
       const restaurant = await service.update(RESTAURANT_ID, false);
 
-      expect(restaurants.findOneBy).toHaveBeenCalledWith({ id: RESTAURANT_ID });
-      expect(restaurants.save).toHaveBeenCalledWith(
-        expect.objectContaining({ id: RESTAURANT_ID, isOpen: false }),
+      expect(restaurants.update).toHaveBeenCalledWith(
+        { id: RESTAURANT_ID },
+        { isOpen: false },
       );
+      // The answer is the row read back after the update.
+      expect(restaurants.findOneBy).toHaveBeenCalledWith({ id: RESTAURANT_ID });
       expect(restaurant).toMatchObject({ id: RESTAURANT_ID, isOpen: false });
     });
 
     it('changes only isOpen', async () => {
-      const { service } = createService();
+      const { service, restaurants } = createService();
 
       const restaurant = await service.update(RESTAURANT_ID, false);
 
+      // Only isOpen is written: a stale name, category or address is never sent.
+      const [, changes] = restaurants.update.mock.calls[0] as [
+        unknown,
+        Partial<Restaurant>,
+      ];
+      expect(changes).toEqual({ isOpen: false });
       expect(restaurant).toMatchObject({
         name: 'La Esquina de Ana',
         category: null,
@@ -109,7 +119,7 @@ describe('RestaurantStatusService', () => {
       await expect(result).rejects.toMatchObject({
         response: { errorCode: RESTAURANT_REQUIRED_CODE },
       });
-      expect(restaurants.save).not.toHaveBeenCalled();
+      expect(restaurants.update).not.toHaveBeenCalled();
     });
 
     it('fails as an unexpected error if the session restaurant does not exist', async () => {
@@ -119,7 +129,10 @@ describe('RestaurantStatusService', () => {
 
       await expect(result).rejects.toThrow('not found');
       await expect(result).rejects.not.toBeInstanceOf(HttpException);
-      expect(restaurants.save).not.toHaveBeenCalled();
+      // The update matched no row, so nothing changed.
+      await expect(restaurants.update.mock.results[0].value).resolves.toEqual({
+        affected: 0,
+      });
     });
   });
 });

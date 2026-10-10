@@ -5,6 +5,8 @@ import {
   Get,
   INestApplication,
   Logger,
+  NotFoundException,
+  Param,
   Post,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -43,9 +45,19 @@ class ProbeController {
     });
   }
 
+  @Get('missing')
+  missing(): never {
+    throw new NotFoundException('No encontramos esta mesa.');
+  }
+
   @Post('validate')
   validate(@Body() dto: ProbeDto): ProbeDto {
     return dto;
+  }
+
+  @Post('items/:id')
+  item(@Param('id') id: string): string {
+    return id;
   }
 }
 
@@ -140,16 +152,67 @@ describe('Unhandled errors (e2e)', () => {
     expect(loggedErrors).not.toHaveBeenCalled();
   });
 
-  it('keeps a malformed JSON body as a 400, not a 500', async () => {
+  it('keeps a malformed JSON body as a 400, not a 500, in Spanish and with error', async () => {
     const res = await request(app.getHttpServer())
       .post('/v1/probe/validate')
       .set('Content-Type', 'application/json')
       .send('{"value": ')
       .expect(400);
 
-    expect(res.body.statusCode).toBe(400);
+    expect(res.body).toEqual({
+      statusCode: 400,
+      message: 'El cuerpo de la solicitud no es un JSON válido.',
+      error: 'Bad Request',
+    });
+  });
+
+  it('answers a body that is too large with a Spanish 413 and error', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/v1/probe/validate')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ value: 'x'.repeat(200 * 1024) }))
+      .expect(413);
+
+    expect(res.body).toEqual({
+      statusCode: 413,
+      message: 'La solicitud es demasiado grande.',
+      error: 'Payload Too Large',
+    });
+    expect(loggedErrors).not.toHaveBeenCalled();
+  });
+
+  it('answers an unknown route with a Spanish 404 and error', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/does-not-exist?x=1')
+      .expect(404);
+
+    expect(res.body).toEqual({
+      statusCode: 404,
+      message: 'Ruta no encontrada.',
+      error: 'Not Found',
+    });
+  });
+
+  it('lets our own 404 through unchanged', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/probe/missing')
+      .expect(404);
+
+    expect(res.body).toEqual({
+      statusCode: 404,
+      message: 'No encontramos esta mesa.',
+      error: 'Not Found',
+    });
+  });
+
+  it('does not report a valid JSON body as malformed when a route param cannot be decoded', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/v1/probe/items/%FF')
+      .send({ value: 1 })
+      .expect(400);
+
     expect(res.body.message).not.toBe(
-      'No pudimos completar la acción. Intenta de nuevo en un momento.',
+      'El cuerpo de la solicitud no es un JSON válido.',
     );
   });
 });

@@ -92,6 +92,11 @@ function createStore() {
       committed.set(table.id, { ...table });
       return Promise.resolve({ ...table });
     }),
+    // Called by every transaction's manager.update before it writes, so a
+    // test can make the write fail (e.g. with a unique violation).
+    beforeUpdate: vi.fn((_staged: Map<string, Table>): Promise<void> =>
+      Promise.resolve(),
+    ),
     manager: {
       transaction: vi.fn(
         async <T>(work: (manager: EntityManager) => Promise<T>): Promise<T> => {
@@ -111,6 +116,21 @@ function createStore() {
               staged.set(table.id, { ...table });
               return Promise.resolve({ ...table });
             }),
+            // Writes only the given columns, like EntityManager.update.
+            update: vi.fn(
+              async (
+                _entity: unknown,
+                where: Where,
+                changes: Partial<Table>,
+              ) => {
+                await repository.beforeUpdate(staged);
+                const targets = [...staged.values()].filter((t) =>
+                  matches(t, where),
+                );
+                targets.forEach((t) => Object.assign(t, changes));
+                return { affected: targets.length };
+              },
+            ),
           };
           managers.push(manager as unknown as EntityManager);
           const result = await work(manager as unknown as EntityManager);
@@ -167,6 +187,50 @@ describe('TablesService.update', () => {
     expect(record).not.toHaveBeenCalled();
   });
 
+  it('writes only the edited columns, never status or isActive, under a row lock', async () => {
+    const { service, store } = createService();
+
+    await service.update(RESTAURANT_ID, TABLE_ID, {
+      identifier: '12',
+      capacity: 6,
+    });
+
+    const manager = store.managers[0] as unknown as {
+      findOne: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    expect(manager.findOne.mock.calls[0][1]).toMatchObject({
+      where: { id: TABLE_ID, restaurantId: RESTAURANT_ID },
+      lock: { mode: 'pessimistic_write' },
+    });
+    expect(manager.update).toHaveBeenCalledTimes(1);
+    const [, where, changes] = manager.update.mock.calls[0] as [
+      unknown,
+      Where,
+      Partial<Table>,
+    ];
+    expect(where).toEqual({ id: TABLE_ID, restaurantId: RESTAURANT_ID });
+    expect(changes).toEqual({ identifier: '12', capacity: 6 });
+  });
+
+  it('does not write back a status changed after the table was read', async () => {
+    const { service, store } = createService();
+    // The edit loaded "occupied"; the row becomes "available" before the
+    // write lands. save() of the loaded object would revert it.
+    store.raw.beforeUpdate.mockImplementationOnce((staged) => {
+      Object.assign(staged.get(TABLE_ID) as Table, { status: 'available' });
+      return Promise.resolve();
+    });
+
+    await service.update(RESTAURANT_ID, TABLE_ID, { capacity: 6 });
+
+    expect(store.stored(TABLE_ID)).toMatchObject({
+      capacity: 6,
+      status: 'available',
+      isActive: true,
+    });
+  });
+
   it('edits only the capacity without checking identifiers', async () => {
     const { service, store } = createService();
 
@@ -207,7 +271,7 @@ describe('TablesService.update', () => {
       await expect(result).rejects.toThrow(
         `Ya tienes una ${shownName}. Usa otro identificador.`,
       );
-      expect(store.raw.save).not.toHaveBeenCalled();
+      expect(store.raw.beforeUpdate).not.toHaveBeenCalled();
     },
   );
 
@@ -229,7 +293,7 @@ describe('TablesService.update', () => {
 
   it('turns a unique violation at save into the same 409', async () => {
     const { service, store } = createService();
-    store.raw.save.mockRejectedValueOnce(
+    store.raw.beforeUpdate.mockRejectedValueOnce(
       new QueryFailedError(
         'UPDATE "tables" ...',
         [],

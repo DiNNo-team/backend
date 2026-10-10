@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { Logger, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import type { User } from '../users/user.entity.js';
@@ -101,6 +101,54 @@ describe('FirebaseUserResolver', () => {
       SESSION_EXPIRED_MESSAGE,
     );
     expect(usersService.findByFirebaseUid).not.toHaveBeenCalled();
+  });
+
+  it('logs only the Firebase error code, never the token or the message', async () => {
+    const { auth, resolver } = createResolver();
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    auth.verifyIdToken.mockRejectedValue(
+      Object.assign(new Error('private SDK detail'), {
+        code: 'auth/id-token-expired',
+      }),
+    );
+
+    try {
+      await expectUnauthorized(
+        resolver.resolve(requestWith('Bearer secret-token-value')),
+        SESSION_EXPIRED_MESSAGE,
+      );
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const [logged] = warn.mock.calls[0] as [string];
+      expect(logged).toContain('auth/id-token-expired');
+      expect(logged).not.toContain('secret-token-value');
+      expect(logged).not.toContain('private SDK detail');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('logs a placeholder when the Firebase error has no code', async () => {
+    const { auth, resolver } = createResolver();
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    auth.verifyIdToken.mockRejectedValue(new Error('private SDK detail'));
+
+    try {
+      await expectUnauthorized(
+        resolver.resolve(requestWith('Bearer secret-token-value')),
+        SESSION_EXPIRED_MESSAGE,
+      );
+
+      const [logged] = warn.mock.calls[0] as [string];
+      expect(logged).toContain('sin código');
+      expect(logged).not.toContain('private SDK detail');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('rejects a request without a Bearer token', async () => {
@@ -265,6 +313,42 @@ describe('FirebaseUserResolver', () => {
     );
     expect(usersService.linkFirebaseUid).not.toHaveBeenCalled();
     expect(usersService.create).not.toHaveBeenCalled();
+  });
+
+  it('logs the rejected account without the email, the UIDs or the token', async () => {
+    const { auth, resolver, usersService } = createResolver();
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    auth.verifyIdToken.mockResolvedValue(decodedToken());
+    usersService.findByEmail.mockResolvedValue({
+      id: USER_ID,
+      firebaseUid: 'another-firebase-uid',
+      email: EMAIL,
+    } as User);
+
+    try {
+      // Same 401 as before: the log is the only new thing.
+      await expectUnauthorized(
+        resolver.resolve(requestWith('Bearer secret-token-value')),
+        SESSION_EXPIRED_MESSAGE,
+      );
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const logged = JSON.stringify(warn.mock.calls[0]);
+      expect(logged).toContain('email already linked to another UID');
+      for (const secret of [
+        EMAIL,
+        FIREBASE_UID,
+        'another-firebase-uid',
+        USER_ID,
+        'secret-token-value',
+      ]) {
+        expect(logged).not.toContain(secret);
+      }
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('returns EMAIL_NOT_VERIFIED without creating when no email row exists', async () => {
