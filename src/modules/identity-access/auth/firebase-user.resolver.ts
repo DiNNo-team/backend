@@ -1,4 +1,9 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import type { CurrentUserData } from '../current-user/current-user-data.js';
@@ -33,8 +38,15 @@ function bearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
+function errorCode(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : 'sin código';
+}
+
 @Injectable()
 export class FirebaseUserResolver extends CurrentUserResolver {
+  private readonly logger = new Logger(FirebaseUserResolver.name);
+
   constructor(
     @Inject(FIREBASE_AUTH)
     private readonly getFirebaseAuth: FirebaseAuthFactory,
@@ -53,7 +65,10 @@ export class FirebaseUserResolver extends CurrentUserResolver {
     const firebaseAuth = this.getFirebaseAuth();
     try {
       decodedToken = await firebaseAuth.verifyIdToken(token);
-    } catch {
+    } catch (error) {
+      // Only the code (e.g. auth/id-token-expired): it tells an expired session
+      // from a wrong FIREBASE_PROJECT_ID. Never the token or the full message.
+      this.logger.warn(`verifyIdToken rechazó el token: ${errorCode(error)}`);
       throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
     }
 

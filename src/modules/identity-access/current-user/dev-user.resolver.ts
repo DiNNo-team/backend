@@ -17,6 +17,14 @@ export const DEV_USER_HEADER = 'x-dev-user-id';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+// Render sets RENDER on every service; NODE_ENV covers other deployments.
+export function isDeployedEnvironment(config: ConfigService): boolean {
+  return (
+    config.get<string>('RENDER') !== undefined ||
+    config.get<string>('NODE_ENV') === 'production'
+  );
+}
+
 // Development-only user, until the real authentication (PBI 2) replaces it.
 @Injectable()
 export class DevUserResolver
@@ -34,10 +42,7 @@ export class DevUserResolver
   ) {
     super();
     this.requested = config.get<string>('DEV_USER_ENABLED') === 'true';
-    // Render sets RENDER on every service; NODE_ENV covers other deployments.
-    this.deployed =
-      config.get<string>('RENDER') !== undefined ||
-      config.get<string>('NODE_ENV') === 'production';
+    this.deployed = isDeployedEnvironment(config);
     this.defaultUserId = config.get<string>('DEV_USER_ID');
   }
 

@@ -45,9 +45,8 @@ export class RestaurantScheduleResponseDto {
   }
 }
 
-// The restaurant with its opening hours: GET /restaurants/me and the
-// registration answer with it. PATCH /restaurants/me answers without
-// schedules until editing supports them (Elizabeth).
+// The restaurant with its opening hours: GET /restaurants/me, the
+// registration and PATCH /restaurants/me answer with it.
 export class RestaurantProfileResponseDto extends RestaurantResponseDto {
   @ApiProperty({
     description:

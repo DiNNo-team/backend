@@ -20,7 +20,7 @@ import {
   RESTAURANT_REQUIRED_CODE,
   RESTAURANT_REQUIRED_MESSAGE,
 } from '../shared/restaurant-required.js';
-import { RestaurantResponseDto } from './dto/restaurant-response.dto.js';
+import { RestaurantProfileResponseDto } from './dto/restaurant-profile-response.dto.js';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto.js';
 import {
   NO_CHANGES_MESSAGE,
@@ -39,20 +39,37 @@ export class RestaurantEditController {
   @ApiOperation({
     summary: 'Editar los datos del restaurante del usuario',
     description:
-      'Actualiza solo los campos que se envían; los demás no cambian. Todos son opcionales, pero hay que enviar al menos uno. Se pueden editar el nombre, la categoría y la dirección; los horarios todavía no se editan con esta ruta (enviar schedules da 400). Cualquier campo que no esté en el DTO se rechaza con 400. El restaurante es siempre el del usuario de la sesión.',
+      'Actualiza solo los campos que se envían; los demás no cambian. Todos son opcionales, pero hay que enviar al menos uno. Se pueden editar el nombre, la categoría, la dirección y los horarios. schedules reemplaza todos los horarios guardados, con las mismas reglas que el registro; si no se envía, los horarios no cambian. Todo se guarda en una sola transacción. Cualquier campo que no esté en el DTO se rechaza con 400. El restaurante es siempre el del usuario de la sesión. Responde lo mismo que GET /restaurants/me.',
   })
   @ApiOkResponse({
-    description: 'Restaurante con sus datos actualizados.',
-    type: RestaurantResponseDto,
+    description:
+      'Restaurante con sus datos y sus horarios ya actualizados, igual que GET /restaurants/me.',
+    type: RestaurantProfileResponseDto,
   })
   @ApiBadRequestResponse({
     description:
-      'Body vacío (nada que actualizar), un campo inválido (nombre vacío o de más de 120 caracteres, categoría fuera de la lista, dirección vacía o de más de 255 caracteres, o cualquiera de ellos en null) o un campo que no existe (por ejemplo, schedules). message es una lista.',
+      'Body vacío (nada que actualizar), un campo inválido (nombre vacío o de más de 120 caracteres, categoría fuera de la lista, dirección vacía o de más de 255 caracteres, o cualquiera de ellos en null), horarios inválidos (null, lista vacía, un día repetido, más de 7 elementos, horas que no están en HH:MM o iguales, horas en un día de 24 horas, campos de más dentro de un día) o un campo que no existe (por ejemplo, restaurantId). message es una lista.',
     type: ErrorResponseDto,
-    example: {
-      statusCode: 400,
-      message: [NO_CHANGES_MESSAGE],
-      error: 'Bad Request',
+    examples: {
+      noChanges: {
+        summary: 'Body vacío',
+        value: {
+          statusCode: 400,
+          message: [NO_CHANGES_MESSAGE],
+          error: 'Bad Request',
+        },
+      },
+      invalidSchedules: {
+        summary: 'Horarios inválidos',
+        value: {
+          statusCode: 400,
+          message: [
+            'Cada día de la semana va una sola vez en los horarios.',
+            'El lunes: escribe la hora de apertura en formato HH:MM, por ejemplo 09:30.',
+          ],
+          error: 'Bad Request',
+        },
+      },
     },
   })
   @ApiUnauthorizedResponse({
@@ -93,11 +110,11 @@ export class RestaurantEditController {
   async update(
     @CurrentUser() user: CurrentUserData,
     @Body() dto: UpdateRestaurantDto,
-  ): Promise<RestaurantResponseDto> {
-    const restaurant = await this.restaurantEditService.update(
+  ): Promise<RestaurantProfileResponseDto> {
+    const { restaurant, schedules } = await this.restaurantEditService.update(
       user.restaurantId,
       dto,
     );
-    return RestaurantResponseDto.fromEntity(restaurant);
+    return RestaurantProfileResponseDto.fromEntities(restaurant, schedules);
   }
 }

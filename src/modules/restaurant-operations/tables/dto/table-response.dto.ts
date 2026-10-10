@@ -12,7 +12,7 @@ export class TableResponseDto {
   })
   id: string;
 
-  @ApiProperty({ example: 'Mesa 4' })
+  @ApiProperty({ example: '04' })
   identifier: string;
 
   @ApiProperty({ type: 'integer', minimum: 1, maximum: 20, example: 4 })

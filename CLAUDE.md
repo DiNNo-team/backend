@@ -183,8 +183,8 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 - Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local), `DEV_USER_ENABLED`, `DEV_USER_ID`, `RENDER`, `NODE_ENV`, `RENDER_GIT_COMMIT` y `FIREBASE_PROJECT_ID`.
   - **Obligatorias:** `DATABASE_URL` y `REDIS_URL`; además, `FIREBASE_PROJECT_ID` cuando el usuario de desarrollo está deshabilitado. La app no arranca si falta una variable obligatoria (`getOrThrow`).
   - `DEV_USER_ENABLED=true` activa el usuario de desarrollo y `DEV_USER_ID` es el uuid del usuario por defecto. Solo local, nunca se definen en Render: sin ellas, toda ruta protegida responde `401`.
-  - `FIREBASE_AUTH_EMULATOR_HOST` es opcional y solo para el emulador de Firebase en local; no la lee nuestro código sino el SDK de Firebase. **Nunca se define en Render:** con ella, el SDK deja de verificar la firma de los tokens.
-  - `RENDER` (la define Render) y `NODE_ENV=production` apagan el usuario de desarrollo aunque `DEV_USER_ENABLED` sea `true`. No se definen a mano.
+  - `FIREBASE_AUTH_EMULATOR_HOST` es opcional y solo para el emulador de Firebase en local; la usa el SDK de Firebase, y nuestro código solo comprueba si está definida. **Nunca se define en Render:** con ella, el SDK deja de verificar la firma de los tokens.
+  - `RENDER` (la define Render) y `NODE_ENV=production` marcan el ambiente como desplegado (`isDeployedEnvironment`, en `identity-access/current-user/dev-user.resolver.ts`). No se definen a mano. En un ambiente desplegado, **la app no arranca** si `FIREBASE_AUTH_EMULATOR_HOST` está definida o `DEV_USER_ENABLED` es `true`: el error nombra la variable, nunca su valor (`identity-access/auth/deployment-safety.ts`).
   - `RENDER_GIT_COMMIT` la define Render con el commit desplegado; `GET /v1/health` la devuelve en `commit` y el CI la compara con el commit del push. En local es `null`.
 - `CORS_ORIGINS`: lista separada por comas, sin `/` final. **Nunca la abras a `*`.** Si un origen nuevo necesita acceso, se agrega en Render.
 

@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { assertSafeDeploymentConfig } from './auth/deployment-safety.js';
 import { CurrentUserGuard } from './current-user/current-user.guard.js';
 import { CurrentUserResolver } from './current-user/current-user.resolver.js';
 import { DevUserResolver } from './current-user/dev-user.resolver.js';
@@ -35,4 +36,11 @@ import { RolesGuard } from './roles/roles.guard.js';
   ],
   exports: [CurrentUserResolver, CurrentUserGuard, RolesGuard, UsersService],
 })
-export class IdentityAccessModule {}
+export class IdentityAccessModule implements OnModuleInit {
+  constructor(private readonly config: ConfigService) {}
+
+  // Stops the boot before the app serves a single request.
+  onModuleInit(): void {
+    assertSafeDeploymentConfig(this.config);
+  }
+}

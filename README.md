@@ -65,7 +65,8 @@ emulador de Firebase en local, y nunca se define en Render.
 
 - **Monolito modular.** El código de negocio vive bajo `src/modules/`, uno por dominio,
   registrado en [`src/app.module.ts`](src/app.module.ts). Hoy existen 5 módulos.
-  `restaurant-operations` ya tiene controladores y servicios (mesas y edición del restaurante);
+  `restaurant-operations` ya tiene controladores y servicios (registro, consulta y edición del
+  restaurante, estado abierto/cerrado, mesas y bitácora de mesas);
   `identity-access` ya tiene el usuario actual (guard, resolver y `UsersService`); los otros
   tres siguen vacíos:
   - `identity-access`
@@ -170,6 +171,9 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
   `FIREBASE_PROJECT_ID` es obligatoria porque en Render el usuario de desarrollo está apagado:
   si falta, la app no arranca. `PORT` no se define ahí: Render lo asigna en tiempo de ejecución.
   `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` **no se definen en Render**.
+  **En un entorno desplegado (`RENDER` definida o `NODE_ENV=production`) la app no arranca** si
+  `FIREBASE_AUTH_EMULATOR_HOST` está definida o `DEV_USER_ENABLED` es `true`: el error del log
+  nombra la variable (nunca su valor). Quítala del panel y vuelve a desplegar.
 - **Health Check Path:** `/v1/health`.
 - Además del despliegue en sí (gestionado por Render), el workflow de GitHub Actions en
   [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) tiene dos jobs:
@@ -227,8 +231,8 @@ lee **de la base** en cada petición.
   curl http://localhost:3000/v1/<ruta> -H "x-dev-user-id: 3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f"
   ```
 
-- En Render no funciona aunque la variable esté en `true`. Al arrancar en local con el usuario
-  de desarrollo activo, Nest deja un aviso en la consola.
+- En Render no funciona: si la variable está en `true`, la app no arranca (ver la sección 7).
+  Al arrancar en local con el usuario de desarrollo activo, Nest deja un aviso en la consola.
 - En el código: `@UseGuards(CurrentUserGuard)` y `@CurrentUser() user: CurrentUserData`,
   importados desde `src/modules/identity-access/index.ts`. El `restaurantId` sale siempre de
   `user`, nunca del body, query ni parámetros de ruta.

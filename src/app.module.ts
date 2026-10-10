@@ -1,10 +1,21 @@
-import { Logger, Module, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Logger,
+  Module,
+  OnApplicationShutdown,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import type { Redis } from 'ioredis';
 import { DataSource } from 'typeorm';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { REDIS_CLIENT, createRedisClient } from './config/redis.config.js';
+import {
+  REDIS_CLIENT,
+  closeRedisClient,
+  createRedisClient,
+} from './config/redis.config.js';
 import { IdentityAccessModule } from './modules/identity-access/identity-access.module.js';
 import { RestaurantOperationsModule } from './modules/restaurant-operations/restaurant-operations.module.js';
 import { ReservationsCheckinModule } from './modules/reservations-checkin/reservations-checkin.module.js';
@@ -53,12 +64,21 @@ const logger = new Logger('Database');
   ],
   exports: [REDIS_CLIENT],
 })
-export class AppModule implements OnModuleInit {
-  constructor(private readonly dataSource: DataSource) {}
+export class AppModule implements OnModuleInit, OnApplicationShutdown {
+  constructor(
+    private readonly dataSource: DataSource,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+  ) {}
 
   onModuleInit() {
     if (this.dataSource.isInitialized) {
       logger.log('PostgreSQL conectado');
     }
+  }
+
+  // Runs on app.close() and, through enableShutdownHooks in main.ts, on the
+  // SIGTERM Render sends before replacing the instance.
+  async onApplicationShutdown(): Promise<void> {
+    await closeRedisClient(this.redis);
   }
 }
