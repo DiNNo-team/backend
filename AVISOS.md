@@ -52,13 +52,9 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.
   - Aplicar en Neon la migración de cada rama antes de fusionar su PR (ver "Reglas nuevas de este sprint").
   - Revisar los PR del backend.
-- **Cambios del registro del restaurante (Santiago, PBI 3) en tu edición:**
-  - **`PATCH /v1/restaurants/me` ya acepta y devuelve `category` y `address`.** Entraron en `RestaurantFieldsDto`, así que la edición los valida igual que el registro sin cambios en tu código: `category` solo de `RESTAURANT_CATEGORIES` ("Elige la categoría de tu restaurante de la lista.") y `address` obligatoria, sin espacios sobrantes y de máximo 255 caracteres ("Escribe la dirección de tu restaurante."). `null` se rechaza, como en el nombre. La descripción de Swagger del `PATCH` ya lo dice.
-  - **Los horarios todavía no se editan con el `PATCH`.** Se guardan en `restaurant_schedules`, así que tu edición no los puede copiar sola. Las reglas de un día ya están en un solo archivo para que las reutilices: `restaurants/dto/restaurant-schedule.dto.ts` (`RestaurantScheduleDto`); la lista con sus reglas está en `RegisterRestaurantDto`. Para responder con horarios usa `RestaurantProfileResponseDto.fromEntities(restaurant, schedules)`: así tu `PATCH` devolverá lo mismo que el `GET` y el registro.
-  - **Toqué una prueba tuya, lo mínimo:** en `test/restaurant-edit.e2e-spec.ts`, la prueba de Swagger comprobaba que `/v1/restaurants/me` no tuviera `GET` y que `UpdateRestaurantDto` solo tuviera `name`. Ahora espera `get` y `patch`, y los campos `name`, `category` y `address`.
+- **Los horarios todavía no se editan con el `PATCH`.** Se guardan en `restaurant_schedules`, así que tu edición no los puede copiar sola. Las reglas de un día ya están en un solo archivo para que las reutilices: `restaurants/dto/restaurant-schedule.dto.ts` (`RestaurantScheduleDto`); la lista con sus reglas está en `RegisterRestaurantDto`. Para responder con horarios usa `RestaurantProfileResponseDto.fromEntities(restaurant, schedules)`: así tu `PATCH` devolverá lo mismo que el `GET` y el registro.
 - **Los horarios no van en `restaurants`, van en otra tabla (`restaurant_schedules`, una fila por día abierto).** La edición no los puede copiar sola. Además, si un campo de horarios entra en `RestaurantFieldsDto` sin una propiedad con el mismo nombre en `Restaurant`, `npm run typecheck` falla en `restaurant-edit.service.ts` (el `Pick` de `RestaurantChanges`).
 - **Carrera conocida en el identificador de mesa:** el índice `UQ_tables_restaurant_id_identifier` compara `lower(trim(identifier))`, así que no cubre que "4" y "04" lleguen a la vez en dos peticiones simultáneas. El chequeo de repetidos de la aplicación (`assertIdentifierAvailable`, en `tables.service.ts`) lo cubre salvo en esa carrera. Es un riesgo bajo y aceptado (hay un dueño por restaurante). Solución futura posible: un índice sobre la clave normalizada.
-- **Toqué una línea de tu `tables/tables.controller.ts` (Sergio, PBI 9):** `TABLE_ID_INVALID` ("El id de la mesa no es un UUID válido.") ahora se exporta. Lo reutiliza `GET /v1/table-logs` para el `?tableId` inválido, así el texto vive en un solo lugar. No cambia nada más en tu archivo.
 
 ### Jacobo
 - **Ya en `develop`:** el login con Firebase (PR #23: un usuario nuevo se crea con rol `restaurant_admin` y `restaurantId` en `null`), `assignRestaurantIfNone` (PR #24) y el control de acceso por rol (PR #30: `@Roles` y `UserRole`), exportados desde `identity-access/index.ts`. En el backend te queda lo de la web, abajo.
@@ -140,6 +136,12 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Historial
 
+- **2026-10-09 · Limpieza tras la auditoría de `develop` (Elizabeth).** Sin cambios de esquema ni de la API.
+  - **Código:** `TABLE_ID_INVALID` ("El id de la mesa no es un UUID válido.") pasó a `restaurant-operations/shared/table-id-invalid.ts`, y lo importan `tables.controller.ts` y `GET /v1/table-logs`; ya no se exporta desde el controlador de mesas. `redis.config.ts` registra el error de conexión con el `Logger` de Nest.
+  - **Docs:** el README lista `FIREBASE_PROJECT_ID` entre las variables de Render y describe el login con Firebase; el `CLAUDE.md` marca el join de la bitácora a `users` como excepción conocida del Sprint 1.
+  - **Avisos cumplidos que salen de la sección de Elizabeth:**
+    - Registro del restaurante (Santiago): `PATCH /v1/restaurants/me` ya acepta y devuelve `category` y `address` (`category` solo de `RESTAURANT_CATEGORIES`; `address` obligatoria, recortada y de máximo 255 caracteres; `null` se rechaza). Santiago ajustó la prueba de Swagger de `test/restaurant-edit.e2e-spec.ts`, que ahora espera `get` y `patch` y los campos `name`, `category` y `address`.
+    - Sergio exportó `TABLE_ID_INVALID` desde `tables/tables.controller.ts` para reutilizarlo en la bitácora; hoy vive en `shared/`.
 - **2026-10-08 · Sergio · PBI 9 · Crear pantalla de bitácora (parte backend): `GET /v1/table-logs`.** Sin cambios de esquema.
   - **Qué quedó listo:**
     - `GET /v1/table-logs?tableId=<uuid opcional>` → `200` con `[{ id, tableId, tableIdentifier, previousStatus, newStatus, changedAt, userEmail }]`, del más reciente al más antiguo, máximo 200 filas, sin paginación. Contrato completo en el `CLAUDE.md` ("Bitácora de mesas") y en Swagger (tag `table-logs`).

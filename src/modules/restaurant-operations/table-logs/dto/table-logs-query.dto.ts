@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsUUID } from 'class-validator';
-import { TABLE_ID_INVALID } from '../../tables/tables.controller.js';
+import { TABLE_ID_INVALID } from '../../shared/table-id-invalid.js';
 
 // Query of GET /v1/table-logs. There is no restaurant parameter on purpose:
 // the restaurant always comes from the session, and the global ValidationPipe

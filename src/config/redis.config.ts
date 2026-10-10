@@ -13,7 +13,7 @@ export function createRedisClient(redisUrl: string): Redis {
   });
 
   client.on('error', (error: Error) => {
-    console.error('Error de conexion a Redis', error);
+    logger.error('Error de conexion a Redis', error.stack);
   });
 
   return client;

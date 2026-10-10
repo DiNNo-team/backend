@@ -20,7 +20,7 @@ import {
   RESTAURANT_REQUIRED_CODE,
   RESTAURANT_REQUIRED_MESSAGE,
 } from '../shared/restaurant-required.js';
-import { TABLE_ID_INVALID } from '../tables/tables.controller.js';
+import { TABLE_ID_INVALID } from '../shared/table-id-invalid.js';
 import { TableLogResponseDto } from './dto/table-log-response.dto.js';
 import { TableLogsQueryDto } from './dto/table-logs-query.dto.js';
 import { TABLE_LOGS_LIMIT, TableLogsService } from './table-logs.service.js';

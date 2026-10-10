@@ -43,6 +43,7 @@ import {
   RESTAURANT_REQUIRED_CODE,
   RESTAURANT_REQUIRED_MESSAGE,
 } from '../shared/restaurant-required.js';
+import { TABLE_ID_INVALID } from '../shared/table-id-invalid.js';
 import { identifierTakenMessage } from './table-identifier.js';
 import {
   NO_TABLE_CHANGES_MESSAGE,
@@ -52,8 +53,6 @@ import {
   TABLE_NOT_FOUND_MESSAGE,
   TablesService,
 } from './tables.service.js';
-
-export const TABLE_ID_INVALID = 'El id de la mesa no es un UUID válido.';
 
 const NOT_FOUND_RESPONSE = {
   description:
