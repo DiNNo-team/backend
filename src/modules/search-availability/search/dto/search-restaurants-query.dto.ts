@@ -3,7 +3,6 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
-  IsNumber,
   IsOptional,
   Max,
   Min,
@@ -14,6 +13,12 @@ import {
   RESTAURANT_CATEGORIES,
   type RestaurantCategory,
 } from '../../../restaurant-operations/index.js';
+import {
+  LatitudeField,
+  LOCATION_MESSAGES,
+  LongitudeField,
+  toNumberOrNaN,
+} from '../../location/location-fields.js';
 import { ZONE_IDS, type ZoneId } from '../zones.js';
 
 export const SEARCH_RADII_KM = [1, 2, 5, 10] as const;
@@ -25,30 +30,13 @@ export const MAX_PARTY_SIZE = 20;
 export const SEARCH_MESSAGES = {
   BOTH_ORIGINS: 'Busca por tu ubicación o por una zona, no por las dos.',
   NO_ORIGIN: 'Envía tu ubicación (lat y lng) o una zona para buscar.',
-  INCOMPLETE_LOCATION: 'Envía lat y lng juntas.',
-  LAT_INVALID: 'La latitud (lat) debe ser un número entre -90 y 90.',
-  LNG_INVALID: 'La longitud (lng) debe ser un número entre -180 y 180.',
+  ...LOCATION_MESSAGES,
   ZONE_UNKNOWN:
     'No conocemos esa zona. Usa una de las que da GET /v1/search/zones.',
   RADIUS_INVALID: 'El radio (radiusKm) debe ser 1, 2, 5 o 10.',
   CATEGORY_INVALID: `La categoría (category) debe ser una de estas: ${RESTAURANT_CATEGORIES.join(', ')}.`,
   PARTY_SIZE_INVALID: `El número de personas (partySize) debe ser un número entero entre ${MIN_PARTY_SIZE} y ${MAX_PARTY_SIZE}.`,
 } as const;
-
-// Plain decimal notation only: optional minus, digits, optional fraction.
-const DECIMAL_NUMBER = /^-?\d+(\.\d+)?$/;
-
-// Query text to number. Only plain decimals are numbers: anything else
-// (empty or blank, "0x10", "1e1", "Infinity", "+5", a repeated parameter)
-// becomes NaN, which IsNumber and IsInt reject with 400. Number() alone would
-// turn "" into 0 and "0x10" into 16.
-export function toNumberOrNaN(value: unknown): number {
-  if (typeof value !== 'string') {
-    return NaN;
-  }
-  const text = value.trim();
-  return DECIMAL_NUMBER.test(text) ? Number(text) : NaN;
-}
 
 interface SearchOrigin {
   lat?: unknown;
@@ -113,11 +101,7 @@ export class SearchRestaurantsQueryDto {
     maximum: 90,
     example: 4.655671,
   })
-  @IsOptional()
-  @Transform(({ value }) => toNumberOrNaN(value))
-  @IsNumber({}, { message: SEARCH_MESSAGES.LAT_INVALID })
-  @Min(-90, { message: SEARCH_MESSAGES.LAT_INVALID })
-  @Max(90, { message: SEARCH_MESSAGES.LAT_INVALID })
+  @LatitudeField()
   lat?: number;
 
   @ApiPropertyOptional({
@@ -126,11 +110,7 @@ export class SearchRestaurantsQueryDto {
     maximum: 180,
     example: -74.057006,
   })
-  @IsOptional()
-  @Transform(({ value }) => toNumberOrNaN(value))
-  @IsNumber({}, { message: SEARCH_MESSAGES.LNG_INVALID })
-  @Min(-180, { message: SEARCH_MESSAGES.LNG_INVALID })
-  @Max(180, { message: SEARCH_MESSAGES.LNG_INVALID })
+  @LongitudeField()
   lng?: number;
 
   @ApiPropertyOptional({

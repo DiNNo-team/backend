@@ -1,19 +1,22 @@
-import { Global, INestApplication, Module } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import type { DecodedIdToken } from 'firebase-admin/auth';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
-import { DataSource, FindOperator } from 'typeorm';
 import { configureApp } from './../src/app.setup.js';
 import { FIREBASE_AUTH } from './../src/modules/identity-access/auth/firebase-admin.provider.js';
-import { UserRole } from './../src/modules/identity-access/index.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import {
   Clock,
   SearchAvailabilityModule,
 } from './../src/modules/search-availability/index.js';
+import { FakeDatabaseModule, fakeRepository } from './support/fake-database.js';
+import {
+  fakeFirebaseAuth,
+  testUsers,
+  usersRepository,
+} from './support/test-accounts.js';
 
 // Friday 2026-10-16 13:00 in Bogotá.
 const FRIDAY_13H = new Date('2026-10-16T18:00:00Z');
@@ -183,122 +186,13 @@ const TABLES = [
   },
 ];
 
-type Row = Record<string, unknown>;
-
-// What Postgres does with the find options both readers send: Between and In
-// on a column (NULL never matches) and equality; select keeps the columns.
-function matches(row: Row, where: Record<string, unknown>): boolean {
-  return Object.entries(where).every(([column, condition]) => {
-    const value = row[column];
-    if (!(condition instanceof FindOperator)) {
-      return value === condition;
-    }
-    if (condition.type === 'between') {
-      const [min, max] = condition.value as unknown as [number, number];
-      return typeof value === 'number' && value >= min && value <= max;
-    }
-    if (condition.type === 'in') {
-      return (condition.value as unknown as unknown[]).includes(value);
-    }
-    throw new Error(`Operator not simulated: ${condition.type}`);
-  });
-}
-
-function repository(rows: Row[]) {
-  return {
-    find: vi.fn(
-      (options: {
-        where: Record<string, unknown>;
-        select: Record<string, true>;
-      }) =>
-        Promise.resolve(
-          rows
-            .filter((row) => matches(row, options.where))
-            .map((row) =>
-              Object.fromEntries(
-                Object.keys(options.select).map((column) => [
-                  column,
-                  row[column],
-                ]),
-              ),
-            ),
-        ),
-    ),
-  };
-}
-
 const repositories = {
-  Restaurant: repository(RESTAURANTS),
-  RestaurantSchedule: repository(SCHEDULES),
-  Table: repository(TABLES),
+  Restaurant: fakeRepository(RESTAURANTS),
+  RestaurantSchedule: fakeRepository(SCHEDULES),
+  Table: fakeRepository(TABLES),
 };
 
-// In the app, TypeOrmModule.forRoot provides DataSource globally; here a
-// stand-in that answers by entity name, without PostgreSQL.
-@Global()
-@Module({
-  providers: [
-    {
-      provide: DataSource,
-      useValue: {
-        getRepository: (name: keyof typeof repositories) => repositories[name],
-      },
-    },
-  ],
-  exports: [DataSource],
-})
-class FakeDatabaseModule {}
-
-// Firebase accounts, by token.
-const TOKENS: Record<string, Partial<DecodedIdToken>> = {
-  diner: { uid: 'uid-diner', email: 'diner@example.com' },
-  owner: { uid: 'uid-owner', email: 'owner@example.com' },
-  // A Firebase account without a users row.
-  noProfile: { uid: 'uid-new', email: 'nueva@example.com' },
-};
-
-const USERS = [
-  {
-    id: '7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a',
-    email: 'diner@example.com',
-    firebaseUid: 'uid-diner',
-    role: UserRole.DINER,
-    displayName: 'Comensal',
-    restaurantId: null,
-  },
-  {
-    id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
-    email: 'owner@example.com',
-    firebaseUid: 'uid-owner',
-    role: UserRole.RESTAURANT_ADMIN,
-    displayName: null,
-    restaurantId: CASA_72,
-  },
-] as User[];
-
-const usersRepository = {
-  findOneBy: (where: Partial<User>) =>
-    Promise.resolve(
-      USERS.find((user) =>
-        Object.entries(where).every(
-          ([key, value]) => user[key as keyof User] === value,
-        ),
-      ) ?? null,
-    ),
-};
-
-const firebaseAuth = {
-  verifyIdToken: (token: string) => {
-    const account = TOKENS[token];
-    return account
-      ? Promise.resolve({ email_verified: true, ...account })
-      : Promise.reject(
-          Object.assign(new Error('bad token'), {
-            code: 'auth/argument-error',
-          }),
-        );
-  },
-};
+const USERS = testUsers(CASA_72);
 
 const CATEGORY_INVALID =
   'La categoría (category) debe ser una de estas: colombian, italian, mexican, asian, grill, fast_food, healthy, seafood, cafe, other.';
@@ -330,14 +224,14 @@ describe('Search (e2e)', () => {
             }),
           ],
         }),
-        FakeDatabaseModule,
+        FakeDatabaseModule.with(repositories),
         SearchAvailabilityModule,
       ],
     })
       .overrideProvider(FIREBASE_AUTH)
-      .useValue(() => firebaseAuth)
+      .useValue(() => fakeFirebaseAuth)
       .overrideProvider(getRepositoryToken(User))
-      .useValue(usersRepository)
+      .useValue(usersRepository(USERS))
       .overrideProvider(Clock)
       .useValue({ now: () => FRIDAY_13H })
       .compile();
