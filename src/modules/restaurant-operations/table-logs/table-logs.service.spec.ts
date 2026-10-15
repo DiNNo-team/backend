@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
+import type { UsersService } from '../../identity-access/index.js';
 import { RESTAURANT_REQUIRED_CODE } from '../shared/restaurant-required.js';
 import { Table } from '../tables/table.entity.js';
 import type { TableLog } from './table-log.entity.js';
@@ -23,9 +24,15 @@ const BUILDER_METHODS = [
   'limit',
 ] as const;
 
+type QueryRow = Omit<TableLogRow, 'userEmail'> & { userId: string };
+
 // Chainable stand-in for SelectQueryBuilder that records every call, so the
-// tests pin the query (join, restaurant filter, order and limit).
-function createService(rows: TableLogRow[] = []) {
+// tests pin the query (join, restaurant filter, order and limit). The emails
+// come from UsersService.findEmailsByIds, never from a join to users.
+function createService(
+  rows: QueryRow[] = [],
+  emails = new Map<string, string>(),
+) {
   const calls: [string, unknown[]][] = [];
   const builder: Record<string, unknown> = {
     getRawMany: vi.fn(() => Promise.resolve(rows)),
@@ -37,10 +44,14 @@ function createService(rows: TableLogRow[] = []) {
     });
   }
   const logs = { createQueryBuilder: vi.fn(() => builder) };
-  const service = new TableLogsService(logs as unknown as Repository<TableLog>);
+  const users = { findEmailsByIds: vi.fn(() => Promise.resolve(emails)) };
+  const service = new TableLogsService(
+    logs as unknown as Repository<TableLog>,
+    users as unknown as UsersService,
+  );
   const callsOf = (method: string) =>
     calls.filter(([name]) => name === method).map(([, args]) => args);
-  return { service, logs, callsOf };
+  return { service, logs, users, callsOf };
 }
 
 describe('TableLogsService', () => {
@@ -56,7 +67,7 @@ describe('TableLogsService', () => {
     expect(logs.createQueryBuilder).not.toHaveBeenCalled();
   });
 
-  it('filters by the session restaurant through the join to tables', async () => {
+  it('filters by the session restaurant through the join to tables, without joining users', async () => {
     const { service, logs, callsOf } = createService();
 
     await service.findForRestaurant(RESTAURANT_ID);
@@ -64,7 +75,6 @@ describe('TableLogsService', () => {
     expect(logs.createQueryBuilder).toHaveBeenCalledWith('log');
     expect(callsOf('innerJoin')).toEqual([
       [Table, 'loggedTable', 'loggedTable.id = log.tableId'],
-      ['User', 'author', 'author.id = log.userId'],
     ]);
     expect(callsOf('where')).toEqual([
       [
@@ -74,7 +84,7 @@ describe('TableLogsService', () => {
     ]);
   });
 
-  it('selects only the columns of the response', async () => {
+  it('selects the columns of the response and the author id', async () => {
     const { service, callsOf } = createService();
 
     await service.findForRestaurant(RESTAURANT_ID);
@@ -86,7 +96,7 @@ describe('TableLogsService', () => {
       ['log.previousStatus', 'previousStatus'],
       ['log.newStatus', 'newStatus'],
       ['log.changedAt', 'changedAt'],
-      ['author.email', 'userEmail'],
+      ['log.userId', 'userId'],
     ]);
   });
 
@@ -125,20 +135,48 @@ describe('TableLogsService', () => {
     ]);
   });
 
-  it('returns the rows of the query as they come', async () => {
-    const row: TableLogRow = {
-      id: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+  it('adds each author email from one lookup, keeping the order of the query', async () => {
+    const OWNER = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const WAITER = '7c6b5a49-3827-4615-a4b3-c2d1e0f9a8b7';
+    const base = {
       tableId: TABLE_ID,
       tableIdentifier: '04',
       previousStatus: 'available',
       newStatus: 'occupied',
       changedAt: new Date('2026-10-08T19:30:00Z'),
-      userEmail: 'admin@casa72.co',
+    } as const;
+    const rows: QueryRow[] = [
+      { ...base, id: 'log-3', userId: OWNER },
+      { ...base, id: 'log-2', userId: WAITER },
+      { ...base, id: 'log-1', userId: OWNER },
+    ];
+    const emails = new Map([
+      [OWNER, 'admin@casa72.co'],
+      [WAITER, 'mesero@casa72.co'],
+    ]);
+    const { service, users } = createService(rows, emails);
+
+    await expect(service.findForRestaurant(RESTAURANT_ID)).resolves.toEqual([
+      { ...base, id: 'log-3', userEmail: 'admin@casa72.co' },
+      { ...base, id: 'log-2', userEmail: 'mesero@casa72.co' },
+      { ...base, id: 'log-1', userEmail: 'admin@casa72.co' },
+    ]);
+    expect(users.findEmailsByIds).toHaveBeenCalledTimes(1);
+    expect(users.findEmailsByIds).toHaveBeenCalledWith([OWNER, WAITER, OWNER]);
+  });
+
+  it('drops a row whose author is not found, like the former inner join', async () => {
+    const row: QueryRow = {
+      id: 'log-1',
+      tableId: TABLE_ID,
+      tableIdentifier: '04',
+      previousStatus: 'available',
+      newStatus: 'occupied',
+      changedAt: new Date('2026-10-08T19:30:00Z'),
+      userId: 'missing-user',
     };
     const { service } = createService([row]);
 
-    await expect(service.findForRestaurant(RESTAURANT_ID)).resolves.toEqual([
-      row,
-    ]);
+    await expect(service.findForRestaurant(RESTAURANT_ID)).resolves.toEqual([]);
   });
 });

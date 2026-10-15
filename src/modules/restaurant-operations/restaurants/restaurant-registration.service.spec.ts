@@ -1,8 +1,9 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import type { EntityManager, Repository } from 'typeorm';
-import type {
-  CurrentUserData,
-  UsersService,
+import {
+  type CurrentUserData,
+  type UsersService,
+  UserRole,
 } from '../../identity-access/index.js';
 import type { RegisterRestaurantDto } from './dto/register-restaurant.dto.js';
 import {
@@ -18,7 +19,7 @@ const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const newcomer: CurrentUserData = {
   userId: USER_ID,
   restaurantId: null,
-  role: 'restaurant_admin',
+  role: UserRole.RESTAURANT_ADMIN,
 };
 
 const dto: RegisterRestaurantDto = {

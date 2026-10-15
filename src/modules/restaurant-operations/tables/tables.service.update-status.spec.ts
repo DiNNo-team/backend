@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { EntityManager, Repository } from 'typeorm';
-import type { CurrentUserData } from '../../identity-access/index.js';
+import { type CurrentUserData, UserRole } from '../../identity-access/index.js';
 import { Table, type TableStatus } from './table.entity.js';
 import type { TableStatusChange, TableStatusLog } from './table-status-log.js';
 import { RESTAURANT_REQUIRED_CODE } from '../shared/restaurant-required.js';
@@ -25,7 +25,7 @@ const UNKNOWN_TABLE_ID = '00000000-0000-4000-8000-000000000000';
 const owner: CurrentUserData = {
   userId: USER_ID,
   restaurantId: RESTAURANT_ID,
-  role: 'restaurant_admin',
+  role: UserRole.RESTAURANT_ADMIN,
 };
 
 function row(overrides: Partial<Table>): Table {

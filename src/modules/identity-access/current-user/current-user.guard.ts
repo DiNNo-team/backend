@@ -1,9 +1,11 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
-import type { CurrentUserData } from './current-user-data.js';
+import type { CurrentUserData, RequestIdentity } from './current-user-data.js';
 import { CurrentUserResolver } from './current-user.resolver.js';
 
 export interface RequestWithCurrentUser extends Request {
+  identity?: RequestIdentity;
+  // Only for registered accounts: what @CurrentUser() returns.
   currentUser?: CurrentUserData;
 }
 
@@ -13,7 +15,11 @@ export class CurrentUserGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<RequestWithCurrentUser>();
-    request.currentUser = await this.resolver.resolve(request);
+    const identity = await this.resolver.resolve(request);
+    request.identity = identity;
+    if (identity.kind === 'registered') {
+      request.currentUser = identity.user;
+    }
     return true;
   }
 }

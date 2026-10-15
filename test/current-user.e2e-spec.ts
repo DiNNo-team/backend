@@ -16,6 +16,7 @@ import {
   CurrentUserGuard,
   IdentityAccessModule,
   type CurrentUserData,
+  UserRole,
 } from './../src/modules/identity-access/index.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 
@@ -36,8 +37,12 @@ const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 
 const users = [
-  { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
-  { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
+  {
+    id: OWNER_ID,
+    role: UserRole.RESTAURANT_ADMIN,
+    restaurantId: RESTAURANT_ID,
+  },
+  { id: NEWCOMER_ID, role: UserRole.RESTAURANT_ADMIN, restaurantId: null },
 ];
 
 // Prueba el contrato de usuario actual desde otro módulo, sin PostgreSQL.
@@ -71,7 +76,7 @@ describe('CurrentUser (e2e)', () => {
     return request(app.getHttpServer()).get('/v1/probe').expect(200).expect({
       userId: OWNER_ID,
       restaurantId: RESTAURANT_ID,
-      role: 'restaurant_admin',
+      role: UserRole.RESTAURANT_ADMIN,
     });
   });
 
@@ -83,7 +88,7 @@ describe('CurrentUser (e2e)', () => {
       .expect({
         userId: NEWCOMER_ID,
         restaurantId: null,
-        role: 'restaurant_admin',
+        role: UserRole.RESTAURANT_ADMIN,
       });
   });
 

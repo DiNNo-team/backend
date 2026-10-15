@@ -5,7 +5,15 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  type ValueTransformer,
 } from 'typeorm';
+
+// pg returns numeric as a string (it may not fit a JS number); the
+// coordinates, numeric(9,6), always fit, so the entity speaks number | null.
+export const coordinateTransformer: ValueTransformer = {
+  to: (value: number | null | undefined) => value,
+  from: (value: string | null) => (value === null ? null : Number(value)),
+};
 
 export const RESTAURANT_CATEGORIES = [
   'colombian',
@@ -32,6 +40,13 @@ const CATEGORY_VALUES_SQL = RESTAURANT_CATEGORIES.map(
   'CHK_restaurants_category',
   `"category" IS NULL OR "category" IN (${CATEGORY_VALUES_SQL})`,
 )
+// Both coordinates or neither. The Bogotá bounds are checked by the API.
+@Check(
+  'CHK_restaurants_location_pair',
+  `("latitude" IS NULL AND "longitude" IS NULL) OR ("latitude" IS NOT NULL AND "longitude" IS NOT NULL)`,
+)
+@Check('CHK_restaurants_latitude', `"latitude" BETWEEN -90 AND 90`)
+@Check('CHK_restaurants_longitude', `"longitude" BETWEEN -180 AND 180`)
 export class Restaurant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -52,6 +67,27 @@ export class Restaurant {
   // dashboard. It does not follow restaurant_schedules in Sprint 1.
   @Column({ name: 'is_open', type: 'boolean', default: true })
   isOpen: boolean;
+
+  // Location for the diner search (Sprint 2). Nullable: restaurants
+  // registered before Sprint 2 have none, and without coordinates a
+  // restaurant does not appear in the search.
+  @Column({
+    type: 'numeric',
+    precision: 9,
+    scale: 6,
+    nullable: true,
+    transformer: coordinateTransformer,
+  })
+  latitude: number | null;
+
+  @Column({
+    type: 'numeric',
+    precision: 9,
+    scale: 6,
+    nullable: true,
+    transformer: coordinateTransformer,
+  })
+  longitude: number | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

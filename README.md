@@ -212,10 +212,17 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
   - un usuario **sin restaurante** (para probar el onboarding);
   - `demo@example.com`, también sin restaurante, **reservado para la demo del Día 7: no lo uses
     para probar**;
-  - un usuario con el restaurante **Casa 72** y 8 mesas (Disponibles, Reservadas, Ocupadas y una
-    Inactiva).
+  - un usuario con el restaurante **Casa 72** (el restaurante de prueba del equipo) y 8 mesas
+    (Disponibles, Reservadas, Ocupadas y una Inactiva). El seed es la fuente de verdad de Casa 72:
+    en cada corrida restablece su categoría, dirección, coordenadas y horarios (borra los que
+    tenga e inserta los del seed). No toca su nombre ni sus mesas;
+  - `comensal@example.com`, con rol `diner` ("Comensal de prueba"), para probar las rutas del
+    comensal;
+  - `dinnoteam2026@gmail.com`, el único correo real habilitado como restaurante, sin restaurante
+    asignado por el seed.
 
-  Se puede correr varias veces: no duplica nada. Al final imprime los ids de los tres usuarios
+  Se puede correr varias veces: no duplica nada y no cambia usuarios ni mesas que ya existen (si
+  un correo ya existe con otro rol, solo lo avisa); a Casa 72 la deja siempre igual. Al final imprime los ids de los usuarios de prueba
   para usarlos en `DEV_USER_ID`. Como la base es compartida, normalmente ya están creados:
   pide los ids en el grupo antes de correrlo. No es una migración, así que nunca llega a Render.
 

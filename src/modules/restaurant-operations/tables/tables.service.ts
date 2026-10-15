@@ -5,7 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
+import { isUniqueViolation } from '../../../common/database/unique-violation.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
 import type { CreateTableDto } from './dto/create-table.dto.js';
@@ -17,7 +18,6 @@ import {
 import { Table, type TableStatus } from './table.entity.js';
 import { TableStatusLog } from './table-status-log.js';
 
-const UNIQUE_VIOLATION = '23505';
 const UNIQUE_IDENTIFIER_INDEX = 'UQ_tables_restaurant_id_identifier';
 
 // Same text for a missing table and another restaurant's table: never reveal
@@ -248,24 +248,10 @@ export class TablesService {
     try {
       return await write();
     } catch (error) {
-      if (isDuplicateIdentifier(error)) {
+      if (isUniqueViolation(error, UNIQUE_IDENTIFIER_INDEX)) {
         throw new ConflictException(identifierTakenMessage(identifier));
       }
       throw error;
     }
   }
-}
-
-function isDuplicateIdentifier(error: unknown): boolean {
-  if (!(error instanceof QueryFailedError)) {
-    return false;
-  }
-  const driverError = error.driverError as {
-    code?: string;
-    constraint?: string;
-  };
-  return (
-    driverError.code === UNIQUE_VIOLATION &&
-    driverError.constraint === UNIQUE_IDENTIFIER_INDEX
-  );
 }

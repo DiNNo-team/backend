@@ -5,7 +5,9 @@ Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md
 
 Última migración aplicada: `1791342586330-AddRestaurantIsOpen` (2026-10-08).
 
-> Las cinco migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`) y `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08). Todo lo que se documenta abajo existe en Neon.
+> Las cinco migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`) y `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08). Todo lo que se documenta abajo existe en Neon, salvo lo marcado como *pendiente*.
+
+> **Pendiente de aplicar en Neon:** `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, rama `feature/s2-cuentas-roles`; Elizabeth). Agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`. Se aplica antes de fusionar la rama a `develop`.
 
 ## Tablas
 
@@ -25,6 +27,12 @@ Todas las tablas tienen `id`, `created_at` y `updated_at`:
 | `category` | `varchar(50)` | NULL. Solo uno de los valores de la lista de categorías (`CHK_restaurants_category`); ver "Decisiones" |
 | `address` | `varchar(255)` | NULL |
 | `is_open` | `boolean` | NOT NULL, por defecto `true`. Estado Abierto/Cerrado del restaurante (PBI 8); ver "Decisiones" |
+| `latitude` | `numeric(9,6)` | NULL. Entre -90 y 90 (`CHK_restaurants_latitude`). *Pendiente* (Sprint 2) |
+| `longitude` | `numeric(9,6)` | NULL. Entre -180 y 180 (`CHK_restaurants_longitude`). *Pendiente* (Sprint 2) |
+
+- `CHK_restaurants_location_pair`: las dos coordenadas o ninguna. Sin coordenadas, el restaurante no aparece en la búsqueda del comensal.
+- La base solo exige rangos válidos en el planeta; **la restricción a Bogotá la pone la API** (contrato del Sprint 2, `CLAUDE.md` sección 10).
+- `numeric` llega del driver `pg` como texto: la entidad lo convierte a `number | null` con `coordinateTransformer` (`restaurants/restaurant.entity.ts`).
 
 ### `restaurant_schedules` · entidad `RestaurantSchedule`
 
@@ -47,9 +55,12 @@ Horario de atención: una fila por cada día que el restaurante **abre**. Un dí
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `firebase_uid` | `varchar(128)` | NULL, único (`UQ_users_firebase_uid`); NULL para usuarios de prueba sin UID |
-| `email` | `varchar(255)` | NOT NULL, único (`UQ_users_email`) |
-| `role` | `varchar(50)` | NOT NULL. Sin check: los valores los define Jacobo (PBI 2) |
-| `restaurant_id` | `uuid` | NULL = usuario que aún no registra su restaurante (onboarding). FK → `restaurants.id` |
+| `email` | `varchar(255)` | NOT NULL, único (`UQ_users_email`). En minúsculas y sin espacios (`CHK_users_email_normalized`, *pendiente*) |
+| `display_name` | `varchar(60)` | NULL. Nombre para mostrar del comensal; NULL en cuentas de restaurante. *Pendiente* (Sprint 2) |
+| `role` | `varchar(50)` | NOT NULL. `'restaurant_admin'` o `'diner'` (`CHK_users_role`, *pendiente*; valores de `UserRole`). Cambiar la lista exige una migración escrita a mano que borre y vuelva a crear el check |
+| `restaurant_id` | `uuid` | NULL = usuario que aún no registra su restaurante (onboarding), o comensal. FK → `restaurants.id` |
+
+- Desde el Sprint 2 el backend no crea usuarios al iniciar sesión. Una fila de `users` existe solo si se habilitó a mano como restaurante ("Restaurantes habilitados") o si la app la creó como comensal con `POST /v1/diners/me`.
 
 ### `tables` · entidad `Table`
 
@@ -119,7 +130,7 @@ Nadie recrea una tabla ni toca columnas de otra persona.
   | `other` | Otra |
 
   Como `status` en `tables`, es `varchar` con check y no `enum` de Postgres. **Para agregar o quitar una categoría hace falta una migración escrita a mano** que borre y vuelva a crear `CHK_restaurants_category`: TypeORM compara los checks solo por su nombre, así que `migration:generate` no detecta que cambió la lista.
-- **`category` y `address` son NULL en la base a propósito:** ya hay restaurantes creados solo con nombre (el del seed, y `src/seed.ts` sigue creándolos así). Que sean obligatorios lo impone el endpoint de registro, no la base. No tienen valor por defecto.
+- **`category` y `address` son NULL en la base a propósito:** ya hay restaurantes creados solo con nombre, de antes del registro completo. El seed le fija a Casa 72 categoría, dirección, coordenadas y horarios en cada corrida (es la fuente de verdad de ese restaurante de prueba). Que sean obligatorios lo impone el endpoint de registro, no la base. No tienen valor por defecto.
 - **Un día cerrado es un día sin fila** en `restaurant_schedules`; no hay columna de "cerrado".
 - **`restaurants.is_open` es un interruptor manual**, independiente de `restaurant_schedules`: en el Sprint 1 no se calcula a partir de los horarios. Nace en `true` (decisión tomada: el restaurante recién registrado queda Abierto), y los restaurantes que ya existían quedaron en `true` al aplicar la migración.
 - **"Abierto 24 horas" es explícito, con `is_open_24h = true`** y sin horas. Una apertura igual al cierre no es válida, para que "24 horas" no tenga dos formas de escribirse.

@@ -14,9 +14,11 @@ import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
   CurrentUser,
   CurrentUserGuard,
+  RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
   Roles,
   type CurrentUserData,
   UserRole,
+  SESSION_UNAUTHORIZED_RESPONSE,
 } from '../../identity-access/index.js';
 import {
   RESTAURANT_REQUIRED_CODE,
@@ -31,17 +33,7 @@ import {
 
 @ApiTags('restaurants')
 @ApiBearerAuth()
-@ApiUnauthorizedResponse({
-  description:
-    'No hay una sesión activa o el correo no está verificado (errorCode: EMAIL_NOT_VERIFIED).',
-  type: ErrorResponseDto,
-  example: {
-    statusCode: 401,
-    message: 'Verifica tu correo para continuar.',
-    error: 'Unauthorized',
-    errorCode: 'EMAIL_NOT_VERIFIED',
-  },
-})
+@ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
 @Roles(UserRole.RESTAURANT_ADMIN)
 @UseGuards(CurrentUserGuard)
 @Controller('restaurants')
@@ -74,12 +66,11 @@ export class RestaurantRegistrationController {
     },
   })
   @ApiForbiddenResponse({
-    description: 'El usuario no tiene acceso por rol.',
+    description:
+      'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED) o es de comensal (DINER_ACCOUNT).',
     type: ErrorResponseDto,
-    example: {
-      statusCode: 403,
-      message: 'No tienes acceso a esta sección.',
-      error: 'Forbidden',
+    examples: {
+      ...RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
     },
   })
   @ApiConflictResponse({
@@ -115,17 +106,10 @@ export class RestaurantRegistrationController {
   })
   @ApiForbiddenResponse({
     description:
-      'El usuario no tiene acceso por rol, o todavía no registra su restaurante (errorCode: RESTAURANT_REQUIRED): en ese caso hay que llevarlo al registro del restaurante.',
+      'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED), es de comensal (DINER_ACCOUNT) o todavía no registra su restaurante (RESTAURANT_REQUIRED): en ese caso hay que llevarlo al registro del restaurante.',
     type: ErrorResponseDto,
     examples: {
-      insufficientRole: {
-        summary: 'El rol no permite consultar el restaurante',
-        value: {
-          statusCode: 403,
-          message: 'No tienes acceso a esta sección.',
-          error: 'Forbidden',
-        },
-      },
+      ...RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
       restaurantRequired: {
         summary: 'El usuario todavía no registra su restaurante',
         value: {

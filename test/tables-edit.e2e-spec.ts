@@ -12,6 +12,7 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
+import { UserRole } from './../src/modules/identity-access/index.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
@@ -19,14 +20,18 @@ const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const TABLE_ID = '3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f';
 const OTHER_TABLE_ID = '6a5b4c3d-2e1f-4a0b-9c8d-7e6f5a4b3c2d';
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
-const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
+const DINER_USER_ID = '00000000-0000-4000-8000-000000000001';
 
 const users = [
-  { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
-  { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
   {
-    id: INVALID_ROLE_USER_ID,
-    role: 'unknown-role',
+    id: OWNER_ID,
+    role: UserRole.RESTAURANT_ADMIN,
+    restaurantId: RESTAURANT_ID,
+  },
+  { id: NEWCOMER_ID, role: UserRole.RESTAURANT_ADMIN, restaurantId: null },
+  {
+    id: DINER_USER_ID,
+    role: UserRole.DINER,
     restaurantId: RESTAURANT_ID,
   },
 ];
@@ -225,17 +230,19 @@ describe('Tables · edit and deactivate (e2e)', () => {
       );
     });
 
-    it('returns 403 without errorCode for an invalid role and edits nothing', async () => {
+    it('returns 403 DINER_ACCOUNT for a diner and edits nothing', async () => {
       const res = await request(app.getHttpServer())
         .patch(`/v1/tables/${TABLE_ID}`)
-        .set('x-dev-user-id', INVALID_ROLE_USER_ID)
+        .set('x-dev-user-id', DINER_USER_ID)
         .send({ capacity: 2 })
         .expect(403);
 
       expect(res.body).toEqual({
         statusCode: 403,
         error: 'Forbidden',
-        message: 'No tienes acceso a esta sección.',
+        message:
+          'Esta es una cuenta de comensal. Para buscar mesa, usa la app DiNNo.',
+        errorCode: 'DINER_ACCOUNT',
       });
       expect(tables.manager.transaction).not.toHaveBeenCalled();
       expect(tables.findOneBy).not.toHaveBeenCalled();

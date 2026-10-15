@@ -8,8 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Request } from 'express';
 import { Repository } from 'typeorm';
+import { sessionExpired } from '../auth/auth-errors.js';
+import { isDeployedEnvironment } from '../auth/deployed-environment.js';
 import { User } from '../users/user.entity.js';
-import type { CurrentUserData } from './current-user-data.js';
+import type { RequestIdentity } from './current-user-data.js';
 import { CurrentUserResolver } from './current-user.resolver.js';
 
 export const DEV_USER_HEADER = 'x-dev-user-id';
@@ -17,15 +19,10 @@ export const DEV_USER_HEADER = 'x-dev-user-id';
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Render sets RENDER on every service; NODE_ENV covers other deployments.
-export function isDeployedEnvironment(config: ConfigService): boolean {
-  return (
-    config.get<string>('RENDER') !== undefined ||
-    config.get<string>('NODE_ENV') === 'production'
-  );
-}
-
-// Development-only user, until the real authentication (PBI 2) replaces it.
+// Development user: a permanent tool for local development and the tests. It
+// resolves the session user from DEV_USER_ID or the x-dev-user-id header,
+// without Firebase. It is off in deployed environments (isDeployedEnvironment),
+// where DEV_USER_ENABLED=true even stops the boot (deployment-safety.ts).
 @Injectable()
 export class DevUserResolver
   extends CurrentUserResolver
@@ -62,11 +59,10 @@ export class DevUserResolver
     }
   }
 
-  async resolve(request: Request): Promise<CurrentUserData> {
+  // Always a registered user, with the role of its row (restaurant_admin or diner).
+  async resolve(request: Request): Promise<RequestIdentity> {
     if (!this.enabled) {
-      throw new UnauthorizedException(
-        'Tu sesión terminó. Inicia sesión de nuevo.',
-      );
+      throw sessionExpired();
     }
 
     const userId = this.parseUserId(
@@ -80,9 +76,12 @@ export class DevUserResolver
     }
 
     return {
-      userId: user.id,
-      restaurantId: user.restaurantId,
-      role: user.role,
+      kind: 'registered',
+      user: {
+        userId: user.id,
+        restaurantId: user.restaurantId,
+        role: user.role,
+      },
     };
   }
 

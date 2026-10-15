@@ -14,9 +14,13 @@ import { FirebaseUserResolver } from './auth/firebase-user.resolver.js';
 import { User } from './users/user.entity.js';
 import { UsersService } from './users/users.service.js';
 import { RolesGuard } from './roles/roles.guard.js';
+import { DinersController } from './diners/diners.controller.js';
+import { DinersService } from './diners/diners.service.js';
+import { MeController } from './users/me.controller.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
+  controllers: [MeController, DinersController],
   providers: [
     DevUserResolver,
     FirebaseUserResolver,
@@ -33,6 +37,7 @@ import { RolesGuard } from './roles/roles.guard.js';
     CurrentUserGuard,
     RolesGuard,
     UsersService,
+    DinersService,
   ],
   exports: [CurrentUserResolver, CurrentUserGuard, RolesGuard, UsersService],
 })

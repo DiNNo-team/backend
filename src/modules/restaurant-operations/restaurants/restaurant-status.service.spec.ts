@@ -14,6 +14,8 @@ function createService() {
     category: null,
     address: null,
     isOpen: true,
+    latitude: null,
+    longitude: null,
     createdAt: new Date('2026-10-04T12:00:00Z'),
     updatedAt: new Date('2026-10-04T12:00:00Z'),
   };

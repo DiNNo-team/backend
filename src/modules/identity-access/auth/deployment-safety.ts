@@ -1,5 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
-import { isDeployedEnvironment } from '../current-user/dev-user.resolver.js';
+import { isDeployedEnvironment } from './deployed-environment.js';
 
 // Local-only switches that must never reach a deployed environment: with the
 // emulator host the Firebase SDK accepts unsigned tokens, and the dev user

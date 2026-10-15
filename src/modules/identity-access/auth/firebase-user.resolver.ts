@@ -1,30 +1,24 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Request } from 'express';
 import type { DecodedIdToken } from 'firebase-admin/auth';
-import type { CurrentUserData } from '../current-user/current-user-data.js';
+import type { RequestIdentity } from '../current-user/current-user-data.js';
 import { CurrentUserResolver } from '../current-user/current-user.resolver.js';
-import { isUniqueViolation } from '../users/unique-violation.js';
 import type { User } from '../users/user.entity.js';
 import { UsersService } from '../users/users.service.js';
+import { emailNotVerified, sessionExpired } from './auth-errors.js';
 import {
   FIREBASE_AUTH,
   type FirebaseAuthFactory,
 } from './firebase-admin.provider.js';
 
-const SESSION_EXPIRED_MESSAGE = 'Tu sesión terminó. Inicia sesión de nuevo.';
-const EMAIL_NOT_VERIFIED_MESSAGE = 'Verifica tu correo para continuar.';
-const CREATE_ROLE = 'restaurant_admin';
-
-function toCurrentUser(user: User): CurrentUserData {
+function registered(user: User): RequestIdentity {
   return {
-    userId: user.id,
-    restaurantId: user.restaurantId,
-    role: user.role,
+    kind: 'registered',
+    user: {
+      userId: user.id,
+      restaurantId: user.restaurantId,
+      role: user.role,
+    },
   };
 }
 
@@ -43,6 +37,11 @@ function errorCode(error: unknown): string {
   return typeof code === 'string' ? code : 'sin código';
 }
 
+function tokenName(token: DecodedIdToken): string | null {
+  const name: unknown = token.name;
+  return typeof name === 'string' && name.trim() !== '' ? name.trim() : null;
+}
+
 @Injectable()
 export class FirebaseUserResolver extends CurrentUserResolver {
   private readonly logger = new Logger(FirebaseUserResolver.name);
@@ -55,10 +54,12 @@ export class FirebaseUserResolver extends CurrentUserResolver {
     super();
   }
 
-  async resolve(request: Request): Promise<CurrentUserData> {
+  // Never creates a user (Sprint 2): an account without a users row resolves
+  // to an unregistered identity. Only POST /v1/diners/me creates users.
+  async resolve(request: Request): Promise<RequestIdentity> {
     const token = bearerToken(request);
     if (!token) {
-      throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
+      throw sessionExpired();
     }
 
     let decodedToken: DecodedIdToken;
@@ -69,24 +70,22 @@ export class FirebaseUserResolver extends CurrentUserResolver {
       // Only the code (e.g. auth/id-token-expired): it tells an expired session
       // from a wrong FIREBASE_PROJECT_ID. Never the token or the full message.
       this.logger.warn(`verifyIdToken rechazó el token: ${errorCode(error)}`);
-      throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
+      throw sessionExpired();
     }
 
     if (!decodedToken.email) {
-      throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
+      throw sessionExpired();
     }
 
     const userByUid = await this.usersService.findByFirebaseUid(
       decodedToken.uid,
     );
     if (userByUid) {
-      return toCurrentUser(userByUid);
+      return registered(userByUid);
     }
 
     if (decodedToken.email_verified !== true) {
-      throw new UnauthorizedException(EMAIL_NOT_VERIFIED_MESSAGE, {
-        errorCode: 'EMAIL_NOT_VERIFIED',
-      });
+      throw emailNotVerified();
     }
 
     const userByEmail = await this.usersService.findByEmail(decodedToken.email);
@@ -97,33 +96,21 @@ export class FirebaseUserResolver extends CurrentUserResolver {
         this.logger.warn(
           'Firebase account rejected: email already linked to another UID',
         );
-        throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
+        throw sessionExpired();
       }
-      return toCurrentUser(
+      return registered(
         await this.usersService.linkFirebaseUid(userByEmail, decodedToken.uid),
       );
     }
 
-    try {
-      const user = await this.usersService.create({
-        firebaseUid: decodedToken.uid,
+    return {
+      kind: 'unregistered',
+      firebase: {
+        uid: decodedToken.uid,
         email: decodedToken.email,
-        role: CREATE_ROLE,
-        restaurantId: null,
-      });
-      return toCurrentUser(user);
-    } catch (error) {
-      if (!isUniqueViolation(error)) {
-        throw error;
-      }
-
-      const userAfterConflict = await this.usersService.findByFirebaseUid(
-        decodedToken.uid,
-      );
-      if (!userAfterConflict) {
-        throw new UnauthorizedException(SESSION_EXPIRED_MESSAGE);
-      }
-      return toCurrentUser(userAfterConflict);
-    }
+        name: tokenName(decodedToken),
+        emailVerified: true,
+      },
+    };
   }
 }
