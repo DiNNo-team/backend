@@ -1,7 +1,7 @@
 # Base de datos · DiNNo backend
 
 Esquema vigente de PostgreSQL (Neon). **Se actualiza en el mismo PR que cambia el esquema.**
-Cómo crear y correr migraciones, y quién las corre: sección 10 del [CLAUDE.md](../CLAUDE.md), subsección "Migraciones".
+Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md](../CLAUDE.md), subsección "Migraciones".
 
 Última migración aplicada: `1791342586330-AddRestaurantIsOpen` (2026-10-08).
 
@@ -124,6 +124,12 @@ Nadie recrea una tabla ni toca columnas de otra persona.
 - **`restaurants.is_open` es un interruptor manual**, independiente de `restaurant_schedules`: en el Sprint 1 no se calcula a partir de los horarios. Nace en `true` (decisión tomada: el restaurante recién registrado queda Abierto), y los restaurantes que ya existían quedaron en `true` al aplicar la migración.
 - **"Abierto 24 horas" es explícito, con `is_open_24h = true`** y sin horas. Una apertura igual al cierre no es válida, para que "24 horas" no tenga dos formas de escribirse.
 - **Un cierre menor que la apertura significa que cierra al día siguiente** (por ejemplo, abre a las 18:00 y cierra a las 02:00). Por eso no hay un check `closes_at > opens_at`.
+
+## Restaurantes habilitados (Sprint 2)
+
+Un correo es de restaurante solo si existe en `users` con `role = 'restaurant_admin'`. El backend ya no crea usuarios automáticamente. Para habilitar un correo:
+`INSERT INTO users (email, role) VALUES ('correo@dominio.com', 'restaurant_admin');`
+El correo va en minúsculas y sin espacios. En el primer inicio de sesión (Google o correo y clave con el correo verificado), el backend vincula su `firebase_uid`. Por ahora el único correo real habilitado es `dinnoteam2026@gmail.com`.
 
 ## Reiniciar los datos de prueba
 

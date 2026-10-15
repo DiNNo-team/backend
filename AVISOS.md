@@ -21,13 +21,13 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - No hay conversión implícita: en un body, `"4"` no es un número. Un `@Param('x') x: number` sí se convierte, pero las propiedades numéricas de un DTO de query necesitan `@Type(() => Number)`.
   - Un `:id` de ruta no se valida solo: usa `ParseUUIDPipe` con un mensaje propio. Si no, un id mal formado llega a Postgres y responde `500`.
 - **Forma de los errores de toda la API:** `{ statusCode, message, error }`. En los `400` de validación `message` es una **lista** (un mensaje por problema); en los demás errores es un **texto**. El DTO para Swagger es `src/common/dto/error-response.dto.ts`: impórtalo, no lo dupliques.
-  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 10, "API"). Hoy existen `RESTAURANT_REQUIRED` y `EMAIL_NOT_VERIFIED`.
+  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 11, "API"). Hoy existen `RESTAURANT_REQUIRED` y `EMAIL_NOT_VERIFIED`.
   - **Nuevo: los errores que da Nest antes de llegar a nuestro código ya tienen la misma forma y el mismo idioma.** JSON mal formado: `400` con "El cuerpo de la solicitud no es un JSON válido."; body demasiado grande: `413` con "La solicitud es demasiado grande."; ruta inexistente: `404` con "Ruta no encontrada.". Los tres traen `statusCode`, `message` (texto) y `error`. Lo hace el filtro global (`unhandled-exception.filter.ts`); tus `400`, `403`, `404` y `409` siguen saliendo sin cambios.
   - **Decisión tomada: cómo responde la API cuando un usuario no puede acceder a algo.** Hay tres situaciones distintas, y cada una tiene su respuesta:
     - **Usuario sin restaurante:** responde `403` con `errorCode: "RESTAURANT_REQUIRED"` (`requireRestaurant`, en `restaurant-operations/shared/restaurant-required.ts`). Ya está en las rutas de mesas y de restaurante, y la web ramifica por ese código para llevar al usuario al registro del restaurante, así que no debe cambiar.
     - **Recurso de otro restaurante:** responde `404`, con el mismo mensaje que si el recurso no existiera. Así la API no revela que existe algo de otro restaurante. Ya se aplica en las mesas.
     - **Rol insuficiente:** responde `403` sin `errorCode`, con el texto que fija el manual en 14.2: "No tienes acceso a esta sección." No lleva `errorCode` porque aquí el front solo muestra el mensaje; como el de "sin restaurante" sí trae su `errorCode`, el front distingue los dos `403` sin leer el texto. Ya está implementado (`@Roles`, PR #30 de Jacobo) en todas las rutas de `restaurant-operations`: mesas, `GET` y `PATCH /v1/restaurants/me`, `POST /v1/restaurants`, `GET` y `PATCH /v1/restaurants/me/status` y `GET /v1/table-logs` (ver "Control de acceso por rol" más abajo).
-- **Código compartido entre módulos:** va en `src/common/`, solo si de verdad lo usan varios módulos y no es de ningún dominio. Nada de lógica de negocio (regla en el CLAUDE.md, sección 10).
+- **Código compartido entre módulos:** va en `src/common/`, solo si de verdad lo usan varios módulos y no es de ningún dominio. Nada de lógica de negocio (regla en el CLAUDE.md, sección 11).
 - **Los mensajes de error que puede ver el usuario siguen la sección 14 del manual de identidad v1.1:**
   - Tuteo, frases cortas y sin culpar, qué pasó + qué hacer.
   - Sin códigos técnicos, emojis ni signos de exclamación, y con mayúscula inicial solamente.
@@ -46,11 +46,14 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Por persona
 
+### Todos (Sprint 2)
+**Todos:** solo Elizabeth corre migraciones y seed contra Neon.
+
 ### Elizabeth
 - **Tus pendientes:**
   - **Seed:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`.
   - Probar el login con un token real de Firebase contra Render.
-  - Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 10). **Antes de fusionar esta rama a `develop`:** desde ahora, con `FIREBASE_AUTH_EMULATOR_HOST` definida o `DEV_USER_ENABLED=true`, la app no arranca en Render.
+  - Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 11). **Antes de fusionar esta rama a `develop`:** desde ahora, con `FIREBASE_AUTH_EMULATOR_HOST` definida o `DEV_USER_ENABLED=true`, la app no arranca en Render.
   - Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.
   - Aplicar en Neon la migración de cada rama antes de fusionar su PR (ver "Reglas nuevas de este sprint").
   - Revisar los PR del backend.
@@ -77,6 +80,32 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - `restaurants` ya tiene `name`, `category`, `address` e `is_open`. Quien agregue una columna lo hace con su propia migración de `ALTER`. Nadie recrea la tabla.
 
 ### Santiago
+**Santiago:** formato del archivo de los 15 restaurantes reales. Entrégalo el **viernes 16** como `src/seed-data/restaurants.json` en una rama `feature/s2-seed-restaurantes`, con PR para Elizabeth. **No ejecutes el seed en Neon.** Cada elemento:
+```json
+{
+  "name": "Nombre real",
+  "category": "colombian",
+  "address": "Cra. 11 #72-30, Bogotá",
+  "latitude": 4.657123,
+  "longitude": -74.056789,
+  "isOpen": true,
+  "ownerEmail": "restaurante-01@dinno.test",
+  "schedules": [
+    { "dayOfWeek": 1, "isOpen24h": false, "opensAt": "12:00", "closesAt": "22:00" },
+    { "dayOfWeek": 5, "isOpen24h": false, "opensAt": "18:00", "closesAt": "02:00" },
+    { "dayOfWeek": 6, "isOpen24h": true }
+  ],
+  "tables": [
+    { "identifier": "01", "capacity": 2, "status": "available", "isActive": true }
+  ]
+}
+```
+- `category`: uno de los 10 valores del contrato. `dayOfWeek`: 1 = lunes … 7 = domingo. Los días cerrados no se incluyen. Un cierre después de medianoche se escribe con `closesAt` menor que `opensAt`.
+- Coordenadas con 6 decimales, copiadas a mano de Google Maps y dentro de Bogotá (lat 4.45–4.85, lng −74.25 a −73.95).
+- `tables`: entre 4 y 12 mesas; `identifier` corto (máx. 10 caracteres, sin repetir en el mismo restaurante); `capacity` de 1 a 20; `status` entre `available`, `reserved` y `occupied`.
+- `ownerEmail`: por ahora todos con `restaurante-XX@dinno.test` (de 01 a 15). Los correos reales del equipo se asignan después.
+- Lo que deben cubrir los datos (sección 9 del reparto): al menos 6 categorías, los tres niveles del indicador, 2 restaurantes con `isOpen: false`, 1 fuera de horario a la hora de la demo, 1 que cierre al día siguiente y 1 de 24 horas.
+
 - **Ya hecho en el backend:** registro y consulta del restaurante (PBI 3: `POST /v1/restaurants` y `GET /v1/restaurants/me`, con `@Roles(UserRole.RESTAURANT_ADMIN)` como el resto de rutas de restaurante). Para tu formulario:
   - **`POST /v1/restaurants`** recibe exactamente `{ "name", "category", "address", "schedules": [{ "dayOfWeek": 1, "isOpen24h": false, "opensAt": "09:00", "closesAt": "22:00" }] }`. Un elemento por día abierto (al menos uno, sin repetir); un día cerrado no se envía; con `isOpen24h: true` no se envían horas. Las horas van en `HH:MM` de 24 horas: el `TimeSelect` muestra "7:30 p. m.", pero envía `"19:30"`.
   - Responde `201` con `{ id, name, category, address, schedules }`, igual que `GET /v1/restaurants/me`.
@@ -89,7 +118,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Te falta en la web:** el formulario del registro del restaurante en `/onboarding`, con sus validaciones: "Tu restaurante" (nombre y categoría), "Ubicación" (dirección) y "Horarios" (con el `HoursEditor` del kit). Registro y edición validan igual, en la web y en el backend (`RestaurantFieldsDto`). Luego, su integración con `POST /v1/restaurants` y la prueba del recorrido con el usuario de onboarding (no con `demo@example.com`).
 
 ### Sergio
-- **Ya en `develop`:** el estado abierto/cerrado (PBI 8: `GET` y `PATCH /v1/restaurants/me/status` y la columna `is_open`) y la bitácora (PBI 9: tabla `table_logs` y `DbTableStatusLog`, que ya registra cambiar el estado, desactivar y reactivar una mesa). Cómo funcionan y cómo se usan: `CLAUDE.md`, sección 10 ("Bitácora de mesas" y "Estado abierto/cerrado del restaurante").
+- **Ya en `develop`:** el estado abierto/cerrado (PBI 8: `GET` y `PATCH /v1/restaurants/me/status` y la columna `is_open`) y la bitácora (PBI 9: tabla `table_logs` y `DbTableStatusLog`, que ya registra cambiar el estado, desactivar y reactivar una mesa). Cómo funcionan y cómo se usan: `CLAUDE.md`, sección 11 ("Bitácora de mesas" y "Estado abierto/cerrado del restaurante").
 - **Ya en `develop` y en `main` (web, PR #21):** el switch Abierto/Cerrado del topbar, el aviso de cerrado y el cambio de estado con "Deshacer" y confirmación con mesas reservadas. Pendiente en la web: la variante de estado del `Switch` del kit (Sebastián) y probar que el estado persiste en el ambiente desplegado, que necesita el login web.
 - **Ya en `develop` (PR #31):** `GET /v1/table-logs` (contrato en el `CLAUDE.md`, "Bitácora de mesas") y `@Roles` en tus rutas de estado.
 - **Te toca en la web (PBI 9, bitácora):**
@@ -99,7 +128,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Sebastián
 - **Te toca en la web:** el kit visual del manual (`components/ui`), el AppShell (sidebar con Mesas, Restaurante y Bitácora; topbar con el espacio para el switch Abierto/Cerrado de Sergio) y las pantallas de mesas (crear, cambiar estado, editar y desactivar). Sergio usa del kit el switch, la alerta, el diálogo y el toast.
-- **Endpoints que ya puedes consumir** (contrato en Swagger, `/docs`): los de mesas (`POST` y `GET /v1/tables`, `PATCH /v1/tables/:id/status`, `PATCH /v1/tables/:id`, `POST /v1/tables/:id/deactivate` y `POST /v1/tables/:id/reactivate`), `GET` y `PATCH /v1/restaurants/me` (detalle en la sección de Jacobo), `POST /v1/restaurants` (registro, detalle en la sección de Santiago), `GET` y `PATCH /v1/restaurants/me/status`, que reciben y devuelven `{ "isOpen": boolean }` (detalle en el `CLAUDE.md`, sección 10), y `GET /v1/table-logs` (Sergio, PR #31; contrato en el `CLAUDE.md`, "Bitácora de mesas").
+- **Endpoints que ya puedes consumir** (contrato en Swagger, `/docs`): los de mesas (`POST` y `GET /v1/tables`, `PATCH /v1/tables/:id/status`, `PATCH /v1/tables/:id`, `POST /v1/tables/:id/deactivate` y `POST /v1/tables/:id/reactivate`), `GET` y `PATCH /v1/restaurants/me` (detalle en la sección de Jacobo), `POST /v1/restaurants` (registro, detalle en la sección de Santiago), `GET` y `PATCH /v1/restaurants/me/status`, que reciben y devuelven `{ "isOpen": boolean }` (detalle en el `CLAUDE.md`, sección 11), y `GET /v1/table-logs` (Sergio, PR #31; contrato en el `CLAUDE.md`, "Bitácora de mesas").
 - **Desactivar y reactivar ya escriben en la bitácora de verdad** (PBI 9, Sergio). No tienes que cambiar nada: `changeActive` ya llama a `TableStatusLog.record(...)` con el `manager` de su transacción. Lo nuevo es que, si el insert en `table_logs` falla, la petición responde `500` y la mesa no cambia, igual que el cambio de estado.
 - **Decisión (Sebastián, 2026-10-06): el campo se llama "Identificador", no "Nombre".** Lo dice el manual en 12.4, y la regla de mostrar "Mesa 04" (14.1) supone un identificador corto. Los mensajes del backend dicen "identificador", igual que la web: "Escribe el identificador de la mesa.", "Usa máximo 10 caracteres en el identificador de la mesa." y "Ya tienes una Mesa 04. Usa otro identificador.". En el código y en la API el campo sigue siendo `identifier`.
 - **El horario admite "Abierto 24 horas" (`is_open_24h`).** El HoursEditor del manual no tiene esa opción; hace falta agregarla al kit antes de que Santiago y Jacobo armen sus formularios (registro y edición del restaurante), porque los dos usan el `HoursEditor`.
@@ -141,7 +170,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 Riesgos aceptados para el Sprint 1, a revisar más adelante:
 
-- **Rol automático:** toda cuenta del proyecto Firebase con correo verificado entra como `restaurant_admin` y puede registrar un restaurante. Revisarlo antes de que la app móvil use login, si comparte el proyecto Firebase.
+- **Rol automático:** toda cuenta del proyecto Firebase con correo verificado entra como `restaurant_admin` y puede registrar un restaurante. Revisarlo antes de que la app móvil use login, si comparte el proyecto Firebase. **Se resuelve en el Sprint 2 (rama feature/s2-cuentas-roles).**
 - **Sesiones revocadas:** `verifyIdToken` no usa `checkRevoked`, así que un token revocado sirve hasta que vence (máximo 1 hora). Activarlo exige credenciales de cuenta de servicio.
 - **TLS con Neon:** la conexión no verifica el certificado del servidor (`rejectUnauthorized: false`).
 - **Sin rate limiting:** ninguna ruta limita las peticiones por IP ni por usuario.
@@ -152,6 +181,10 @@ Riesgos aceptados para el Sprint 1, a revisar más adelante:
 - **Consola de Firebase:** revisar que solo estén habilitados Email/Password y Google, y que la vinculación de cuentas por correo esté activa (una cuenta por correo).
 
 ## Historial
+
+- **2026-10-15 · Elizabeth · Contratos del Sprint 2 publicados**
+  - Los contratos del Sprint 2 están en `CLAUDE.md`, sección "Sprint 2 · Contratos". Es la fuente de verdad para backend, web y app; si algo no está ahí, se pregunta antes de inventarlo. Las fechas de cada contrato están en la tabla "Cuándo está listo cada contrato en `develop`".
+  - **Cambio importante (llega a `develop` el 15 oct en la noche):** el backend deja de crear usuarios automáticamente. Por ahora el único correo real habilitado como restaurante es `dinnoteam2026@gmail.com`. Para probar la web como restaurante, usen esa cuenta o el usuario de desarrollo en local. Cualquier otra cuenta recibe 403 `ACCOUNT_NOT_ENABLED` en la web. Si necesitan habilitar otro correo, pídanselo a Elizabeth.
 
 - **2026-10-09 · Arreglos de la revisión adversarial (Elizabeth).** Sin cambios de esquema, de la API ni dependencias nuevas.
   - **Local:** la API escucha solo en `127.0.0.1` fuera de Render (ver "Acciones pendientes de todos").
@@ -195,7 +228,7 @@ Riesgos aceptados para el Sprint 1, a revisar más adelante:
   - **Qué quedó listo:**
     - la columna `restaurants.is_open` (`boolean`, NOT NULL, `DEFAULT true`; propiedad `isOpen` de `Restaurant`), con la migración `1791342586330-AddRestaurantIsOpen`;
     - `GET /v1/restaurants/me/status` → `200 { "isOpen": boolean }`;
-    - `PATCH /v1/restaurants/me/status` con `{ "isOpen": boolean }` → `200 { "isOpen": boolean }`. El restaurante sale de la sesión; `401` sin sesión, `403 RESTAURANT_REQUIRED` sin restaurante y `400` si `isOpen` no es booleano o hay campos de más. Detalle en el `CLAUDE.md` (sección 10, "Estado abierto/cerrado del restaurante") y en Swagger;
+    - `PATCH /v1/restaurants/me/status` con `{ "isOpen": boolean }` → `200 { "isOpen": boolean }`. El restaurante sale de la sesión; `401` sin sesión, `403 RESTAURANT_REQUIRED` sin restaurante y `400` si `isOpen` no es booleano o hay campos de más. Detalle en el `CLAUDE.md` (sección 11, "Estado abierto/cerrado del restaurante") y en Swagger;
     - el cambio es manual: no mira los horarios. El conteo de mesas reservadas para confirmar el cierre lo hace la web; el endpoint no lo devuelve.
   - **Para quién / qué deben hacer:**
     - **Todos:** quien cree un objeto `Restaurant` completo en una prueba tiene que agregar `isOpen` (ya está en `stored` de `restaurant-edit.service.spec.ts`).
@@ -213,7 +246,7 @@ Riesgos aceptados para el Sprint 1, a revisar más adelante:
   - **Rama / PR:** `feat/sprint1-bitacora-estructura` → `develop` (PR #25, fusionado). La migración `CreateTableLogs` ya está aplicada en Neon.
   - **Pendiente o conocido:**
     - la consulta de la bitácora para la pantalla (`GET /v1/table-logs`) llega en otro PR.
-- **2026-10-06 · Limpieza de documentación y pruebas (Elizabeth, rama `chore/sprint1-docs-and-tests-cleanup`).** Solo documentación y pruebas, sin cambios de comportamiento ni de la API. Migraciones aplicadas al día en `docs/database.md` y en este archivo; los textos de la mesa dicen "identificador" en todo `AVISOS.md`; `CLAUDE.md` (sección 10), `README.md` y `AGENTS.md` al día con el código. Pruebas nuevas: 404 de `deactivate` y `reactivate`, `identifier: null` en `PATCH /v1/tables/:id` y `table-identifier.spec.ts`.
+- **2026-10-06 · Limpieza de documentación y pruebas (Elizabeth, rama `chore/sprint1-docs-and-tests-cleanup`).** Solo documentación y pruebas, sin cambios de comportamiento ni de la API. Migraciones aplicadas al día en `docs/database.md` y en este archivo; los textos de la mesa dicen "identificador" en todo `AVISOS.md`; `CLAUDE.md` (sección 11), `README.md` y `AGENTS.md` al día con el código. Pruebas nuevas: 404 de `deactivate` y `reactivate`, `identifier: null` en `PATCH /v1/tables/:id` y `table-identifier.spec.ts`.
 - **2026-10-06 · PR de editar, desactivar y reactivar mesas (Sebastián, PBI 7).**
   - **Rutas nuevas:** `PATCH /v1/tables/:id` (identificador y/o capacidad, al menos uno), `POST /v1/tables/:id/deactivate` y `POST /v1/tables/:id/reactivate` (vuelve como `available`).
   - **Bitácora:** desactivar y reactivar se registran en la misma transacción, con `inactive` como estado.
