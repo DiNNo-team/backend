@@ -50,6 +50,7 @@ export class RestaurantEditService {
         throw new Error(`Restaurant ${ownerId} of the session user not found`);
       }
 
+      // Realtime branch: editing the location (and the hours) must emit the availability event after the commit.
       // id last: whatever the changes carry, the session restaurant is updated.
       const saved = hasFieldChanges
         ? await manager.save(

@@ -21,7 +21,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - No hay conversión implícita: en un body, `"4"` no es un número. Un `@Param('x') x: number` sí se convierte, pero las propiedades numéricas de un DTO de query necesitan `@Type(() => Number)`.
   - Un `:id` de ruta no se valida solo: usa `ParseUUIDPipe` con un mensaje propio. Si no, un id mal formado llega a Postgres y responde `500`.
 - **Forma de los errores de toda la API:** `{ statusCode, message, error }`. En los `400` de validación `message` es una **lista** (un mensaje por problema); en los demás errores es un **texto**. El DTO para Swagger es `src/common/dto/error-response.dto.ts`: impórtalo, no lo dupliques.
-  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 11, "API"). Hoy existen `RESTAURANT_REQUIRED`, `EMAIL_NOT_VERIFIED` y, desde el Sprint 2, `ACCOUNT_NOT_ENABLED`, `PROFILE_REQUIRED`, `DINER_ACCOUNT`, `RESTAURANT_ACCOUNT` y `RESTAURANT_NOT_FOUND` (404 del detalle público).
+  - Algunos errores traen además **`errorCode`**, solo los que el front tiene que tratar distinto según el motivo; los que el front solo muestra no lo llevan (regla en el CLAUDE.md, sección 11, "API"). Hoy existen `RESTAURANT_REQUIRED`, `EMAIL_NOT_VERIFIED` y, desde el Sprint 2, `ACCOUNT_NOT_ENABLED`, `PROFILE_REQUIRED`, `DINER_ACCOUNT`, `RESTAURANT_ACCOUNT` `RESTAURANT_NOT_FOUND` (404 del detalle público), `ADDRESS_NOT_FOUND` (404) y `GEOCODING_UNAVAILABLE` (503) de `GET /v1/geocode`.
   - **Nuevo: los errores que da Nest antes de llegar a nuestro código ya tienen la misma forma y el mismo idioma.** JSON mal formado: `400` con "El cuerpo de la solicitud no es un JSON válido."; body demasiado grande: `413` con "La solicitud es demasiado grande."; ruta inexistente: `404` con "Ruta no encontrada.". Los tres traen `statusCode`, `message` (texto) y `error`. Lo hace el filtro global (`unhandled-exception.filter.ts`); tus `400`, `403`, `404` y `409` siguen saliendo sin cambios.
   - **Decisión tomada: cómo responde la API cuando un usuario no puede acceder a algo.** Hay tres situaciones distintas, y cada una tiene su respuesta:
     - **Usuario sin restaurante:** responde `403` con `errorCode: "RESTAURANT_REQUIRED"` (`requireRestaurant`, en `restaurant-operations/shared/restaurant-required.ts`). Ya está en las rutas de mesas y de restaurante, y la web ramifica por ese código para llevar al usuario al registro del restaurante, así que no debe cambiar.
@@ -83,7 +83,16 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 ### Santiago y Sergio
 - `restaurants` ya tiene `name`, `category`, `address` e `is_open`. Quien agregue una columna lo hace con su propia migración de `ALTER`. Nadie recrea la tabla.
 
+### Equipo de Google Cloud (Jacobo, Santiago y Sergio)
+- **Nuevo: la llave del backend (`GOOGLE_GEOCODING_API_KEY`, Google Geocoding API) se entrega a Elizabeth por canal privado**, nunca por el grupo, un commit ni un PR. Ella la configura en Render y en su `.env`. Hasta entonces `GET /v1/geocode` responde `503` y la web muestra el mapa para mover el pin.
+
 ### Santiago
+- **Nuevo (Sprint 2): ubicación del restaurante para el formulario de registro y de edición.** Contrato en `CLAUDE.md` (sección 10) y en Swagger (tags `geocode` y `restaurants`).
+  - **`GET /v1/geocode?address=<texto>`** → `200 { latitude, longitude, formattedAddress }`, con 6 decimales y siempre dentro de Bogotá. **No exige restaurante registrado:** úsalo en `/onboarding` antes del `POST`. `address` va recortada, de 3 a 255 caracteres; si no cumple, `400` (`message` es una lista).
+  - **`404 ADDRESS_NOT_FOUND`:** «No encontramos esa dirección en Bogotá. Mueve el pin al lugar correcto.» · **`503 GEOCODING_UNAVAILABLE`:** «No pudimos ubicar la dirección en este momento. Mueve el pin al lugar correcto.» **En los dos casos** muestra el mensaje y el mapa centrado en Bogotá para que el usuario mueva el pin. Ramifica por `errorCode`. Hasta que llegue la llave de Google, la respuesta siempre es `503`.
+  - **`POST /v1/restaurants` y `PATCH /v1/restaurants/me`** aceptan `latitude` y `longitude` (números): **las dos o ninguna**, dentro de Bogotá (latitud 4.45 a 4.85, longitud -74.25 a -73.95), se aceptan con más decimales y **se guardan redondeadas a 6**. **No se pueden borrar:** `null` da `400`. En el `PATCH`, enviar solo las coordenadas es una edición válida. La obligatoriedad al registrar la impone tu formulario: el backend las deja opcionales para no romper la web actual.
+  - **Las respuestas** de `POST /v1/restaurants`, `GET` y `PATCH /v1/restaurants/me` traen `latitude` y `longitude` (`number | null`). **El aviso «Completa tu ubicación» se basa en `latitude === null` en `GET /v1/restaurants/me`.**
+
 **Santiago:** formato del archivo de los 15 restaurantes reales. Entrégalo el **viernes 16** como `src/seed-data/restaurants.json` en una rama `feature/s2-seed-restaurantes`, con PR para Elizabeth. **No ejecutes el seed en Neon.** Cada elemento:
 ```json
 {
@@ -205,6 +214,14 @@ Resuelta el 2026-10-15 (`feature/s2-cuentas-roles`, detalle en el Historial):
 - ~~**Join de la bitácora a `users`** (excepción del Sprint 1)~~: los correos salen de `UsersService.findEmailsByIds`.
 
 ## Historial
+
+- **2026-10-15 · Elizabeth · Ubicación del restaurante: geocodificación y coordenadas (`feature/s2-geocode`).** Rutas y campos nuevos en la API, sin cambios de esquema (las columnas `latitude` y `longitude` llegaron con `AddDinerRoleAndRestaurantLocation`) ni dependencias nuevas.
+  - **Qué quedó listo:** `GET /v1/geocode` (dirección → coordenadas con Google Geocoding, restringido a Bogotá, solo restaurantes y sin exigir restaurante registrado) y `latitude`/`longitude` en `POST /v1/restaurants`, `PATCH /v1/restaurants/me` y sus respuestas, incluida `GET /v1/restaurants/me`. Detalle para la web en la sección de Santiago; reglas en `CLAUDE.md`, sección 11, "Geocodificación".
+  - **Sin llave, `GET /v1/geocode` responde `503 GEOCODING_UNAVAILABLE`** hasta que el equipo de Google Cloud la entregue (ver su sección). La app arranca igual.
+  - **Variable nueva:** `GOOGLE_GEOCODING_API_KEY` (opcional y secreta; en `.env.example` sin valor). Solo se define en Render y en el `.env` de Elizabeth.
+  - **Códigos nuevos:** `ADDRESS_NOT_FOUND` (404) y `GEOCODING_UNAVAILABLE` (503), en `ErrorResponseDto`.
+  - **Para las pruebas:** las e2e que montan `RestaurantOperationsModule` no necesitan nada nuevo (sin llave el adaptador no llama a Google). Para probar `GET /v1/geocode`, reemplaza el puerto con `.overrideProvider(Geocoder)`, como `test/geocode.e2e-spec.ts`.
+  - **Archivos de otros integrantes que se tocaron:** **Santiago (registro):** `restaurant-registration.service.ts` (guarda las coordenadas), `restaurant-registration.service.spec.ts` y `test/restaurant-registration.e2e-spec.ts` (los dos campos nuevos en lo esperado). `dto/restaurant-fields.dto.ts` (compartido) suma los dos campos.
 
 - **2026-10-15 · Elizabeth · Búsqueda por ubicación y por zona, con filtros y detalle público (`feature/s2-busqueda`, PBI 2.1, 2.2, 3.2 y 4.1).** Rutas nuevas de la API, sin cambios de esquema ni dependencias nuevas.
   - **Qué quedó listo:** `GET /v1/search/zones` (las 20 zonas, ordenadas por nombre) y `GET /v1/search/restaurants` con `lat` + `lng` **o** `zone`, y `radiusKm` ∈ {1, 2, 5, 10} (por defecto 2). Solo comensales (`@Roles(UserRole.DINER)`). Contrato en `CLAUDE.md`, sección 10, y en Swagger (tag `search`).

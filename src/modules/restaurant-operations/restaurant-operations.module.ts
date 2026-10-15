@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IdentityAccessModule } from '../identity-access/index.js';
+import { GeocodeController } from './geocoding/geocode.controller.js';
+import { Geocoder } from './geocoding/geocoder.js';
+import { GoogleGeocoder } from './geocoding/google-geocoder.js';
 import { RestaurantEditController } from './restaurants/restaurant-edit.controller.js';
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
 import { RestaurantRegistrationController } from './restaurants/restaurant-registration.controller.js';
@@ -29,6 +32,7 @@ import { TablesService } from './tables/tables.service.js';
     RestaurantRegistrationController,
     RestaurantStatusController,
     TableLogsController,
+    GeocodeController,
   ],
   providers: [
     TablesService,
@@ -38,6 +42,8 @@ import { TablesService } from './tables/tables.service.js';
     // Table log (PBI 9): table-logs/ implements the tables/ port.
     { provide: TableStatusLog, useClass: DbTableStatusLog },
     TableLogsService,
+    // Geocoding (Sprint 2): the tests replace the port with a fake.
+    { provide: Geocoder, useClass: GoogleGeocoder },
   ],
 })
 export class RestaurantOperationsModule {}

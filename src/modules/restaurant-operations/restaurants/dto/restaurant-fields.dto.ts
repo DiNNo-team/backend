@@ -1,11 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsNotEmpty, IsString } from 'class-validator';
 import { MaxCodePoints } from '../../../../common/validation/max-code-points.js';
+import { BOGOTA_BOUNDS } from '../../shared/bogota-location.js';
 import {
   RESTAURANT_CATEGORIES,
   type RestaurantCategory,
 } from '../restaurant.entity.js';
+import { RestaurantCoordinateField } from './restaurant-location-fields.js';
 
 export const RESTAURANT_NAME_MAX_LENGTH = 120;
 export const RESTAURANT_ADDRESS_MAX_LENGTH = 255;
@@ -72,4 +74,24 @@ export class RestaurantFieldsDto {
         : ADDRESS_REQUIRED,
   })
   address: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Latitud del restaurante, junto con longitude (las dos o ninguna). Dentro de Bogotá. Se aceptan más decimales y se guarda con 6. No acepta null: la ubicación no se puede borrar.',
+    minimum: BOGOTA_BOUNDS.minLatitude,
+    maximum: BOGOTA_BOUNDS.maxLatitude,
+    example: 4.655671,
+  })
+  @RestaurantCoordinateField('latitude')
+  latitude?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Longitud del restaurante, junto con latitude. Dentro de Bogotá. Se aceptan más decimales y se guarda con 6. No acepta null.',
+    minimum: BOGOTA_BOUNDS.minLongitude,
+    maximum: BOGOTA_BOUNDS.maxLongitude,
+    example: -74.057006,
+  })
+  @RestaurantCoordinateField('longitude')
+  longitude?: number;
 }

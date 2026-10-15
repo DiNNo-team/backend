@@ -74,6 +74,8 @@ describe('RestaurantRegistrationService', () => {
         name: 'La Esquina de Ana',
         category: 'colombian',
         address: 'Calle 72 # 10-34, Bogotá',
+        latitude: null,
+        longitude: null,
       });
       expect(result.restaurant.id).toBe(RESTAURANT_ID);
       expect(result.schedules).toEqual([
