@@ -190,6 +190,12 @@ Resuelta el 2026-10-15 (`feature/s2-cuentas-roles`, detalle en el Historial):
 
 ## Historial
 
+- **2026-10-15 · Elizabeth · Regla de disponibilidad del Sprint 2 (`feature/s2-disponibilidad`, PBI 3.1).** Sin endpoints, sin cambios de esquema ni de la API, sin dependencias nuevas.
+  - **Qué quedó listo:** la regla de "Disponibilidad" del `CLAUDE.md` (sección 10) está implementada y probada en `search-availability/availability/`. Calcula si el restaurante está abierto ahora (hora de Bogotá, cierre exclusivo, horarios que cierran al día siguiente y días de 24 horas), el nivel `available` / `few` / `none` / `closed` y si aparece en la búsqueda.
+  - **Cómo se usa:** `SearchAvailabilityModule` exporta `AvailabilityService` (`getForRestaurant`, `getForRestaurants`, `canSeat`), importado desde `search-availability/index.ts`. Lo usarán la búsqueda, el detalle público y el WebSocket (viernes 16 y sábado 17) y la asignación de mesa del Sprint 3. Detalle en el `CLAUDE.md`, sección 11, "Disponibilidad".
+  - **Para las pruebas:** la hora se fija reemplazando `Clock` (`.overrideProvider(Clock)`). Escriban los instantes en UTC con su hora de Bogotá en un comentario.
+  - **Regla que no cambia:** ninguna respuesta lleva cuántas mesas hay ni cuántas están libres.
+
 - **2026-10-15 · Elizabeth · Cuentas y roles del Sprint 2 (`feature/s2-cuentas-roles`).** Cambia el esquema y la API.
   - **El backend ya no crea usuarios al iniciar sesión.** Una cuenta de Firebase sin fila en `users` queda *sin perfil*. Solo `POST /v1/diners/me` crea usuarios, siempre con rol `diner`. Los restaurantes se habilitan a mano ([`docs/database.md`](docs/database.md), "Restaurantes habilitados"). El único correo real habilitado es `dinnoteam2026@gmail.com`.
   - **Roles:** `UserRole` tiene `RESTAURANT_ADMIN` y `DINER`. Todas las rutas del Sprint 1 siguen con `@Roles(UserRole.RESTAURANT_ADMIN)`; no cambian sus rutas ni sus respuestas de éxito.

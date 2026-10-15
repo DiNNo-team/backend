@@ -344,6 +344,24 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - **Es manual en el Sprint 1:** no depende de `restaurant_schedules`. La confirmación de cerrar con mesas reservadas (y el conteo de esas mesas) la hace la web con `GET /v1/tables`; el endpoint no la pide ni la devuelve.
 - Es independiente de `GET`/`PATCH /v1/restaurants/me`: `RestaurantResponseDto` no incluye `isOpen`.
 
+### Disponibilidad (`search-availability`, Elizabeth)
+- **Dónde vive:** `search-availability/availability/`. La regla de la sección 10 ("Disponibilidad") está en funciones puras, sin Nest ni base de datos:
+  - `toBogotaTime` en `bogota-time.ts`;
+  - `isOpenNow` y `parseTimeOfDay` en `opening-hours.ts`;
+  - `availabilityLevel`, `hasTableFor` y `hasActiveTable` en `table-availability.ts`;
+  - `computeAvailability` en `compute-availability.ts`.
+  
+  Trabajan con tipos propios del módulo (`availability.types.ts`), nunca con entidades de `restaurant-operations`.
+- **Cómo se usa:** importa `SearchAvailabilityModule` e inyecta `AvailabilityService` (los dos desde `search-availability/index.ts`). Tiene tres métodos:
+  - `getForRestaurant(id)` → `AvailabilityResult | null` (`null` si el restaurante no existe);
+  - `getForRestaurants(ids, { partySize? })` → `Map<id, AvailabilityResult>`, siempre con tres consultas sin importar cuántos ids lleguen. **Es el que usa la búsqueda:** con `partySize` (filtro de personas), `isSearchable` además exige una mesa libre y activa con `capacity ≥ partySize`, sobre las mesas ya cargadas. No llames `canSeat` por cada restaurante: sería N+1;
+  - `canSeat(id, partySize)` → `boolean`, para un solo restaurante (asignación de mesa del Sprint 3). **Solo mira las mesas, no el horario:** para asignar una mesa, combínalo con `getForRestaurant(id)` y su `isOpenNow`.
+  
+  `AvailabilityResult` es `{ isOpenNow, availability, isSearchable }`. Los ids deben ser UUID válidos: quien recibe el id del cliente lo valida antes.
+- **Lectura de datos:** solo lectura de `Restaurant`, `RestaurantSchedule` y `Table` por nombre de entidad (`DataSource.getRepository('Restaurant')`), con las columnas justas. El mapeo de filas a tipos está en `availability-rows.ts`. Nunca escribe.
+- **Hora:** se calcula con `Intl.DateTimeFormat` en `America/Bogota`; depende solo del instante, no del `TZ` del servidor (Render corre en UTC). El instante sale de `Clock` (`SystemClock` en el módulo). En las pruebas se fija con `.overrideProvider(Clock).useValue({ now: () => new Date('2026-10-16T18:00:00Z') })`, y en las unitarias se pasa el instante directamente. Escribe los instantes en UTC con su hora de Bogotá en un comentario.
+- **Nunca expongas conteos:** ni `AvailabilityResult` ni ninguna respuesta lleva cuántas mesas hay o cuántas están libres. Si necesitas una decisión nueva, agrega una función que devuelva un booleano o un nivel, nunca un número.
+
 ### Pruebas
 - Vitest. Pruebas unitarias junto al código (`*.spec.ts`) y e2e en `test/`.
 - Cada servicio nuevo con pruebas de casos felices y de error (por ejemplo: mesa de otro restaurante, datos inválidos, mesa inactiva).
@@ -355,7 +373,7 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 
 ### Sprint 2 · Notas de implementación
 - `UserRole` tiene `RESTAURANT_ADMIN` y `DINER`. Nada de literales `'restaurant_admin'` en el código; `users.role` lleva un check con los dos valores.
-- La cuenta sin perfil se resuelve a un `CurrentUserData` sin usuario (rol `null`) en lugar de crearla. `RolesGuard` traduce cada caso a su `errorCode` según los roles que exige el endpoint (tabla de códigos de cuenta).
+- La cuenta sin perfil se resuelve a una `RequestIdentity` con `kind: 'unregistered'` en lugar de crearla. `RolesGuard` traduce cada caso a su `errorCode` según los roles que exige el endpoint (tabla de códigos de cuenta).
 - `search-availability` es dueño de la búsqueda, el detalle público, las zonas, la disponibilidad y el WebSocket. La regla de disponibilidad vive en **funciones puras** (`isOpenNow`, `availabilityLevel`) sin dependencias de Nest ni de la base, con la hora inyectable para las pruebas, más un `AvailabilityService` **exportado** para el Sprint 3.
 - Lectura entre módulos: `search-availability` lee restaurantes, horarios y mesas con consultas de solo lectura (query builder por nombre de entidad, como la excepción documentada de `table-logs`). Nunca escribe en tablas de `restaurant-operations`.
 - Eventos: `restaurant-operations` emite eventos internos (EventEmitter2) **después del commit**, solo con `{ restaurantId }`. `search-availability` los escucha, recalcula y envía por el WebSocket. La lógica de mesas no conoce al WebSocket.
