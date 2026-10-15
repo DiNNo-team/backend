@@ -23,6 +23,11 @@ const PARQUE_93 = '55bb0482-be1e-490b-9ba8-7533335d958b';
 const CERRADO = '6c1f3e2a-8b7d-4c5e-9f0a-1b2c3d4e5f60';
 const SIN_UBICACION = '7d2e4f3b-9c8e-4d6f-a01b-2c3d4e5f6071';
 const KENNEDY = '8e3f5a4c-0d9f-4e7a-b12c-3d4e5f607182';
+// Usaquén, more than 5 km from Casa 72: the party size cases.
+const PAREJAS = '9f4a6b5d-1e0a-4f8b-823d-4e5f60718293';
+const GRANDE_OCUPADA = 'a05b7c6e-2f1b-4a9c-934e-5f60718293a4';
+const GRANDE_INACTIVA = 'b16c8d7f-3a2c-4b0d-a45f-60718293a4b5';
+const GRANDE_LIBRE = 'c27d9e8a-4b3d-4c1e-b56a-718293a4b5c6';
 
 // Rows of the restaurant-operations tables, with the entity property names.
 const RESTAURANTS = [
@@ -73,6 +78,42 @@ const RESTAURANTS = [
     latitude: 4.6285,
     longitude: -74.1525,
   },
+  {
+    id: PAREJAS,
+    name: 'Parejas',
+    category: 'italian',
+    address: 'Calle 119 # 6-10, Bogotá',
+    isOpen: true,
+    latitude: 4.6995,
+    longitude: -74.0305,
+  },
+  {
+    id: GRANDE_OCUPADA,
+    name: 'Mesa grande ocupada',
+    category: 'colombian',
+    address: 'Calle 120 # 6-20, Bogotá',
+    isOpen: true,
+    latitude: 4.7,
+    longitude: -74.03,
+  },
+  {
+    id: GRANDE_INACTIVA,
+    name: 'Mesa grande inactiva',
+    category: 'colombian',
+    address: 'Calle 120 # 5-30, Bogotá',
+    isOpen: true,
+    latitude: 4.7005,
+    longitude: -74.0295,
+  },
+  {
+    id: GRANDE_LIBRE,
+    name: 'Mesa grande libre',
+    category: 'colombian',
+    address: 'Calle 121 # 5-40, Bogotá',
+    isOpen: true,
+    latitude: 4.701,
+    longitude: -74.029,
+  },
 ];
 
 // Every restaurant opens Friday 12:00-22:00.
@@ -99,6 +140,47 @@ const TABLES = [
     isActive: true,
   },
   { restaurantId: KENNEDY, capacity: 4, status: 'available', isActive: true },
+  // Usaquén. For a party of 6, only Mesa grande libre has a table: Parejas
+  // only has small free tables, and the big table of the other two is
+  // occupied or inactive.
+  { restaurantId: PAREJAS, capacity: 2, status: 'available', isActive: true },
+  { restaurantId: PAREJAS, capacity: 2, status: 'available', isActive: true },
+  {
+    restaurantId: GRANDE_OCUPADA,
+    capacity: 8,
+    status: 'occupied',
+    isActive: true,
+  },
+  {
+    restaurantId: GRANDE_OCUPADA,
+    capacity: 2,
+    status: 'available',
+    isActive: true,
+  },
+  {
+    restaurantId: GRANDE_INACTIVA,
+    capacity: 8,
+    status: 'available',
+    isActive: false,
+  },
+  {
+    restaurantId: GRANDE_INACTIVA,
+    capacity: 2,
+    status: 'available',
+    isActive: true,
+  },
+  {
+    restaurantId: GRANDE_LIBRE,
+    capacity: 8,
+    status: 'available',
+    isActive: true,
+  },
+  {
+    restaurantId: GRANDE_LIBRE,
+    capacity: 2,
+    status: 'occupied',
+    isActive: true,
+  },
 ];
 
 type Row = Record<string, unknown>;
@@ -217,6 +299,11 @@ const firebaseAuth = {
         );
   },
 };
+
+const CATEGORY_INVALID =
+  'La categoría (category) debe ser una de estas: colombian, italian, mexican, asian, grill, fast_food, healthy, seafood, cafe, other.';
+const PARTY_SIZE_INVALID =
+  'El número de personas (partySize) debe ser un número entero entre 1 y 20.';
 
 const ACCOUNT_MESSAGES = {
   PROFILE_REQUIRED: 'Completa tu perfil para continuar.',
@@ -346,6 +433,68 @@ describe('Search (e2e)', () => {
     });
   });
 
+  describe('filters', () => {
+    const ids = (res: { body: { id: string }[] }) =>
+      res.body.map((restaurant) => restaurant.id);
+
+    it('category=colombian: only the Colombian restaurants', async () => {
+      const res = await get(
+        '/v1/search/restaurants?zone=calle-72&radiusKm=5&category=colombian',
+      ).expect(200);
+
+      // Parque 93 (grill) is in the radius but not Colombian.
+      expect(ids(res)).toEqual([CASA_72]);
+      expect(res.body[0].category).toBe('colombian');
+    });
+
+    it('category=italian with no Italian restaurant around: []', async () => {
+      await get(
+        '/v1/search/restaurants?zone=calle-72&radiusKm=5&category=italian',
+      )
+        .expect(200)
+        .expect([]);
+    });
+
+    it('without filters, Usaquén has the four restaurants', async () => {
+      const res = await get('/v1/search/restaurants?zone=usaquen').expect(200);
+
+      expect(ids(res).sort()).toEqual(
+        [PAREJAS, GRANDE_OCUPADA, GRANDE_INACTIVA, GRANDE_LIBRE].sort(),
+      );
+    });
+
+    it('partySize leaves out small free tables and big tables that are occupied or inactive', async () => {
+      const res = await get(
+        '/v1/search/restaurants?zone=usaquen&partySize=6',
+      ).expect(200);
+
+      expect(ids(res)).toEqual([GRANDE_LIBRE]);
+    });
+
+    it('partySize=2 keeps all four (each has a free active table for 2)', async () => {
+      const res = await get(
+        '/v1/search/restaurants?zone=usaquen&partySize=2',
+      ).expect(200);
+
+      expect(res.body).toHaveLength(4);
+    });
+
+    it.each([
+      ['colombian', 6, [GRANDE_LIBRE]],
+      ['italian', 2, [PAREJAS]],
+      ['italian', 6, []],
+    ])(
+      'zone + category=%s + partySize=%i',
+      async (category, partySize, expected) => {
+        const res = await get(
+          `/v1/search/restaurants?zone=usaquen&category=${category}&partySize=${partySize}`,
+        ).expect(200);
+
+        expect(ids(res)).toEqual(expected);
+      },
+    );
+  });
+
   describe('accounts', () => {
     it.each(['/v1/search/zones', '/v1/search/restaurants?zone=calle-72'])(
       '%s: a restaurant gets 403 RESTAURANT_ACCOUNT',
@@ -416,9 +565,21 @@ describe('Search (e2e)', () => {
       ],
       [
         'an unknown parameter',
-        'zone=calle-72&category=italian',
-        'El campo "category" no se permite. Quítalo de la solicitud.',
+        'zone=calle-72&restaurantId=x',
+        'El campo "restaurantId" no se permite. Quítalo de la solicitud.',
       ],
+      ['category=pizza', 'zone=calle-72&category=pizza', CATEGORY_INVALID],
+      [
+        'category=Colombian (case matters)',
+        'zone=calle-72&category=Colombian',
+        CATEGORY_INVALID,
+      ],
+      ['partySize=0', 'zone=calle-72&partySize=0', PARTY_SIZE_INVALID],
+      ['partySize=21', 'zone=calle-72&partySize=21', PARTY_SIZE_INVALID],
+      ['partySize=2.5', 'zone=calle-72&partySize=2.5', PARTY_SIZE_INVALID],
+      ['empty partySize', 'zone=calle-72&partySize=', PARTY_SIZE_INVALID],
+      // Number('0x10') is 16: only plain decimals are numbers.
+      ['partySize=0x10', 'zone=calle-72&partySize=0x10', PARTY_SIZE_INVALID],
     ])('%s', async (_case, query, message) => {
       const res = await get(`/v1/search/restaurants?${query}`).expect(400);
 
@@ -466,7 +627,29 @@ describe('Search (e2e)', () => {
     expect(search.get.security).toEqual([{ bearer: [] }]);
     expect(
       search.get.parameters.map((p: { name: string }) => p.name).sort(),
-    ).toEqual(['lat', 'lng', 'radiusKm', 'zone']);
+    ).toEqual(['category', 'lat', 'lng', 'partySize', 'radiusKm', 'zone']);
+    const param = (name: string) =>
+      search.get.parameters.find((p: { name: string }) => p.name === name);
+    const categories = [
+      'colombian',
+      'italian',
+      'mexican',
+      'asian',
+      'grill',
+      'fast_food',
+      'healthy',
+      'seafood',
+      'cafe',
+      'other',
+    ];
+    expect(param('category').schema.enum).toEqual(categories);
+    expect(param('partySize').schema).toEqual(
+      expect.objectContaining({ type: 'integer', minimum: 1, maximum: 20 }),
+    );
+    const resultCategory =
+      res.body.components.schemas.SearchResultDto.properties.category;
+    expect(resultCategory.enum).toEqual(categories);
+    expect(resultCategory.nullable).toBe(true);
     expect(
       Object.keys(res.body.components.schemas.SearchResultDto.properties),
     ).toEqual([

@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { RestaurantCategory } from '../../../restaurant-operations/index.js';
+import {
+  RESTAURANT_CATEGORIES,
+  type RestaurantCategory,
+} from '../../../restaurant-operations/index.js';
 import type { AvailabilityLevel } from '../../availability/availability.types.js';
 import { ZONE_IDS, type Zone, type ZoneId } from '../zones.js';
 
@@ -41,9 +44,9 @@ export class SearchResultDto {
 
   @ApiProperty({
     description:
-      'Categoría del contrato (colombian, italian, mexican, asian, grill, fast_food, healthy, seafood, cafe, other). null solo en restaurantes creados antes del registro completo.',
+      'Categoría del restaurante. null solo en restaurantes creados antes del registro completo.',
+    enum: RESTAURANT_CATEGORIES,
     nullable: true,
-    type: String,
     example: 'colombian',
   })
   category: RestaurantCategory | null;

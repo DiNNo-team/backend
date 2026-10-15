@@ -69,8 +69,8 @@ export class SearchController {
 
   @Get('restaurants')
   @ApiOperation({
-    summary: 'Buscar restaurantes por ubicación o por zona',
-    description: `Restaurantes dentro del radio (por defecto 2 km) alrededor de la ubicación del comensal (lat y lng) o del centro de una zona (zone), nunca las dos. Solo aparecen los que tienen ubicación, están abiertos ahora (hora de Bogotá) y tienen al menos una mesa activa. Ordenados por distancia, máximo ${SEARCH_RESULTS_LIMIT}. Sin resultados, []. Nunca se expone cuántas mesas hay ni cuántas están libres.`,
+    summary: 'Buscar restaurantes por ubicación o por zona, con filtros',
+    description: `Restaurantes dentro del radio (por defecto 2 km) alrededor de la ubicación del comensal (lat y lng) o del centro de una zona (zone), nunca las dos. Solo aparecen los que tienen ubicación, están abiertos ahora (hora de Bogotá) y tienen al menos una mesa activa. Filtros opcionales y combinables: category (una categoría) y partySize (solo los que tienen una mesa libre y activa para todo el grupo). Ordenados por distancia, máximo ${SEARCH_RESULTS_LIMIT}. Sin resultados, []. Nunca se expone cuántas mesas hay ni cuántas están libres.`,
   })
   @ApiOkResponse({
     description: `Restaurantes del más cercano al más lejano, máximo ${SEARCH_RESULTS_LIMIT}.`,
@@ -79,7 +79,7 @@ export class SearchController {
   })
   @ApiBadRequestResponse({
     description:
-      'Faltan lat y lng o zone, llegan los dos modos, llega solo lat o solo lng, una coordenada no es válida, la zona no existe, radiusKm no es 1, 2, 5 ni 10, o llega un parámetro que no existe. message es una lista.',
+      'Faltan lat y lng o zone, llegan los dos modos, llega solo lat o solo lng, una coordenada no es válida, la zona no existe, radiusKm no es 1, 2, 5 ni 10, category no es de la lista, partySize no es un entero de 1 a 20, o llega un parámetro que no existe. message es una lista.',
     type: ErrorResponseDto,
     examples: {
       bothOrigins: badRequestExample(
@@ -101,6 +101,14 @@ export class SearchController {
       invalidRadius: badRequestExample(
         'Radio fuera de la lista',
         SEARCH_MESSAGES.RADIUS_INVALID,
+      ),
+      invalidCategory: badRequestExample(
+        'Categoría fuera de la lista',
+        SEARCH_MESSAGES.CATEGORY_INVALID,
+      ),
+      invalidPartySize: badRequestExample(
+        'Número de personas inválido',
+        SEARCH_MESSAGES.PARTY_SIZE_INVALID,
       ),
     },
   })

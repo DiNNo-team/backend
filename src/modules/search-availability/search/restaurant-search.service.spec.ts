@@ -1,4 +1,7 @@
-import type { AvailabilityService } from '../availability/availability.service.js';
+import type {
+  AvailabilityService,
+  GetForRestaurantsOptions,
+} from '../availability/availability.service.js';
 import type { AvailabilityResult } from '../availability/availability.types.js';
 import { boundingBox, haversineKm, type GeoPoint } from './geo.js';
 import type {
@@ -50,10 +53,11 @@ function setup(
 ) {
   const reader = { findWithin: vi.fn().mockResolvedValue(candidates) };
   const availability = {
-    getForRestaurants: vi.fn((ids: string[]) =>
-      Promise.resolve(
-        new Map(ids.map((id) => [id, overrides[id] ?? SEARCHABLE])),
-      ),
+    getForRestaurants: vi.fn(
+      (ids: string[], _options?: GetForRestaurantsOptions) =>
+        Promise.resolve(
+          new Map(ids.map((id) => [id, overrides[id] ?? SEARCHABLE])),
+        ),
     ),
   };
   const service = new RestaurantSearchService(
@@ -76,7 +80,9 @@ describe('RestaurantSearchService', () => {
     await service.search(byLocation(5));
 
     expect(reader.findWithin).toHaveBeenCalledTimes(1);
-    expect(reader.findWithin).toHaveBeenCalledWith(boundingBox(CENTER, 5));
+    expect(reader.findWithin).toHaveBeenCalledWith(boundingBox(CENTER, 5), {
+      category: undefined,
+    });
   });
 
   it('searches around the centre of the zone', async () => {
@@ -86,6 +92,7 @@ describe('RestaurantSearchService', () => {
 
     expect(reader.findWithin).toHaveBeenCalledWith(
       boundingBox(zoneCenter('kennedy'), 2),
+      { category: undefined },
     );
   });
 
@@ -110,7 +117,7 @@ describe('RestaurantSearchService', () => {
     const results = await service.search(byLocation(2));
 
     expect(results.map((r) => r.id)).toEqual([uuid(2)]);
-    expect(availability.getForRestaurants).toHaveBeenCalledWith([uuid(2)]);
+    expect(availability.getForRestaurants).toHaveBeenCalledWith([uuid(2)], {});
   });
 
   // Exactly 2 km is left to floating-point noise; 1 m inside must stay.
@@ -223,10 +230,10 @@ describe('RestaurantSearchService', () => {
     await service.search(byLocation(2));
 
     expect(availability.getForRestaurants).toHaveBeenCalledTimes(1);
-    expect(availability.getForRestaurants).toHaveBeenCalledWith([
-      uuid(1),
-      uuid(2),
-    ]);
+    expect(availability.getForRestaurants).toHaveBeenCalledWith(
+      [uuid(1), uuid(2)],
+      {},
+    );
   });
 
   it('does not ask the availability without candidates in the radius', async () => {
@@ -258,5 +265,110 @@ describe('RestaurantSearchService', () => {
     const { service } = setup([candidate(1, 2.004)]);
 
     await expect(service.search(byLocation(2))).resolves.toEqual([]);
+  });
+
+  describe('filters', () => {
+    it('passes the category to the reader, which applies it in SQL', async () => {
+      const { service, reader } = setup([]);
+
+      await service.search({
+        zone: 'calle-72',
+        radiusKm: 2,
+        category: 'italian',
+      });
+
+      expect(reader.findWithin).toHaveBeenCalledTimes(1);
+      expect(reader.findWithin).toHaveBeenCalledWith(
+        boundingBox(zoneCenter('calle-72'), 2),
+        { category: 'italian' },
+      );
+    });
+
+    it('asks the availability once with { partySize }', async () => {
+      const { service, availability } = setup([
+        candidate(1, 0.1),
+        candidate(2, 0.2),
+      ]);
+
+      await service.search({ ...byLocation(), partySize: 6 });
+
+      expect(availability.getForRestaurants).toHaveBeenCalledTimes(1);
+      expect(availability.getForRestaurants).toHaveBeenCalledWith(
+        [uuid(1), uuid(2)],
+        { partySize: 6 },
+      );
+    });
+
+    it('without partySize, asks the availability without that option', async () => {
+      const { service, availability } = setup([candidate(1, 0.1)]);
+
+      await service.search(byLocation());
+
+      const [, options] = availability.getForRestaurants.mock.calls[0];
+      expect(options).toEqual({});
+      expect(options).not.toHaveProperty('partySize');
+    });
+
+    // The reader stand-in filters by category like the SQL does; the
+    // availability stand-in only makes "no table for the party" unsearchable
+    // when partySize arrives, like AvailabilityService does.
+    it('combined: only the restaurant of the category with a table for the party', async () => {
+      const italianNoTable = {
+        ...candidate(1, 0.1),
+        category: 'italian' as const,
+      };
+      const colombianWithTable = candidate(2, 0.2);
+      const italianWithTable = {
+        ...candidate(3, 0.3),
+        category: 'italian' as const,
+      };
+      const all = [italianNoTable, colombianWithTable, italianWithTable];
+      const reader = {
+        findWithin: vi.fn((_box: unknown, filters: { category?: string }) =>
+          Promise.resolve(
+            all.filter(
+              (c) =>
+                filters.category === undefined ||
+                c.category === filters.category,
+            ),
+          ),
+        ),
+      };
+      const availability = {
+        getForRestaurants: vi.fn(
+          (ids: string[], options: { partySize?: number }) =>
+            Promise.resolve(
+              new Map(
+                ids.map((id) => [
+                  id,
+                  options.partySize !== undefined && id === italianNoTable.id
+                    ? {
+                        isOpenNow: true,
+                        availability: 'few' as const,
+                        isSearchable: false,
+                      }
+                    : SEARCHABLE,
+                ]),
+              ),
+            ),
+        ),
+      };
+      const service = new RestaurantSearchService(
+        reader as unknown as RestaurantCandidatesReader,
+        availability as unknown as AvailabilityService,
+      );
+
+      const results = await service.search({
+        ...byLocation(),
+        category: 'italian',
+        partySize: 6,
+      });
+
+      expect(results.map((r) => r.id)).toEqual([italianWithTable.id]);
+      expect(availability.getForRestaurants).toHaveBeenCalledWith(
+        [italianNoTable.id, italianWithTable.id],
+        { partySize: 6 },
+      );
+    });
   });
 });

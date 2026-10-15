@@ -95,17 +95,23 @@ describe('SearchRestaurantsQueryDto', () => {
   });
 
   describe('coordinates', () => {
-    it.each(['abc', '91', '-90.5', '1e3'])('rejects lat=%s', async (lat) => {
-      await expect(messagesFor({ lat, lng: '-74.05' })).resolves.toEqual([
-        SEARCH_MESSAGES.LAT_INVALID,
-      ]);
-    });
+    it.each(['abc', '91', '-90.5', '1e3', '0x10', '1e1', 'Infinity', '+5'])(
+      'rejects lat=%s',
+      async (lat) => {
+        await expect(messagesFor({ lat, lng: '-74.05' })).resolves.toEqual([
+          SEARCH_MESSAGES.LAT_INVALID,
+        ]);
+      },
+    );
 
-    it.each(['abc', '181', '-180.1'])('rejects lng=%s', async (lng) => {
-      await expect(messagesFor({ lat: '4.65', lng })).resolves.toEqual([
-        SEARCH_MESSAGES.LNG_INVALID,
-      ]);
-    });
+    it.each(['abc', '181', '-180.1', '0x10', '1e1', '-Infinity', '+5'])(
+      'rejects lng=%s',
+      async (lng) => {
+        await expect(messagesFor({ lat: '4.65', lng })).resolves.toEqual([
+          SEARCH_MESSAGES.LNG_INVALID,
+        ]);
+      },
+    );
 
     // Number('') is 0: without the check, "?lat=&lng=" would search at (0, 0).
     it.each(['', '  '])(
@@ -128,6 +134,19 @@ describe('SearchRestaurantsQueryDto', () => {
       await expect(validate({ lat: '0', lng: '0' })).resolves.toEqual({
         lat: 0,
         lng: 0,
+        radiusKm: 2,
+      });
+    });
+
+    // 0x10, 1e1 and +5 would be 16, 10 and 5 with Number(): all in range, so
+    // the cases above only fail because of the plain decimal rule.
+    it('accepts plain decimals with spaces around them', async () => {
+      await expect(
+        validate({ lat: ' 4.655671 ', lng: '-74.057006 ', partySize: ' 4 ' }),
+      ).resolves.toEqual({
+        lat: 4.655671,
+        lng: -74.057006,
+        partySize: 4,
         radiusKm: 2,
       });
     });
@@ -161,14 +180,120 @@ describe('SearchRestaurantsQueryDto', () => {
     );
   });
 
-  it.each(['category', 'partySize', 'restaurantId'])(
-    'rejects a parameter that is not in the contract yet: %s',
-    async (field) => {
+  describe('category', () => {
+    it.each(['colombian', 'italian', 'fast_food'])(
+      'accepts category=%s',
+      async (category) => {
+        await expect(validate({ zone: 'calle-72', category })).resolves.toEqual(
+          { zone: 'calle-72', radiusKm: 2, category },
+        );
+      },
+    );
+
+    it.each(['Colombian', 'pizza', '', 'fast-food'])(
+      'rejects category="%s" and lists the valid ones',
+      async (category) => {
+        await expect(
+          messagesFor({ zone: 'calle-72', category }),
+        ).resolves.toEqual([SEARCH_MESSAGES.CATEGORY_INVALID]);
+      },
+    );
+
+    it('the message lists every category', () => {
+      expect(SEARCH_MESSAGES.CATEGORY_INVALID).toBe(
+        'La categoría (category) debe ser una de estas: colombian, italian, mexican, asian, grill, fast_food, healthy, seafood, cafe, other.',
+      );
+    });
+
+    it('rejects two categories (?category=a&category=b)', async () => {
       await expect(
-        messagesFor({ zone: 'calle-72', [field]: 'x' }),
+        messagesFor({ zone: 'calle-72', category: ['colombian', 'italian'] }),
+      ).resolves.toEqual([SEARCH_MESSAGES.CATEGORY_INVALID]);
+    });
+  });
+
+  describe('partySize', () => {
+    it.each([
+      ['1', 1],
+      ['20', 20],
+    ])('accepts partySize=%s', async (partySize, expected) => {
+      await expect(validate({ zone: 'calle-72', partySize })).resolves.toEqual({
+        zone: 'calle-72',
+        radiusKm: 2,
+        partySize: expected,
+      });
+    });
+
+    // '' and '  ' must not become 0, the same rule as lat and lng.
+    it.each([
+      '0',
+      '21',
+      '2.5',
+      'abc',
+      '',
+      '  ',
+      '-1',
+      '0x10',
+      '1e1',
+      'Infinity',
+      '+5',
+    ])('rejects partySize="%s"', async (partySize) => {
+      await expect(
+        messagesFor({ zone: 'calle-72', partySize }),
+      ).resolves.toEqual([SEARCH_MESSAGES.PARTY_SIZE_INVALID]);
+    });
+  });
+
+  describe('combined filters', () => {
+    it('zone + category', async () => {
+      await expect(
+        validate({ zone: 'chapinero', category: 'italian' }),
+      ).resolves.toEqual({
+        zone: 'chapinero',
+        radiusKm: 2,
+        category: 'italian',
+      });
+    });
+
+    it('location + partySize', async () => {
+      await expect(
+        validate({ lat: '4.65', lng: '-74.05', partySize: '4' }),
+      ).resolves.toEqual({ lat: 4.65, lng: -74.05, radiusKm: 2, partySize: 4 });
+    });
+
+    it('location + category + partySize + radiusKm', async () => {
+      await expect(
+        validate({
+          lat: '4.65',
+          lng: '-74.05',
+          category: 'grill',
+          partySize: '6',
+          radiusKm: '5',
+        }),
+      ).resolves.toEqual({
+        lat: 4.65,
+        lng: -74.05,
+        radiusKm: 5,
+        category: 'grill',
+        partySize: 6,
+      });
+    });
+
+    it('reports every invalid filter at once', async () => {
+      await expect(
+        messagesFor({ zone: 'calle-72', category: 'x', partySize: '0' }),
       ).resolves.toEqual([
-        `El campo "${field}" no se permite. Quítalo de la solicitud.`,
+        SEARCH_MESSAGES.CATEGORY_INVALID,
+        SEARCH_MESSAGES.PARTY_SIZE_INVALID,
       ]);
-    },
-  );
+    });
+  });
+
+  it('rejects a parameter that is not in the contract (restaurantId)', async () => {
+    await expect(
+      messagesFor({ zone: 'calle-72', restaurantId: 'x' }),
+    ).resolves.toEqual([
+      'El campo "restaurantId" no se permite. Quítalo de la solicitud.',
+    ]);
+  });
 });

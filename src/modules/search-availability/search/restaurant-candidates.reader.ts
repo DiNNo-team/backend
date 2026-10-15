@@ -38,20 +38,32 @@ export function toCandidate(row: CandidateRow): RestaurantCandidate {
   };
 }
 
+// Filters the database applies, so it never returns rows the search would
+// throw away.
+export interface CandidateFilters {
+  category?: RestaurantCategory;
+}
+
 // The SQL side of the search: one read-only query with the cheap rectangle
-// prefilter. A restaurant without coordinates never matches BETWEEN (NULL),
-// so it is left out here. The exact distance is not its job (geo.ts).
+// prefilter and the category. A restaurant without coordinates never matches
+// BETWEEN (NULL), and one without category never matches a category filter
+// (NULL = 'x' is not true), so both are left out here. The exact distance is
+// not its job (geo.ts).
 @Injectable()
 export class RestaurantCandidatesReader {
   constructor(private readonly dataSource: DataSource) {}
 
-  async findWithin(box: BoundingBox): Promise<RestaurantCandidate[]> {
+  async findWithin(
+    box: BoundingBox,
+    filters: CandidateFilters = {},
+  ): Promise<RestaurantCandidate[]> {
     const rows = await this.dataSource
       .getRepository<CandidateRow>('Restaurant')
       .find({
         where: {
           latitude: Between(box.minLat, box.maxLat),
           longitude: Between(box.minLng, box.maxLng),
+          ...(filters.category !== undefined && { category: filters.category }),
         },
         select: {
           id: true,

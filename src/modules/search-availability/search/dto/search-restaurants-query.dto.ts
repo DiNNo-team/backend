@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   Max,
@@ -9,11 +10,17 @@ import {
   ValidateBy,
   type ValidationArguments,
 } from 'class-validator';
+import {
+  RESTAURANT_CATEGORIES,
+  type RestaurantCategory,
+} from '../../../restaurant-operations/index.js';
 import { ZONE_IDS, type ZoneId } from '../zones.js';
 
 export const SEARCH_RADII_KM = [1, 2, 5, 10] as const;
 export type SearchRadiusKm = (typeof SEARCH_RADII_KM)[number];
 export const DEFAULT_SEARCH_RADIUS_KM: SearchRadiusKm = 2;
+export const MIN_PARTY_SIZE = 1;
+export const MAX_PARTY_SIZE = 20;
 
 export const SEARCH_MESSAGES = {
   BOTH_ORIGINS: 'Busca por tu ubicación o por una zona, no por las dos.',
@@ -24,15 +31,23 @@ export const SEARCH_MESSAGES = {
   ZONE_UNKNOWN:
     'No conocemos esa zona. Usa una de las que da GET /v1/search/zones.',
   RADIUS_INVALID: 'El radio (radiusKm) debe ser 1, 2, 5 o 10.',
+  CATEGORY_INVALID: `La categoría (category) debe ser una de estas: ${RESTAURANT_CATEGORIES.join(', ')}.`,
+  PARTY_SIZE_INVALID: `El número de personas (partySize) debe ser un número entero entre ${MIN_PARTY_SIZE} y ${MAX_PARTY_SIZE}.`,
 } as const;
 
-// Query text to number, like @Type(() => Number), except that an empty or
-// blank value ("?lat=") becomes NaN, which IsNumber rejects, instead of 0.
-export function toCoordinate(value: unknown): number {
-  if (typeof value === 'string' && value.trim() === '') {
+// Plain decimal notation only: optional minus, digits, optional fraction.
+const DECIMAL_NUMBER = /^-?\d+(\.\d+)?$/;
+
+// Query text to number. Only plain decimals are numbers: anything else
+// (empty or blank, "0x10", "1e1", "Infinity", "+5", a repeated parameter)
+// becomes NaN, which IsNumber and IsInt reject with 400. Number() alone would
+// turn "" into 0 and "0x10" into 16.
+export function toNumberOrNaN(value: unknown): number {
+  if (typeof value !== 'string') {
     return NaN;
   }
-  return Number(value);
+  const text = value.trim();
+  return DECIMAL_NUMBER.test(text) ? Number(text) : NaN;
 }
 
 interface SearchOrigin {
@@ -89,7 +104,7 @@ function IsZoneIdOrMissing() {
 }
 
 // Query of GET /v1/search/restaurants. Any other parameter is rejected with
-// 400 by the global ValidationPipe (category and partySize arrive later).
+// 400 by the global ValidationPipe.
 export class SearchRestaurantsQueryDto {
   @ApiPropertyOptional({
     description:
@@ -99,7 +114,7 @@ export class SearchRestaurantsQueryDto {
     example: 4.655671,
   })
   @IsOptional()
-  @Transform(({ value }) => toCoordinate(value))
+  @Transform(({ value }) => toNumberOrNaN(value))
   @IsNumber({}, { message: SEARCH_MESSAGES.LAT_INVALID })
   @Min(-90, { message: SEARCH_MESSAGES.LAT_INVALID })
   @Max(90, { message: SEARCH_MESSAGES.LAT_INVALID })
@@ -112,7 +127,7 @@ export class SearchRestaurantsQueryDto {
     example: -74.057006,
   })
   @IsOptional()
-  @Transform(({ value }) => toCoordinate(value))
+  @Transform(({ value }) => toNumberOrNaN(value))
   @IsNumber({}, { message: SEARCH_MESSAGES.LNG_INVALID })
   @Min(-180, { message: SEARCH_MESSAGES.LNG_INVALID })
   @Max(180, { message: SEARCH_MESSAGES.LNG_INVALID })
@@ -138,4 +153,29 @@ export class SearchRestaurantsQueryDto {
   @Type(() => Number)
   @IsIn(SEARCH_RADII_KM, { message: SEARCH_MESSAGES.RADIUS_INVALID })
   radiusKm: SearchRadiusKm = DEFAULT_SEARCH_RADIUS_KM;
+
+  @ApiPropertyOptional({
+    description:
+      'Solo restaurantes de esta categoría (una por búsqueda). Un restaurante sin categoría no aparece cuando se filtra.',
+    enum: RESTAURANT_CATEGORIES,
+    example: 'colombian',
+  })
+  @IsOptional()
+  @IsIn(RESTAURANT_CATEGORIES, { message: SEARCH_MESSAGES.CATEGORY_INVALID })
+  category?: RestaurantCategory;
+
+  @ApiPropertyOptional({
+    description:
+      'Número de personas. Solo aparecen los restaurantes con al menos una mesa libre y activa para todo el grupo.',
+    type: 'integer',
+    minimum: MIN_PARTY_SIZE,
+    maximum: MAX_PARTY_SIZE,
+    example: 4,
+  })
+  @IsOptional()
+  @Transform(({ value }) => toNumberOrNaN(value))
+  @IsInt({ message: SEARCH_MESSAGES.PARTY_SIZE_INVALID })
+  @Min(MIN_PARTY_SIZE, { message: SEARCH_MESSAGES.PARTY_SIZE_INVALID })
+  @Max(MAX_PARTY_SIZE, { message: SEARCH_MESSAGES.PARTY_SIZE_INVALID })
+  partySize?: number;
 }

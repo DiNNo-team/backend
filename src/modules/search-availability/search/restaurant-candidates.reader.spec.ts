@@ -75,4 +75,42 @@ describe('RestaurantCandidatesReader', () => {
     });
     expect(candidates).toEqual([EXPECTED]);
   });
+
+  describe('category filter', () => {
+    function readerWith(rows: CandidateRow[]) {
+      const find = vi.fn().mockResolvedValue(rows);
+      const reader = new RestaurantCandidatesReader({
+        getRepository: () => ({ find }),
+      } as unknown as DataSource);
+      return { reader, find };
+    }
+    const BOX = { minLat: 4.64, maxLat: 4.67, minLng: -74.07, maxLng: -74.04 };
+
+    it('adds the category equality to the same query', async () => {
+      const { reader, find } = readerWith([ROW]);
+
+      await reader.findWithin(BOX, { category: 'colombian' });
+
+      expect(find).toHaveBeenCalledTimes(1);
+      expect(find.mock.calls[0][0].where).toEqual({
+        latitude: Between(4.64, 4.67),
+        longitude: Between(-74.07, -74.04),
+        category: 'colombian',
+      });
+    });
+
+    it.each([
+      ['no filters', undefined],
+      ['an undefined category', { category: undefined }],
+    ])(
+      'leaves the category out of the query with %s',
+      async (_case, filters) => {
+        const { reader, find } = readerWith([ROW]);
+
+        await reader.findWithin(BOX, filters);
+
+        expect(find.mock.calls[0][0].where).not.toHaveProperty('category');
+      },
+    );
+  });
 });
