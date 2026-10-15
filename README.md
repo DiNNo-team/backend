@@ -53,13 +53,15 @@ Todas están documentadas con placeholders en [`.env.example`](.env.example):
 | `DATABASE_URL` | **Sí** | Cadena de conexión de PostgreSQL. | Panel de **Neon** → tu proyecto → "Connection string". | `postgresql://usuario:password@host/nombre_db?sslmode=require` |
 | `REDIS_URL` | **Sí** | Cadena de conexión de Redis. | Panel de **Upstash** → tu base de datos → "Connect" (usar la URL `rediss://...` con TLS). | `redis://default:password@host:puerto` |
 | `FIREBASE_PROJECT_ID` | **Sí**, si el usuario de desarrollo está apagado (siempre en Render) | ID del proyecto de Firebase con el que se verifican los ID tokens. No es un secreto. | Consola de **Firebase** → configuración del proyecto. | `mi-proyecto-firebase` |
+| `GOOGLE_GEOCODING_API_KEY` | No | Llave de Google Geocoding API para `GET /v1/geocode`. **Secreto.** Sin ella la app arranca y esa ruta responde `503 GEOCODING_UNAVAILABLE`. | Consola de **Google Cloud** → APIs y servicios → Credenciales (restringida a Geocoding API). La entrega el equipo de Google Cloud por canal privado. | *(sin valor en `.env.example`)* |
 | `DEV_USER_ENABLED` | No (por defecto apagado) | Activa el usuario de desarrollo. **Solo local:** se apaga solo en Render aunque esté en `true`. | La defines tú en tu `.env`. **No la definas en Render.** | `true` |
 | `DEV_USER_ID` | Si `DEV_USER_ENABLED=true` | UUID (tabla `users`) del usuario de desarrollo por defecto. | Lo imprime `npm run seed`. | `3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f` |
 
 La app usa `ConfigService.getOrThrow()` para leer `DATABASE_URL` y `REDIS_URL`: si falta
 cualquiera de las dos, **no arranca**. Lo mismo pasa con `FIREBASE_PROJECT_ID` cuando el
 usuario de desarrollo está apagado. `FIREBASE_AUTH_EMULATOR_HOST` es opcional, solo para el
-emulador de Firebase en local, y nunca se define en Render.
+emulador de Firebase en local, y nunca se define en Render. `GOOGLE_GEOCODING_API_KEY` también es
+opcional: sin ella solo `GET /v1/geocode` deja de funcionar (responde `503`).
 
 ## 4. Arquitectura
 
@@ -173,7 +175,7 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 - Desplegado en **Render** como *Web Service*.
 - **Auto-deploy activado**: cada push a la rama `develop` dispara un nuevo despliegue.
 - **URL de producción:** https://dinno-backend.onrender.com
-- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS` y `FIREBASE_PROJECT_ID`)
+- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID` y `GOOGLE_GEOCODING_API_KEY`)
   se configuran directamente en el dashboard de Render — **no viven en el repositorio**.
   `FIREBASE_PROJECT_ID` es obligatoria porque en Render el usuario de desarrollo está apagado:
   si falta, la app no arranca. `PORT` no se define ahí: Render lo asigna en tiempo de ejecución.

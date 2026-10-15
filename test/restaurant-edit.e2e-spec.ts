@@ -439,7 +439,14 @@ describe('Restaurant edit (e2e)', () => {
     ).toBe('#/components/schemas/RestaurantProfileResponseDto');
     expect(
       Object.keys(res.body.components.schemas.UpdateRestaurantDto.properties),
-    ).toEqual(['name', 'category', 'address', 'schedules']);
+    ).toEqual([
+      'name',
+      'category',
+      'address',
+      'latitude',
+      'longitude',
+      'schedules',
+    ]);
     expect(
       res.body.components.schemas.UpdateRestaurantDto.required ?? [],
     ).toEqual([]);

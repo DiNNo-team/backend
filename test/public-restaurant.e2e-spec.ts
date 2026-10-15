@@ -384,6 +384,8 @@ describe('Public restaurant detail (e2e)', () => {
           name: 'Casa 72',
           category: 'colombian',
           address: ADDRESS,
+          latitude: 4.655671,
+          longitude: -74.057006,
           schedules: [
             {
               dayOfWeek: 1,

@@ -163,6 +163,8 @@ describe('Restaurant registration (e2e)', () => {
         name: 'La Esquina de Ana',
         category: 'colombian',
         address: 'Calle 72 # 10-34, Bogotá',
+        latitude: null,
+        longitude: null,
         schedules: [
           {
             dayOfWeek: 1,

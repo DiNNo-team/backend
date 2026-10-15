@@ -49,6 +49,9 @@ export class RestaurantRegistrationService {
           name: dto.name,
           category: dto.category,
           address: dto.address,
+          // Optional (Sprint 2): both or neither, already validated.
+          latitude: dto.latitude ?? null,
+          longitude: dto.longitude ?? null,
         }),
       );
       const schedules = await manager.save(

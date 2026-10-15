@@ -37,12 +37,32 @@ export class RestaurantResponseDto {
   })
   address: string | null;
 
+  @ApiProperty({
+    description:
+      'Latitud con hasta 6 decimales. null si el restaurante todavía no tiene ubicación: la web muestra «Completa tu ubicación».',
+    type: Number,
+    nullable: true,
+    example: 4.655671,
+  })
+  latitude: number | null;
+
+  @ApiProperty({
+    description:
+      'Longitud con hasta 6 decimales. null si el restaurante todavía no tiene ubicación.',
+    type: Number,
+    nullable: true,
+    example: -74.057006,
+  })
+  longitude: number | null;
+
   static fromEntity(restaurant: Restaurant): RestaurantResponseDto {
     return {
       id: restaurant.id,
       name: restaurant.name,
       category: restaurant.category,
       address: restaurant.address,
+      latitude: restaurant.latitude,
+      longitude: restaurant.longitude,
     };
   }
 }
