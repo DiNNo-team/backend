@@ -206,7 +206,7 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 
 - El esquema vigente, sus reglas y las decisiones están en [`docs/database.md`](docs/database.md).
 - **Las migraciones las corre solo Elizabeth**: en el Sprint 1 compartimos una sola base en
-  Neon. El porqué y cómo crear la tuya está en el [CLAUDE.md](CLAUDE.md) (sección 10,
+  Neon. El porqué y cómo crear la tuya está en el [CLAUDE.md](CLAUDE.md) (sección 11,
   "Migraciones").
 - **Datos de prueba:** `npm run seed` compila y crea, si no existen:
   - un usuario **sin restaurante** (para probar el onboarding);
