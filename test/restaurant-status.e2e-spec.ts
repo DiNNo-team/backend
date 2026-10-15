@@ -11,25 +11,30 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { UserRole } from './../src/modules/identity-access/index.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const OTHER_OWNER_ID = '7c6b5a49-3827-4615-a4b3-c2d1e0f9a8b7';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
-const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
+const DINER_USER_ID = '00000000-0000-4000-8000-000000000001';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const OTHER_RESTAURANT_ID = '1d2c3b4a-5f6e-4d7c-8b9a-0a1b2c3d4e5f';
 
 const users = [
-  { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
+  {
+    id: OWNER_ID,
+    role: UserRole.RESTAURANT_ADMIN,
+    restaurantId: RESTAURANT_ID,
+  },
   {
     id: OTHER_OWNER_ID,
-    role: 'restaurant_admin',
+    role: UserRole.RESTAURANT_ADMIN,
     restaurantId: OTHER_RESTAURANT_ID,
   },
-  { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
+  { id: NEWCOMER_ID, role: UserRole.RESTAURANT_ADMIN, restaurantId: null },
   {
-    id: INVALID_ROLE_USER_ID,
-    role: 'unknown-role',
+    id: DINER_USER_ID,
+    role: UserRole.DINER,
     restaurantId: RESTAURANT_ID,
   },
 ];
@@ -89,6 +94,8 @@ describe('Restaurant status (e2e)', () => {
       category: null,
       address: null,
       isOpen: true,
+      latitude: null,
+      longitude: null,
       createdAt: new Date('2026-10-04T12:00:00Z'),
       updatedAt: new Date('2026-10-04T12:00:00Z'),
     });
@@ -256,23 +263,20 @@ describe('Restaurant status (e2e)', () => {
           .patch('/v1/restaurants/me/status')
           .send({ isOpen: false }),
     ],
-  ])(
-    '%s returns 403 without errorCode for an invalid role',
-    async (_method, send) => {
-      const res = await send()
-        .set('x-dev-user-id', INVALID_ROLE_USER_ID)
-        .expect(403);
+  ])('%s returns 403 DINER_ACCOUNT for a diner', async (_method, send) => {
+    const res = await send().set('x-dev-user-id', DINER_USER_ID).expect(403);
 
-      expect(res.body).toEqual({
-        statusCode: 403,
-        error: 'Forbidden',
-        message: 'No tienes acceso a esta sección.',
-      });
-      expect(restaurants.findOneBy).not.toHaveBeenCalled();
-      expect(restaurants.update).not.toHaveBeenCalled();
-      expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
-    },
-  );
+    expect(res.body).toEqual({
+      statusCode: 403,
+      error: 'Forbidden',
+      message:
+        'Esta es una cuenta de comensal. Para buscar mesa, usa la app DiNNo.',
+      errorCode: 'DINER_ACCOUNT',
+    });
+    expect(restaurants.findOneBy).not.toHaveBeenCalled();
+    expect(restaurants.update).not.toHaveBeenCalled();
+    expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
+  });
 
   it.each([
     [

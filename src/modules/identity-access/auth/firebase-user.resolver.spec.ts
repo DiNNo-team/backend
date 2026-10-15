@@ -5,6 +5,7 @@ import type { User } from '../users/user.entity.js';
 import type { UsersService } from '../users/users.service.js';
 import type { FirebaseAuthFactory } from './firebase-admin.provider.js';
 import { FirebaseUserResolver } from './firebase-user.resolver.js';
+import { UserRole } from '../roles/user-role.js';
 
 const SESSION_EXPIRED_MESSAGE = 'Tu sesión terminó. Inicia sesión de nuevo.';
 const EMAIL_NOT_VERIFIED_MESSAGE = 'Verifica tu correo para continuar.';
@@ -75,7 +76,7 @@ describe('FirebaseUserResolver', () => {
       id: USER_ID,
       firebaseUid: FIREBASE_UID,
       email: EMAIL,
-      role: 'restaurant_admin',
+      role: UserRole.RESTAURANT_ADMIN,
       restaurantId: null,
     } as User;
     auth.verifyIdToken.mockResolvedValue(decodedToken());
@@ -84,9 +85,12 @@ describe('FirebaseUserResolver', () => {
     await expect(
       resolver.resolve(requestWith('Bearer valid-token')),
     ).resolves.toEqual({
-      userId: USER_ID,
-      restaurantId: null,
-      role: 'restaurant_admin',
+      kind: 'registered',
+      user: {
+        userId: USER_ID,
+        restaurantId: null,
+        role: UserRole.RESTAURANT_ADMIN,
+      },
     });
     expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
     expect(usersService.findByEmail).not.toHaveBeenCalled();
@@ -186,7 +190,7 @@ describe('FirebaseUserResolver', () => {
       id: USER_ID,
       firebaseUid: FIREBASE_UID,
       email: EMAIL,
-      role: 'restaurant_admin',
+      role: UserRole.RESTAURANT_ADMIN,
       restaurantId: null,
     } as User;
     auth.verifyIdToken.mockResolvedValue(decodedToken());
@@ -194,7 +198,7 @@ describe('FirebaseUserResolver', () => {
 
     await expect(
       resolver.resolve(requestWith('bEaReR valid-token')),
-    ).resolves.toMatchObject({ userId: USER_ID });
+    ).resolves.toMatchObject({ user: { userId: USER_ID } });
     expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
   });
 
@@ -204,7 +208,7 @@ describe('FirebaseUserResolver', () => {
       id: USER_ID,
       firebaseUid: FIREBASE_UID,
       email: EMAIL,
-      role: 'restaurant_admin',
+      role: UserRole.RESTAURANT_ADMIN,
       restaurantId: null,
     } as User;
     auth.verifyIdToken.mockResolvedValue(decodedToken());
@@ -212,7 +216,7 @@ describe('FirebaseUserResolver', () => {
 
     await expect(
       resolver.resolve(requestWith('  Bearer   valid-token  ')),
-    ).resolves.toMatchObject({ userId: USER_ID });
+    ).resolves.toMatchObject({ user: { userId: USER_ID } });
     expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
   });
 
@@ -228,32 +232,45 @@ describe('FirebaseUserResolver', () => {
     expect(usersService.create).not.toHaveBeenCalled();
   });
 
-  it('creates a user with the default role when no UID or email row exists', async () => {
+  it('returns an unregistered identity, never creating a user, when no UID or email row exists', async () => {
     const { auth, resolver, usersService } = createResolver();
-    const user = {
-      id: USER_ID,
-      firebaseUid: FIREBASE_UID,
-      email: EMAIL,
-      role: 'restaurant_admin',
-      restaurantId: null,
-    } as User;
-    auth.verifyIdToken.mockResolvedValue(decodedToken());
-    usersService.create.mockResolvedValue(user);
+    auth.verifyIdToken.mockResolvedValue(
+      decodedToken({ name: '  Ana Gómez ' }),
+    );
 
     await expect(
       resolver.resolve(requestWith('Bearer valid-token')),
     ).resolves.toEqual({
-      userId: USER_ID,
-      restaurantId: null,
-      role: 'restaurant_admin',
+      kind: 'unregistered',
+      firebase: {
+        uid: FIREBASE_UID,
+        email: EMAIL,
+        name: 'Ana Gómez',
+        emailVerified: true,
+      },
     });
-    expect(usersService.create).toHaveBeenCalledWith({
-      firebaseUid: FIREBASE_UID,
-      email: EMAIL,
-      role: 'restaurant_admin',
-      restaurantId: null,
-    });
+    expect(usersService.findByEmail).toHaveBeenCalledWith(EMAIL);
+    expect(usersService.create).not.toHaveBeenCalled();
+    expect(usersService.linkFirebaseUid).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['no name', undefined],
+    ['a blank name', '   '],
+  ])(
+    'gives a null name to an unregistered identity whose token has %s',
+    async (_case, name) => {
+      const { auth, resolver } = createResolver();
+      auth.verifyIdToken.mockResolvedValue(decodedToken({ name }));
+
+      await expect(
+        resolver.resolve(requestWith('Bearer valid-token')),
+      ).resolves.toMatchObject({
+        kind: 'unregistered',
+        firebase: { name: null },
+      });
+    },
+  );
 
   it('links an existing email row only when its email is verified', async () => {
     const { auth, resolver, usersService } = createResolver();
@@ -261,7 +278,7 @@ describe('FirebaseUserResolver', () => {
       id: USER_ID,
       firebaseUid: null,
       email: EMAIL,
-      role: 'restaurant_admin',
+      role: UserRole.RESTAURANT_ADMIN,
       restaurantId: null,
     } as User;
     const linkedUser = { ...existingUser, firebaseUid: FIREBASE_UID } as User;
@@ -271,7 +288,7 @@ describe('FirebaseUserResolver', () => {
 
     await expect(
       resolver.resolve(requestWith('Bearer valid-token')),
-    ).resolves.toMatchObject({ userId: USER_ID });
+    ).resolves.toMatchObject({ kind: 'registered', user: { userId: USER_ID } });
     expect(usersService.linkFirebaseUid).toHaveBeenCalledWith(
       existingUser,
       FIREBASE_UID,
@@ -372,7 +389,7 @@ describe('FirebaseUserResolver', () => {
       id: USER_ID,
       firebaseUid: FIREBASE_UID,
       email: EMAIL,
-      role: 'restaurant_admin',
+      role: UserRole.RESTAURANT_ADMIN,
       restaurantId: null,
     } as User;
     auth.verifyIdToken.mockResolvedValue(
@@ -383,43 +400,13 @@ describe('FirebaseUserResolver', () => {
     await expect(
       resolver.resolve(requestWith('Bearer valid-token')),
     ).resolves.toEqual({
-      userId: USER_ID,
-      restaurantId: null,
-      role: 'restaurant_admin',
+      kind: 'registered',
+      user: {
+        userId: USER_ID,
+        restaurantId: null,
+        role: UserRole.RESTAURANT_ADMIN,
+      },
     });
     expect(usersService.findByEmail).not.toHaveBeenCalled();
-  });
-
-  it('rechecks by UID after a unique conflict while creating', async () => {
-    const { auth, resolver, usersService } = createResolver();
-    const user = {
-      id: USER_ID,
-      firebaseUid: FIREBASE_UID,
-      email: EMAIL,
-      role: 'restaurant_admin',
-      restaurantId: null,
-    } as User;
-    auth.verifyIdToken.mockResolvedValue(decodedToken());
-    usersService.create.mockRejectedValue({ code: '23505' });
-    usersService.findByFirebaseUid
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(user);
-
-    await expect(
-      resolver.resolve(requestWith('Bearer valid-token')),
-    ).resolves.toMatchObject({ userId: USER_ID });
-    expect(usersService.findByFirebaseUid).toHaveBeenCalledTimes(2);
-  });
-
-  it('propagates creation errors other than unique violations', async () => {
-    const { auth, resolver, usersService } = createResolver();
-    const error = new Error('database unavailable');
-    auth.verifyIdToken.mockResolvedValue(decodedToken());
-    usersService.create.mockRejectedValue(error);
-
-    await expect(
-      resolver.resolve(requestWith('Bearer valid-token')),
-    ).rejects.toBe(error);
-    expect(usersService.findByFirebaseUid).toHaveBeenCalledTimes(1);
   });
 });

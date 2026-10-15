@@ -4,6 +4,7 @@ import type { Request } from 'express';
 import type { Repository } from 'typeorm';
 import type { User } from '../users/user.entity.js';
 import { DEV_USER_HEADER, DevUserResolver } from './dev-user.resolver.js';
+import { UserRole } from '../roles/user-role.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
@@ -12,17 +13,25 @@ const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 
 const owner = {
   id: OWNER_ID,
-  role: 'restaurant_admin',
+  role: UserRole.RESTAURANT_ADMIN,
   restaurantId: RESTAURANT_ID,
 } as User;
 const newcomer = {
   id: NEWCOMER_ID,
-  role: 'restaurant_admin',
+  role: UserRole.RESTAURANT_ADMIN,
+  restaurantId: null,
+} as User;
+const DINER_ID = '7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a';
+const diner = {
+  id: DINER_ID,
+  role: UserRole.DINER,
   restaurantId: null,
 } as User;
 
 function createResolver(env: Record<string, string>) {
-  const usersById = new Map([owner, newcomer].map((user) => [user.id, user]));
+  const usersById = new Map(
+    [owner, newcomer, diner].map((user) => [user.id, user]),
+  );
   const users = {
     findOneBy: vi.fn(({ id }: { id: string }) =>
       Promise.resolve(usersById.get(id) ?? null),
@@ -47,9 +56,21 @@ describe('DevUserResolver', () => {
     const { resolver } = createResolver(devEnv);
 
     await expect(resolver.resolve(requestWith())).resolves.toEqual({
-      userId: OWNER_ID,
-      restaurantId: RESTAURANT_ID,
-      role: 'restaurant_admin',
+      kind: 'registered',
+      user: {
+        userId: OWNER_ID,
+        restaurantId: RESTAURANT_ID,
+        role: UserRole.RESTAURANT_ADMIN,
+      },
+    });
+  });
+
+  it('returns a diner row with its own role', async () => {
+    const { resolver } = createResolver({ ...devEnv, DEV_USER_ID: DINER_ID });
+
+    await expect(resolver.resolve(requestWith())).resolves.toEqual({
+      kind: 'registered',
+      user: { userId: DINER_ID, restaurantId: null, role: UserRole.DINER },
     });
   });
 
@@ -59,19 +80,21 @@ describe('DevUserResolver', () => {
       DEV_USER_ID: NEWCOMER_ID,
     });
 
-    const user = await resolver.resolve(requestWith());
+    const identity = await resolver.resolve(requestWith());
 
-    expect(user.restaurantId).toBeNull();
+    expect(
+      identity.kind === 'registered' && identity.user.restaurantId,
+    ).toBeNull();
   });
 
   it('switches user with the x-dev-user-id header', async () => {
     const { resolver, users } = createResolver(devEnv);
 
-    const user = await resolver.resolve(
+    const identity = await resolver.resolve(
       requestWith({ [DEV_USER_HEADER]: NEWCOMER_ID }),
     );
 
-    expect(user.userId).toBe(NEWCOMER_ID);
+    expect(identity).toMatchObject({ user: { userId: NEWCOMER_ID } });
     expect(users.findOneBy).toHaveBeenCalledWith({ id: NEWCOMER_ID });
   });
 

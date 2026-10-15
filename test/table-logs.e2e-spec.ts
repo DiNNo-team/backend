@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
+import type { FindOperator } from 'typeorm';
 import { configureApp } from './../src/app.setup.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
@@ -12,11 +13,12 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import type { TableLogStatus } from './../src/modules/restaurant-operations/tables/table-status-log.js';
+import { UserRole } from './../src/modules/identity-access/index.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const OTHER_OWNER_ID = '7c6b5a49-3827-4615-a4b3-c2d1e0f9a8b7';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
-const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
+const DINER_USER_ID = '00000000-0000-4000-8000-000000000001';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const OTHER_RESTAURANT_ID = '1d2c3b4a-5f6e-4d7c-8b9a-0a1b2c3d4e5f';
 const TABLE_01 = '3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f';
@@ -30,25 +32,25 @@ const users = [
   {
     id: OWNER_ID,
     email: 'admin@casa72.co',
-    role: 'restaurant_admin',
+    role: UserRole.RESTAURANT_ADMIN,
     restaurantId: RESTAURANT_ID,
   },
   {
     id: OTHER_OWNER_ID,
     email: 'otro@example.com',
-    role: 'restaurant_admin',
+    role: UserRole.RESTAURANT_ADMIN,
     restaurantId: OTHER_RESTAURANT_ID,
   },
   {
     id: NEWCOMER_ID,
     email: 'nuevo@example.com',
-    role: 'restaurant_admin',
+    role: UserRole.RESTAURANT_ADMIN,
     restaurantId: null,
   },
   {
-    id: INVALID_ROLE_USER_ID,
+    id: DINER_USER_ID,
     email: 'rol@example.com',
-    role: 'unknown-role',
+    role: UserRole.DINER,
     restaurantId: RESTAURANT_ID,
   },
 ];
@@ -161,7 +163,7 @@ function createLogsRepository(stored: () => StoredLog[]) {
             previousStatus: entry.previousStatus,
             newStatus: entry.newStatus,
             changedAt: entry.changedAt,
-            userEmail: users.find(({ id }) => id === entry.userId)?.email,
+            userId: entry.userId,
           }));
         return Promise.resolve(rows);
       },
@@ -174,6 +176,16 @@ function createLogsRepository(stored: () => StoredLog[]) {
     requested,
   };
 }
+
+// The users lookup of the authors' emails: one query with every id.
+const usersFind = vi.fn(
+  ({ where }: { where: { id: FindOperator<string[]> } }) =>
+    Promise.resolve(
+      users
+        .filter((user) => where.id.value.includes(user.id))
+        .map(({ id, email }) => ({ id, email })),
+    ),
+);
 
 // Prueba el contrato HTTP de GET /v1/table-logs sin PostgreSQL.
 describe('Table logs (e2e)', () => {
@@ -202,6 +214,8 @@ describe('Table logs (e2e)', () => {
       .useValue({
         findOneBy: ({ id }: { id: string }) =>
           Promise.resolve(users.find((user) => user.id === id) ?? null),
+        // UsersService.findEmailsByIds: where: { id: In([...]) }.
+        find: usersFind,
       })
       .overrideProvider(getRepositoryToken(Restaurant))
       .useValue({})
@@ -251,6 +265,14 @@ describe('Table logs (e2e)', () => {
       changedAt: '2026-10-08T17:00:00.000Z',
       userEmail: 'admin@casa72.co',
     });
+  });
+
+  it('resolves the authors emails in one query, not one per row', async () => {
+    usersFind.mockClear();
+
+    await get().expect(200);
+
+    expect(usersFind).toHaveBeenCalledTimes(1);
   });
 
   it('returns [] when the restaurant has no logs', async () => {
@@ -358,15 +380,15 @@ describe('Table logs (e2e)', () => {
     expect(logs.repository.createQueryBuilder).not.toHaveBeenCalled();
   });
 
-  it('returns 403 without errorCode for an invalid role', async () => {
-    const res = await get()
-      .set('x-dev-user-id', INVALID_ROLE_USER_ID)
-      .expect(403);
+  it('returns 403 DINER_ACCOUNT for a diner', async () => {
+    const res = await get().set('x-dev-user-id', DINER_USER_ID).expect(403);
 
     expect(res.body).toEqual({
       statusCode: 403,
       error: 'Forbidden',
-      message: 'No tienes acceso a esta sección.',
+      message:
+        'Esta es una cuenta de comensal. Para buscar mesa, usa la app DiNNo.',
+      errorCode: 'DINER_ACCOUNT',
     });
     expect(logs.repository.createQueryBuilder).not.toHaveBeenCalled();
   });

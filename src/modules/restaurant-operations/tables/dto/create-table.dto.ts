@@ -1,26 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsInt,
-  IsNotEmpty,
-  IsString,
-  Matches,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
 
-import { MaxCodePoints } from '../../shared/max-code-points.js';
+import { MaxCodePoints } from '../../../../common/validation/max-code-points.js';
+import { NoInvisibleCharacters } from '../../../../common/validation/no-invisible-characters.js';
 import {
   IDENTIFIER_INVISIBLE_CHARACTERS,
   IDENTIFIER_REQUIRED,
   IDENTIFIER_TOO_LONG,
   TABLE_IDENTIFIER_MAX_LENGTH,
 } from '../table-identifier.js';
-
-// Control and format characters (Unicode category C: zero-width spaces,
-// bidirectional marks…) would make "04" and "04\u200B" two different tables
-// that look the same.
-const NO_INVISIBLE_CHARACTERS = /^\P{C}*$/u;
 
 export { TABLE_IDENTIFIER_MAX_LENGTH };
 export const TABLE_CAPACITY_MIN = 1;
@@ -46,14 +35,14 @@ export class CreateTableDto {
   )
   @IsString({ message: IDENTIFIER_REQUIRED })
   @IsNotEmpty({ message: IDENTIFIER_REQUIRED })
-  // MaxCodePoints and Matches also fail on non-strings; there the only
+  // MaxCodePoints and NoInvisibleCharacters also fail on non-strings; there the only
   // useful message is IDENTIFIER_REQUIRED (the pipe drops the repeated one).
   // Counted in code points, like the varchar(50) column (10 fits well).
   @MaxCodePoints(TABLE_IDENTIFIER_MAX_LENGTH, {
     message: ({ value }) =>
       typeof value === 'string' ? IDENTIFIER_TOO_LONG : IDENTIFIER_REQUIRED,
   })
-  @Matches(NO_INVISIBLE_CHARACTERS, {
+  @NoInvisibleCharacters({
     message: ({ value }) =>
       typeof value === 'string'
         ? IDENTIFIER_INVISIBLE_CHARACTERS

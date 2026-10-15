@@ -7,7 +7,10 @@ import type { App } from 'supertest/types.js';
 import { configureApp } from './../src/app.setup.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
-import { UsersService } from './../src/modules/identity-access/index.js';
+import {
+  UsersService,
+  UserRole,
+} from './../src/modules/identity-access/index.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
@@ -18,18 +21,24 @@ const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const NEW_RESTAURANT_ID = '6e5d4c3b-2a19-4807-b6a5-948372615049';
 
-const INVALID_ROLE_USER_ID = '00000000-0000-4000-8000-000000000001';
+const DINER_USER_ID = '00000000-0000-4000-8000-000000000001';
 
 const users = [
-  { id: OWNER_ID, role: 'restaurant_admin', restaurantId: RESTAURANT_ID },
-  { id: NEWCOMER_ID, role: 'restaurant_admin', restaurantId: null },
-  { id: INVALID_ROLE_USER_ID, role: 'unknown-role', restaurantId: null },
+  {
+    id: OWNER_ID,
+    role: UserRole.RESTAURANT_ADMIN,
+    restaurantId: RESTAURANT_ID,
+  },
+  { id: NEWCOMER_ID, role: UserRole.RESTAURANT_ADMIN, restaurantId: null },
+  { id: DINER_USER_ID, role: UserRole.DINER, restaurantId: null },
 ];
 
-const ROLE_FORBIDDEN_BODY = {
+const DINER_ACCOUNT_BODY = {
   statusCode: 403,
   error: 'Forbidden',
-  message: 'No tienes acceso a esta sección.',
+  message:
+    'Esta es una cuenta de comensal. Para buscar mesa, usa la app DiNNo.',
+  errorCode: 'DINER_ACCOUNT',
 };
 
 const REGISTRATION = {
@@ -332,13 +341,11 @@ describe('Restaurant registration (e2e)', () => {
   ] as const;
 
   it.each(sendToEachRoute)(
-    '%s returns 403 without errorCode for an invalid role',
+    '%s returns 403 DINER_ACCOUNT for a diner',
     async (_route, send) => {
-      const res = await send()
-        .set('x-dev-user-id', INVALID_ROLE_USER_ID)
-        .expect(403);
+      const res = await send().set('x-dev-user-id', DINER_USER_ID).expect(403);
 
-      expect(res.body).toEqual(ROLE_FORBIDDEN_BODY);
+      expect(res.body).toEqual(DINER_ACCOUNT_BODY);
       expect(restaurants.manager.transaction).not.toHaveBeenCalled();
       expect(restaurants.findOneBy).not.toHaveBeenCalled();
     },

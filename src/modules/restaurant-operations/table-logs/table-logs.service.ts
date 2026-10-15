@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { UsersService } from '../../identity-access/index.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
 import { Table } from '../tables/table.entity.js';
 import type { TableLogStatus } from '../tables/table-status-log.js';
@@ -19,17 +20,21 @@ export interface TableLogRow {
   userEmail: string;
 }
 
+type TableLogQueryRow = Omit<TableLogRow, 'userEmail'> & { userId: string };
+
 // Read side of the table log (PBI 9). Writing stays in DbTableStatusLog.
 @Injectable()
 export class TableLogsService {
   constructor(
     @InjectRepository(TableLog)
     private readonly logs: Repository<TableLog>,
+    private readonly users: UsersService,
   ) {}
 
   // Newest first. table_logs has no restaurant_id: the restaurant filter goes
   // through the join to tables, always with the session restaurant (agreed
   // with Elizabeth). A tableId of another restaurant just matches no rows.
+  // The authors' emails come from identity-access in one more query.
   async findForRestaurant(
     restaurantId: string | null,
     tableId?: string,
@@ -38,15 +43,13 @@ export class TableLogsService {
     const query = this.logs
       .createQueryBuilder('log')
       .innerJoin(Table, 'loggedTable', 'loggedTable.id = log.tableId')
-      // By entity name: identity-access does not export its entity class.
-      .innerJoin('User', 'author', 'author.id = log.userId')
       .select('log.id', 'id')
       .addSelect('log.tableId', 'tableId')
       .addSelect('loggedTable.identifier', 'tableIdentifier')
       .addSelect('log.previousStatus', 'previousStatus')
       .addSelect('log.newStatus', 'newStatus')
       .addSelect('log.changedAt', 'changedAt')
-      .addSelect('author.email', 'userEmail')
+      .addSelect('log.userId', 'userId')
       .where('loggedTable.restaurantId = :restaurantId', {
         restaurantId: ownerId,
       });
@@ -54,10 +57,20 @@ export class TableLogsService {
       query.andWhere('log.tableId = :tableId', { tableId });
     }
     // id breaks ties so the order is stable between requests.
-    return query
+    const rows = await query
       .orderBy('log.changedAt', 'DESC')
       .addOrderBy('log.id', 'DESC')
       .limit(TABLE_LOGS_LIMIT)
-      .getRawMany<TableLogRow>();
+      .getRawMany<TableLogQueryRow>();
+
+    const emails = await this.users.findEmailsByIds(
+      rows.map((row) => row.userId),
+    );
+    // table_logs.user_id has a foreign key to users, so every author exists;
+    // a row without one is dropped, as the former inner join did.
+    return rows.flatMap(({ userId, ...row }) => {
+      const userEmail = emails.get(userId);
+      return userEmail === undefined ? [] : [{ ...row, userEmail }];
+    });
   }
 }

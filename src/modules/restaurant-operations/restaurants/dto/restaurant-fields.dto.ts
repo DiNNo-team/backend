@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsNotEmpty, IsString } from 'class-validator';
-import { MaxCodePoints } from '../../shared/max-code-points.js';
+import { MaxCodePoints } from '../../../../common/validation/max-code-points.js';
 import {
   RESTAURANT_CATEGORIES,
   type RestaurantCategory,

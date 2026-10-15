@@ -1,10 +1,18 @@
-import { EntityManager, IsNull, QueryFailedError, Repository } from 'typeorm';
+import {
+  EntityManager,
+  In,
+  IsNull,
+  QueryFailedError,
+  Repository,
+} from 'typeorm';
+import { UserRole } from '../roles/user-role.js';
 import { User } from './user.entity.js';
 import { UsersService } from './users.service.js';
 
 describe('UsersService', () => {
   const usersRepository = {
     findOneBy: vi.fn(),
+    find: vi.fn(),
     create: vi.fn(),
     save: vi.fn(),
   };
@@ -84,6 +92,57 @@ describe('UsersService', () => {
     });
   });
 
+  describe('findEmailsByIds', () => {
+    it('looks up every distinct id in one query and maps id to email', async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'user-a', email: 'a@example.com' },
+        { id: 'user-b', email: 'b@example.com' },
+      ]);
+
+      const emails = await usersService.findEmailsByIds([
+        'user-a',
+        'user-b',
+        'user-a',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledTimes(1);
+      expect(usersRepository.find).toHaveBeenCalledWith({
+        where: { id: In(['user-a', 'user-b']) },
+        select: { id: true, email: true },
+      });
+      expect(emails).toEqual(
+        new Map([
+          ['user-a', 'a@example.com'],
+          ['user-b', 'b@example.com'],
+        ]),
+      );
+    });
+
+    it('does not query for an empty list', async () => {
+      await expect(usersService.findEmailsByIds([])).resolves.toEqual(
+        new Map(),
+      );
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getSessionUser', () => {
+    it('returns the row of the session user', async () => {
+      const user = { id: 'user-id' } as User;
+      usersRepository.findOneBy.mockResolvedValue(user);
+
+      await expect(usersService.getSessionUser('user-id')).resolves.toBe(user);
+    });
+
+    it('throws a plain Error (generic 500) when the row is missing', async () => {
+      usersRepository.findOneBy.mockResolvedValue(null);
+
+      await expect(usersService.getSessionUser('missing-id')).rejects.toThrow(
+        'User missing-id of the session not found',
+      );
+    });
+  });
+
   describe('assignRestaurantIfNone', () => {
     const userId = 'user-id';
     const restaurantId = 'restaurant-id';
@@ -156,7 +215,7 @@ describe('UsersService', () => {
       id: 'user-id',
       firebaseUid: null,
       email: 'owner@example.com',
-      role: 'restaurant_admin',
+      role: UserRole.RESTAURANT_ADMIN,
       restaurantId: null,
     } as User;
 
@@ -224,8 +283,9 @@ describe('UsersService', () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: '  Owner@Example.COM  ',
-        role: 'restaurant_admin',
+        role: UserRole.DINER,
         restaurantId: null,
+        displayName: 'Ana',
       };
       const newUser = { ...input, email: 'owner@example.com' } as User;
       const savedUser = { ...newUser, id: 'user-id' } as User;
@@ -244,8 +304,9 @@ describe('UsersService', () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: 'owner@example.com',
-        role: 'restaurant_admin',
+        role: UserRole.DINER,
         restaurantId: null,
+        displayName: 'Ana',
       };
       const error = new Error('Unique constraint violation');
       usersRepository.create.mockReturnValue(input);
@@ -258,8 +319,9 @@ describe('UsersService', () => {
       const input = {
         firebaseUid: 'firebase-uid',
         email: 'owner@example.com',
-        role: 'restaurant_admin',
+        role: UserRole.DINER,
         restaurantId: null,
+        displayName: 'Ana',
         unexpected: 'must not be persisted',
       };
       const persistedFields = {
@@ -267,6 +329,7 @@ describe('UsersService', () => {
         email: input.email,
         role: input.role,
         restaurantId: input.restaurantId,
+        displayName: input.displayName,
       };
       const user = persistedFields as User;
       usersRepository.create.mockReturnValue(user);
