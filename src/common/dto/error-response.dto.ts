@@ -21,7 +21,7 @@ export class ErrorResponseDto {
   // front has to branch on the reason; see CLAUDE.md, "API".
   @ApiPropertyOptional({
     description:
-      'Motivo del error, solo cuando el front tiene que actuar distinto según el motivo. Los demás errores no lo traen. Valores: EMAIL_NOT_VERIFIED (401: verifica tu correo para continuar), ACCOUNT_NOT_ENABLED (403: la cuenta no está habilitada como restaurante), PROFILE_REQUIRED (403: la cuenta todavía no tiene perfil; la app llama a POST /v1/diners/me y reintenta), DINER_ACCOUNT (403: cuenta de comensal en un endpoint de restaurante), RESTAURANT_ACCOUNT (403: cuenta de restaurante en un endpoint de comensal), RESTAURANT_REQUIRED (403: el usuario todavía no registra su restaurante; llévalo al registro).',
+      'Motivo del error, solo cuando el front tiene que actuar distinto según el motivo. Los demás errores no lo traen. Valores: EMAIL_NOT_VERIFIED (401: verifica tu correo para continuar), ACCOUNT_NOT_ENABLED (403: la cuenta no está habilitada como restaurante), PROFILE_REQUIRED (403: la cuenta todavía no tiene perfil; la app llama a POST /v1/diners/me y reintenta), DINER_ACCOUNT (403: cuenta de comensal en un endpoint de restaurante), RESTAURANT_ACCOUNT (403: cuenta de restaurante en un endpoint de comensal), RESTAURANT_REQUIRED (403: el usuario todavía no registra su restaurante; llévalo al registro), RESTAURANT_NOT_FOUND (404: el restaurante del detalle público no existe, el id no es válido o no tiene ubicación).',
     enum: [
       'EMAIL_NOT_VERIFIED',
       'ACCOUNT_NOT_ENABLED',
@@ -29,6 +29,7 @@ export class ErrorResponseDto {
       'DINER_ACCOUNT',
       'RESTAURANT_ACCOUNT',
       'RESTAURANT_REQUIRED',
+      'RESTAURANT_NOT_FOUND',
     ],
   })
   errorCode?: string;

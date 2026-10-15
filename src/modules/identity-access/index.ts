@@ -17,6 +17,7 @@ export { SESSION_UNAUTHORIZED_RESPONSE } from './auth/auth-errors.js';
 export {
   ACCOUNT_ERROR_CODES,
   ACCOUNT_ERROR_MESSAGES,
+  DINER_ENDPOINT_ACCOUNT_EXAMPLES,
   RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
   type AccountErrorCode,
 } from './roles/account-errors.js';

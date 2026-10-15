@@ -1,6 +1,10 @@
 import { Global, Injectable, Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { FIREBASE_AUTH } from './../src/modules/identity-access/auth/firebase-admin.provider.js';
+import { User } from './../src/modules/identity-access/users/user.entity.js';
 import {
   AvailabilityService,
   Clock,
@@ -67,8 +71,27 @@ describe('SearchAvailabilityModule wiring (e2e)', () => {
 
   beforeEach(async () => {
     moduleRef = await Test.createTestingModule({
-      imports: [FakeDatabaseModule, ConsumerModule],
+      imports: [
+        // SearchAvailabilityModule imports IdentityAccessModule (the guards
+        // of the search controller): it needs the config and the users table.
+        ConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true,
+          load: [
+            () => ({
+              DEV_USER_ENABLED: 'false',
+              FIREBASE_PROJECT_ID: 'firebase-project-example',
+            }),
+          ],
+        }),
+        FakeDatabaseModule,
+        ConsumerModule,
+      ],
     })
+      .overrideProvider(FIREBASE_AUTH)
+      .useValue(() => ({}))
+      .overrideProvider(getRepositoryToken(User))
+      .useValue({})
       .overrideProvider(Clock)
       .useValue({ now: () => FRIDAY_13H })
       .compile();
