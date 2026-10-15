@@ -244,6 +244,7 @@ npm run test:cov     # cobertura
 ### Arquitectura: monolito modular
 - El código de negocio vive en `src/modules/<dominio>/`, un módulo por dominio, registrado en `src/app.module.ts`.
 - Cada módulo es dueño de sus controladores, servicios, entidades y DTOs. **Entre módulos solo se usan los providers que el otro módulo exporta**; nunca se importa desde las carpetas internas de otro módulo.
+- **API pública de cada módulo:** su `index.ts`. Hoy la tienen `identity-access`, `search-availability` y `restaurant-operations`. La de `restaurant-operations` (`restaurant-operations/index.ts`) exporta `RestaurantOperationsModule`, `RESTAURANT_CATEGORIES` y `RestaurantCategory`; las categorías siguen viviendo en `restaurants/restaurant.entity.ts`. Lo que otro módulo necesite de `restaurant-operations` se agrega a ese `index.ts`, nunca se importa de sus carpetas.
 - **`src/common/`** es para lo que de verdad usan varios módulos y no pertenece a ningún dominio (por ejemplo `common/dto/error-response.dto.ts`, la forma de error de toda la API). Nada de lógica de negocio ni entidades: si algo solo lo usa un módulo, o es de un dominio, va en ese módulo.
 - **`src/modules/restaurant-operations/shared/`** es para lo que comparten varias funcionalidades de `restaurant-operations` (mesas, restaurante, estado abierto/cerrado, bitácora) y no es de ninguna en particular, por ejemplo `shared/restaurant-required.ts`, el `403` del usuario sin restaurante. Va aquí y no en `src/common/` porque es dominio de este módulo; tampoco en `restaurants/` ni `tables/`, que tienen dueños.
 - La configuración global (ConfigModule, TypeORM, Redis) vive en `src/app.module.ts` y `src/config/`. La configuración HTTP (prefijo, CORS, validación, filtro de errores, Swagger) vive en `src/app.setup.ts`.
@@ -362,6 +363,14 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - **Hora:** se calcula con `Intl.DateTimeFormat` en `America/Bogota`; depende solo del instante, no del `TZ` del servidor (Render corre en UTC). El instante sale de `Clock` (`SystemClock` en el módulo). En las pruebas se fija con `.overrideProvider(Clock).useValue({ now: () => new Date('2026-10-16T18:00:00Z') })`, y en las unitarias se pasa el instante directamente. Escribe los instantes en UTC con su hora de Bogotá en un comentario.
 - **Nunca expongas conteos:** ni `AvailabilityResult` ni ninguna respuesta lleva cuántas mesas hay o cuántas están libres. Si necesitas una decisión nueva, agrega una función que devuelva un booleano o un nivel, nunca un número.
 
+### Búsqueda (`search-availability/search/`, Elizabeth)
+- **Rutas:** `GET /v1/search/zones` y `GET /v1/search/restaurants` (`search.controller.ts`, `@Roles(UserRole.DINER)` + `CurrentUserGuard`). El controlador solo valida y delega.
+- **Zonas:** lista cerrada en `zones.ts` (`ZONES`, `listZones`, `zoneCenter`); no consulta la base.
+- **Validación:** `dto/search-restaurants-query.dto.ts`. La regla del origen (`lat`/`lng` juntas **o** `zone`, nunca las dos) es `searchOriginProblem` y va como decorador sobre `zone`, que a propósito no lleva `@IsOptional`.
+- **Flujo** (`RestaurantSearchService.search`): centro (ubicación o centro de la zona) → `RestaurantCandidatesReader.findWithin(boundingBox(...))`, una sola consulta de solo lectura con el prefiltro por rectángulo → `haversineKm` exacta, fuera los que pasan el radio, orden por distancia y desempate por `id` → **una** llamada a `AvailabilityService.getForRestaurants(ids)` → solo `isSearchable` → máximo 50. `distanceKm` se redondea a 2 decimales al final; el filtro usa la distancia exacta.
+- **Geometría** (`geo.ts`, pura): `haversineKm` (radio 6371,0088 km) y `boundingBox`, que siempre contiene el círculo. Los km por grado salen del mismo radio (~111,195 km): con 111,32 km el rectángulo se queda corto y pierde el borde del círculo.
+- **Pruebas:** unitarias de `geo`, `zones`, el DTO, el lector y el servicio; `test/search.e2e-spec.ts` monta el módulo con una base simulada que aplica `Between` e `In`.
+
 ### Pruebas
 - Vitest. Pruebas unitarias junto al código (`*.spec.ts`) y e2e en `test/`.
 - Cada servicio nuevo con pruebas de casos felices y de error (por ejemplo: mesa de otro restaurante, datos inválidos, mesa inactiva).
@@ -375,9 +384,9 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - `UserRole` tiene `RESTAURANT_ADMIN` y `DINER`. Nada de literales `'restaurant_admin'` en el código; `users.role` lleva un check con los dos valores.
 - La cuenta sin perfil se resuelve a una `RequestIdentity` con `kind: 'unregistered'` en lugar de crearla. `RolesGuard` traduce cada caso a su `errorCode` según los roles que exige el endpoint (tabla de códigos de cuenta).
 - `search-availability` es dueño de la búsqueda, el detalle público, las zonas, la disponibilidad y el WebSocket. La regla de disponibilidad vive en **funciones puras** (`isOpenNow`, `availabilityLevel`) sin dependencias de Nest ni de la base, con la hora inyectable para las pruebas, más un `AvailabilityService` **exportado** para el Sprint 3.
-- Lectura entre módulos: `search-availability` lee restaurantes, horarios y mesas con consultas de solo lectura (query builder por nombre de entidad, como la excepción documentada de `table-logs`). Nunca escribe en tablas de `restaurant-operations`.
+- Lectura entre módulos: `search-availability` lee restaurantes, horarios y mesas con consultas de solo lectura (`find` con el nombre de la entidad (`DataSource.getRepository('Restaurant')`), como la excepción documentada de `table-logs`). Nunca escribe en tablas de `restaurant-operations`.
 - Eventos: `restaurant-operations` emite eventos internos (EventEmitter2) **después del commit**, solo con `{ restaurantId }`. `search-availability` los escucha, recalcula y envía por el WebSocket. La lógica de mesas no conoce al WebSocket.
-- Distancia: Haversine en SQL. Sin PostGIS. Redis no se usa en este sprint.
+- Distancia: Haversine **en TypeScript** (`search/geo.ts`), con un prefiltro barato por rectángulo en SQL (`BETWEEN` sobre `latitude` y `longitude`). Así la regla se prueba sin base de datos (las pruebas nunca ejecutan SQL real). Sin PostGIS. Redis no se usa en este sprint.
 - Zona horaria: `Intl.DateTimeFormat` con `timeZone: 'America/Bogota'`. Sin librerías de fechas nuevas.
 - Geocodificación: Google Geocoding API con `GOOGLE_GEOCODING_API_KEY` (solo en Render y en `.env.example` sin valor; nunca en logs), restringida a Bogotá (`components=locality:Bogotá|country:CO`). Un resultado fuera de los límites de Bogotá → `ADDRESS_NOT_FOUND`. Sin llave, cuota agotada o timeout → `GEOCODING_UNAVAILABLE`.
 - Identificadores de mesa del seed: los existentes (`Mesa N`) se quedan como están para no duplicar mesas en Neon. Los restaurantes nuevos del seed usan identificadores cortos (`01`, `T1`).

@@ -40,6 +40,19 @@ export const RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES = {
   dinerAccount: swaggerExample('Es una cuenta de comensal', 'DINER_ACCOUNT'),
 };
 
+// Swagger examples of the account 403s that every diner endpoint
+// (@Roles(UserRole.DINER)) can answer.
+export const DINER_ENDPOINT_ACCOUNT_EXAMPLES = {
+  profileRequired: swaggerExample(
+    'La cuenta todavía no tiene perfil',
+    'PROFILE_REQUIRED',
+  ),
+  restaurantAccount: swaggerExample(
+    'Es una cuenta de restaurante',
+    'RESTAURANT_ACCOUNT',
+  ),
+};
+
 export function accountForbidden(code: AccountErrorCode): ForbiddenException {
   return new ForbiddenException(ACCOUNT_ERROR_MESSAGES[code], {
     errorCode: code,
