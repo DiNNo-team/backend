@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import {
+  availabilityAffected,
+  RESTAURANT_AVAILABILITY_AFFECTED,
+} from '../shared/availability-affected.event.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
 import { Restaurant } from './restaurant.entity.js';
 
@@ -11,6 +16,7 @@ export class RestaurantStatusService {
   constructor(
     @InjectRepository(Restaurant)
     private readonly restaurants: Repository<Restaurant>,
+    private readonly events: EventEmitter2,
   ) {}
 
   async get(restaurantId: string | null): Promise<Restaurant> {
@@ -22,9 +28,19 @@ export class RestaurantStatusService {
     isOpen: boolean,
   ): Promise<Restaurant> {
     const ownerId = requireRestaurant(restaurantId);
+    const current = await this.findSessionRestaurant(ownerId);
+    // Same state (the web may send it again): nothing is written or emitted.
+    if (current.isOpen === isOpen) {
+      return current;
+    }
     // Only isOpen, always on the session restaurant: save() of a loaded row
     // would write back stale name, category or address edited meanwhile.
     await this.restaurants.update({ id: ownerId }, { isOpen });
+    // After the update is committed (a single statement, no transaction).
+    this.events.emit(
+      RESTAURANT_AVAILABILITY_AFFECTED,
+      availabilityAffected(ownerId),
+    );
     return this.findSessionRestaurant(ownerId);
   }
 

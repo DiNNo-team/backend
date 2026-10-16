@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
@@ -183,6 +184,7 @@ describe('Public restaurant detail (e2e)', () => {
           ],
         }),
         FakeDatabaseModule.with(database),
+        EventEmitterModule.forRoot(),
         // Both modules declare routes under /restaurants.
         RestaurantOperationsModule,
         SearchAvailabilityModule,

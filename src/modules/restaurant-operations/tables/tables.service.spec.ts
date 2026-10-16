@@ -1,3 +1,4 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { QueryFailedError, type Repository } from 'typeorm';
 import type { CreateTableDto } from './dto/create-table.dto.js';
@@ -34,6 +35,7 @@ function createService() {
   const service = new TablesService(
     tables as unknown as Repository<Table>,
     { record: vi.fn() } as unknown as TableStatusLog,
+    { emit: vi.fn() } as unknown as EventEmitter2,
   );
   return { service, tables };
 }

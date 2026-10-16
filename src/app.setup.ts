@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { UnhandledExceptionFilter } from './common/filters/unhandled-exception.filter.js';
+import { CorsIoAdapter } from './config/socket-io.adapter.js';
 import { isDeployedEnvironment } from './modules/identity-access/index.js';
 
 export const API_PREFIX = 'v1';
@@ -71,11 +72,14 @@ export function configureApp(app: INestApplication): void {
   app.useGlobalPipes(createValidationPipe());
   app.useGlobalFilters(new UnhandledExceptionFilter(app.getHttpAdapter()));
 
+  const corsOrigins = parseCorsOrigins(config.get<string>('CORS_ORIGINS'));
   app.enableCors({
-    origin: parseCorsOrigins(config.get<string>('CORS_ORIGINS')),
+    origin: corsOrigins,
     // Sin cookies/sesión por ahora (auth por token); activar si eso cambia.
     credentials: false,
   });
+  // WebSocket (Socket.IO, /socket.io) con los mismos orígenes que la API.
+  app.useWebSocketAdapter(new CorsIoAdapter(app, corsOrigins));
 
   const document = SwaggerModule.createDocument(
     app,

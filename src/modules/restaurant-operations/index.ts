@@ -4,3 +4,8 @@ export {
   RESTAURANT_CATEGORIES,
   type RestaurantCategory,
 } from './restaurants/restaurant.entity.js';
+// Internal event emitted after a change that affects availability is saved.
+export {
+  RESTAURANT_AVAILABILITY_AFFECTED,
+  type RestaurantAvailabilityAffectedEvent,
+} from './shared/availability-affected.event.js';

@@ -1,4 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
@@ -29,6 +30,7 @@ describe('TableStatusLog wiring (e2e)', () => {
             }),
           ],
         }),
+        EventEmitterModule.forRoot(),
         RestaurantOperationsModule,
       ],
     })

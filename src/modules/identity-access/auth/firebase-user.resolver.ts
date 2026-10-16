@@ -1,8 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Request } from 'express';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import type { RequestIdentity } from '../current-user/current-user-data.js';
-import { CurrentUserResolver } from '../current-user/current-user.resolver.js';
+import {
+  CurrentUserResolver,
+  type IdentityRequest,
+} from '../current-user/current-user.resolver.js';
 import type { User } from '../users/user.entity.js';
 import { UsersService } from '../users/users.service.js';
 import { emailNotVerified, sessionExpired } from './auth-errors.js';
@@ -22,7 +24,7 @@ function registered(user: User): RequestIdentity {
   };
 }
 
-function bearerToken(request: Request): string | null {
+function bearerToken(request: IdentityRequest): string | null {
   const authorization = request.headers.authorization;
   if (typeof authorization !== 'string') {
     return null;
@@ -56,7 +58,7 @@ export class FirebaseUserResolver extends CurrentUserResolver {
 
   // Never creates a user (Sprint 2): an account without a users row resolves
   // to an unregistered identity. Only POST /v1/diners/me creates users.
-  async resolve(request: Request): Promise<RequestIdentity> {
+  async resolve(request: IdentityRequest): Promise<RequestIdentity> {
     const token = bearerToken(request);
     if (!token) {
       throw sessionExpired();

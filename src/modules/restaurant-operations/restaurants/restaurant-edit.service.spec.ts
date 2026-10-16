@@ -1,3 +1,4 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BadRequestException,
   ForbiddenException,
@@ -71,6 +72,7 @@ function createService() {
   };
   const service = new RestaurantEditService(
     restaurants as unknown as Repository<Restaurant>,
+    { emit: vi.fn() } as unknown as EventEmitter2,
   );
   return { service, manager, transaction: restaurants.manager.transaction };
 }

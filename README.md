@@ -121,7 +121,7 @@ src/
 | `npm run start:debug` | Igual que `start:dev`, con el inspector de Node activo. |
 | `npm run build` | Compila el proyecto a `dist/` (`nest build`). |
 | `npm run start:prod` | Ejecuta la build ya compilada (`node dist/main`). |
-| `npm run lint` | Revisa `src/` y `test/` con oxlint. |
+| `npm run lint` | Revisa `src/`, `test/` y `scripts/` con oxlint. |
 | `npm run typecheck` | Revisa los tipos de todo el proyecto, pruebas incluidas (`tsc --noEmit`). |
 | `npm run format` | Formatea `src/` y `test/` con Prettier. |
 | `npm run test` | Pruebas unitarias (Vitest). |
@@ -170,6 +170,27 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 > otro dispositivo, avísale al equipo antes. En Render escucha en `0.0.0.0` (todas las interfaces),
 > como exige la plataforma (`resolveListenHost` en `src/app.setup.ts`).
 
+### Tiempo real: escuchar `availability.changed`
+
+El WebSocket (Socket.IO) corre en el mismo host y puerto que la API (`/socket.io`) y solo acepta
+comensales. Para ver llegar los eventos mientras cambias mesas o el estado del restaurante, usa el
+script de QA (necesita `npm install`, porque usa `socket.io-client`):
+
+```bash
+# Local, con el usuario de desarrollo activo: el UUID de un usuario con rol diner
+# (el seed imprime el de comensal@example.com).
+node scripts/listen-availability.mjs --dev-user-id <uuid del comensal>
+
+# Contra Render (o local sin usuario de desarrollo): token de Firebase de un comensal.
+# DINNO_TOKEN no deja el token en el historial de la terminal; --token también funciona.
+DINNO_TOKEN=<token> node scripts/listen-availability.mjs --url https://dinno-backend.onrender.com
+```
+
+Imprime cada evento con la hora, por ejemplo
+`[14:05:12] availability.changed {"restaurantId":"…","availability":"few","isOpenNow":true,"isSearchable":true}`.
+Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `EMAIL_NOT_VERIFIED`,
+`PROFILE_REQUIRED` o `RESTAURANT_ACCOUNT`) y termina. Sal con Ctrl+C.
+
 ## 7. Despliegue
 
 - Desplegado en **Render** como *Web Service*.
@@ -199,6 +220,9 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 - El **frontend** (React + Vite, desplegado en Vercel) y el **mobile** (Expo) consumen esta API
   a través de las variables `VITE_API_URL` y `EXPO_PUBLIC_API_URL` respectivamente, apuntando a
   `https://dinno-backend.onrender.com/v1` en producción (o `http://localhost:3000/v1` en local).
+- **Tiempo real:** la app se conecta por Socket.IO a la misma URL **sin** `/v1`
+  (`https://dinno-backend.onrender.com`), con `auth` como función que entrega el token de Firebase.
+  Contrato en `CLAUDE.md`, sección 10, "Tiempo real".
 - Si cambia la URL de despliegue del frontend o del mobile (por ejemplo, un nuevo dominio de
   Vercel), hay que **actualizar `CORS_ORIGINS` en el dashboard de Render** agregando el nuevo
   origen a la lista separada por comas — de lo contrario el navegador bloqueará las peticiones
