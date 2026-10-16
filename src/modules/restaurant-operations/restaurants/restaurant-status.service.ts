@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import {
   availabilityAffected,
   RESTAURANT_AVAILABILITY_AFFECTED,
@@ -28,19 +28,24 @@ export class RestaurantStatusService {
     isOpen: boolean,
   ): Promise<Restaurant> {
     const ownerId = requireRestaurant(restaurantId);
-    const current = await this.findSessionRestaurant(ownerId);
-    // Same state (the web may send it again): nothing is written or emitted.
-    if (current.isOpen === isOpen) {
-      return current;
-    }
-    // Only isOpen, always on the session restaurant: save() of a loaded row
-    // would write back stale name, category or address edited meanwhile.
-    await this.restaurants.update({ id: ownerId }, { isOpen });
-    // After the update is committed (a single statement, no transaction).
-    this.events.emit(
-      RESTAURANT_AVAILABILITY_AFFECTED,
-      availabilityAffected(ownerId),
+    // One conditional statement (WHERE id = :id AND is_open <> :isOpen), so
+    // the database decides whether it changed: the same state (the web may
+    // send it again) writes nothing, and of two simultaneous requests for the
+    // same new state only one changes the row. Only isOpen, always on the
+    // session restaurant: save() of a loaded row would write back stale name,
+    // category or address edited meanwhile.
+    const { affected } = await this.restaurants.update(
+      { id: ownerId, isOpen: Not(isOpen) },
+      { isOpen },
     );
+    // After the statement is committed, and only for the request that
+    // changed the row: never twice, never for a failed write.
+    if (affected === 1) {
+      this.events.emit(
+        RESTAURANT_AVAILABILITY_AFFECTED,
+        availabilityAffected(ownerId),
+      );
+    }
     return this.findSessionRestaurant(ownerId);
   }
 

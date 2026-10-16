@@ -18,8 +18,10 @@ import {
 } from './availability-changed.js';
 
 // Code for a handshake that failed for a reason other than the session (the
-// database is down). Not in the contract: the app treats it like any other
-// failure and falls back to polling.
+// database is down). Part of the contract (CLAUDE.md, section 10, "Tiempo
+// real"): Socket.IO does not retry a rejected handshake, so the app retries
+// it with a growing wait (5 s, 15 s, 30 s) and meanwhile keeps polling every
+// 60 s.
 export const SOCKET_SERVER_ERROR = 'SERVER_ERROR';
 
 // Socket.IO on the same host and port as the API (path /socket.io; CORS from

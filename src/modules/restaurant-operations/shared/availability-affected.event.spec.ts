@@ -1,5 +1,5 @@
 import type { EventEmitter2 } from '@nestjs/event-emitter';
-import type { Repository } from 'typeorm';
+import type { FindOperator, Repository } from 'typeorm';
 import { UserRole, type CurrentUserData } from '../../identity-access/index.js';
 import type { UpdateRestaurantDto } from '../restaurants/dto/update-restaurant.dto.js';
 import { RestaurantEditService } from '../restaurants/restaurant-edit.service.js';
@@ -160,14 +160,23 @@ describe('availability event of restaurant-operations', () => {
       let stored = { id: RESTAURANT_ID, isOpen } as Restaurant;
       const restaurants = {
         findOneBy: vi.fn(() => Promise.resolve({ ...stored })),
-        update: vi.fn((_where: unknown, changes: Partial<Restaurant>) => {
-          if (updateFails) {
-            return Promise.reject(new Error('database down'));
-          }
-          t.steps.push('update');
-          stored = { ...stored, ...changes };
-          return Promise.resolve({ affected: 1 });
-        }),
+        // The conditional statement: writes only if isOpen is Not(the new value).
+        update: vi.fn(
+          (
+            where: { isOpen: FindOperator<boolean> },
+            changes: Partial<Restaurant>,
+          ) => {
+            if (updateFails) {
+              return Promise.reject(new Error('database down'));
+            }
+            if (stored.isOpen === where.isOpen.value) {
+              return Promise.resolve({ affected: 0 });
+            }
+            t.steps.push('update');
+            stored = { ...stored, ...changes };
+            return Promise.resolve({ affected: 1 });
+          },
+        ),
       };
       const service = new RestaurantStatusService(
         restaurants as unknown as Repository<Restaurant>,
@@ -185,12 +194,13 @@ describe('availability event of restaurant-operations', () => {
     });
 
     it('sending the state it already has writes and emits nothing', async () => {
-      const { service, events, restaurants } = statusFixture(false);
+      const { service, events, steps } = statusFixture(false);
 
       await expect(service.update(RESTAURANT_ID, false)).resolves.toMatchObject(
         { isOpen: false },
       );
-      expect(restaurants.update).not.toHaveBeenCalled();
+      // The conditional statement matched no row (affected 0).
+      expect(steps).toEqual([]);
       expect(events.emit).not.toHaveBeenCalled();
     });
 

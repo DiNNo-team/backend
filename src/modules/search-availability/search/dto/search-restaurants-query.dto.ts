@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   IsIn,
   IsInt,
@@ -130,7 +130,8 @@ export class SearchRestaurantsQueryDto {
     example: DEFAULT_SEARCH_RADIUS_KM,
   })
   @IsOptional()
-  @Type(() => Number)
+  // Same strict parsing as lat, lng and partySize: "0x2" or "2e0" is not 2.
+  @Transform(({ value }) => toNumberOrNaN(value))
   @IsIn(SEARCH_RADII_KM, { message: SEARCH_MESSAGES.RADIUS_INVALID })
   radiusKm: SearchRadiusKm = DEFAULT_SEARCH_RADIUS_KM;
 

@@ -7,6 +7,7 @@ import type { AddressInfo, Server } from 'node:net';
 import { io, type Socket } from 'socket.io-client';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
+import type { FindOperator } from 'typeorm';
 import { configureApp } from './../src/app.setup.js';
 import { FIREBASE_AUTH } from './../src/modules/identity-access/auth/firebase-admin.provider.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
@@ -97,7 +98,15 @@ function createDatabase() {
   };
   const restaurantsRepository = {
     findOneBy: () => Promise.resolve({ ...restaurant }),
-    update: (_where: unknown, changes: Partial<typeof restaurant>) => {
+    // The conditional statement of RestaurantStatusService: writes only if
+    // isOpen is Not(the new value), so the same state is affected 0.
+    update: (
+      { isOpen }: { isOpen: FindOperator<boolean> },
+      changes: Partial<typeof restaurant>,
+    ) => {
+      if (restaurant.isOpen === isOpen.value) {
+        return Promise.resolve({ affected: 0 });
+      }
       Object.assign(restaurant, changes);
       return Promise.resolve({ affected: 1 });
     },
@@ -256,6 +265,35 @@ describe('Real time: availability.changed (e2e)', () => {
       availability: 'closed',
       isOpenNow: false,
       isSearchable: false,
+    });
+  });
+
+  // Without a fixed wait: after the second close, the restaurant is opened
+  // again, and the next event must be that reopening. An event from the
+  // second close would arrive first and say closed (isOpenNow false).
+  it('sends one event when the restaurant is closed twice in a row', async () => {
+    const socket = await connect({ token: 'diner' });
+    const status = (isOpen: boolean) =>
+      asOwner()
+        .patch('/v1/restaurants/me/status')
+        .set(OWNER)
+        .send({ isOpen })
+        .expect(200);
+
+    const closed = nextEvent(socket);
+    await status(false);
+    await expect(closed).resolves.toMatchObject({ isOpenNow: false });
+
+    const next = nextEvent(socket);
+    const again = await status(false);
+    expect(again.body).toEqual({ isOpen: false });
+    await status(true);
+
+    await expect(next).resolves.toEqual({
+      restaurantId: CASA_72,
+      availability: 'few',
+      isOpenNow: true,
+      isSearchable: true,
     });
   });
 
