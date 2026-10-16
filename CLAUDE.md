@@ -181,7 +181,7 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 | GET | `/restaurants/me` | restaurant_admin | — | agrega `latitude`, `longitude` (number \| null) |
 
 **Reglas de los campos:**
-- `latitude` y `longitude` son `number` en JSON, con hasta 6 decimales. Se envían **los dos o ninguno** (si llega solo uno → 400). Deben estar dentro de Bogotá: latitud entre 4.45 y 4.85, longitud entre -74.25 y -73.95 (fuera → 400). En el backend las coordenadas son opcionales para no romper la web actual; la obligatoriedad al registrar la impone el formulario web.
+- `latitude` y `longitude` son `number` en JSON, con hasta 6 decimales. Se aceptan con más de 6: el backend las **redondea** a 6 antes de guardar (no es un error), y las respuestas traen el valor redondeado. Se envían **los dos o ninguno** (si llega solo uno → 400). Deben estar dentro de Bogotá: latitud entre 4.45 y 4.85, longitud entre -74.25 y -73.95 (fuera → 400). En el backend las coordenadas son opcionales para no romper la web actual; la obligatoriedad al registrar la impone el formulario web.
 - Búsqueda: `lat`/`lng` y `zone` son excluyentes (los dos o ninguno → 400). `lat`/`lng` pueden estar fuera de Bogotá (simplemente no habrá resultados). Una `zone` desconocida, una `category` inválida, un `radiusKm` fuera de la lista o un `partySize` fuera de rango → 400 con un mensaje en español.
 - `distanceKm`: número en km con 2 decimales. El formato para mostrar («a 650 m», «a 1,4 km») lo hace la app.
 - `category`: `colombian`, `italian`, `mexican`, `asian`, `grill`, `fast_food`, `healthy`, `seafood`, `cafe`, `other` (los mismos del Sprint 1).
@@ -213,12 +213,15 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 - Respaldo en la app: vuelve a consultar al regresar al primer plano, al reconectarse y cada 60 s en resultados y detalle.
 
 ### Cuándo está listo cada contrato en `develop`
-| Qué | Día |
+**Todo el backend del Sprint 2 ya está en `develop`** (fusionado el 15 oct). Ya no hace falta usar datos de ejemplo: se consume la API real.
+
+| Qué | En `develop` desde |
 |---|---|
-| Roles, `GET /me`, `POST /diners/me`, coordenadas en la base | Jue 15 (noche) |
-| Búsqueda, zonas, disponibilidad, filtros, detalle público, `GET /geocode`, coordenadas en POST/PATCH | Vie 16 |
-| WebSocket `availability.changed` | Sáb 17 |
-| Mientras tanto | usar datos de ejemplo con la forma exacta de este contrato |
+| Roles, `GET /me`, `POST /diners/me`, coordenadas en la base | 15 oct (PR #35) |
+| Regla de disponibilidad (`AvailabilityService`, sin endpoints) | 15 oct (PR #36) |
+| Búsqueda, zonas, disponibilidad, filtros y detalle público | 15 oct (PR #37) |
+| `GET /geocode` y coordenadas en POST/PATCH | 15 oct (PR #38) |
+| WebSocket `availability.changed` | 15 oct (PR #40) |
 
 ---
 
@@ -264,7 +267,7 @@ npm run test:cov     # cobertura
 | Editar y desactivar mesas | `restaurant-operations` | `tables/` | Sebastián |
 | Bitácora de cambios de mesas | `restaurant-operations` | `table-logs/` | Sergio |
 
-Los módulos `reservations-checkin`, `search-availability` y `notifications` existen pero no se tocan en el Sprint 1.
+Los módulos `reservations-checkin` y `notifications` existen pero todavía no tienen código. `search-availability` es del Sprint 2 (búsqueda, detalle público, disponibilidad y WebSocket; ver más abajo).
 
 ### Configuración y variables de entorno
 - **Nunca leas `process.env` en el código de una funcionalidad:** usa `ConfigService` (`getOrThrow` para lo obligatorio).
@@ -289,7 +292,7 @@ Los módulos `reservations-checkin`, `search-availability` y `notifications` exi
 - `npm run migration:run` aplica las pendientes; `npm run migration:revert` deshace la última.
 - Los tres compilan primero (`npm run build`): el CLI de TypeORM lee de `dist/` y `migration:run` solo opera sobre `.js`.
 - **No se usa `typeorm-ts-node-esm`:** `ts-node` no está instalado y no se va a instalar. No lo propongas.
-- `src/data-source.ts` es solo para el CLI y el seed, y es el **único** archivo que lee `process.env` directo, porque vive fuera de la inyección de dependencias de Nest. Es una excepción consciente a la regla de "Configuración y variables de entorno".
+- `src/data-source.ts` es solo para el CLI y el seed, y lee `process.env` directo porque vive fuera de la inyección de dependencias de Nest. Es una de las **dos** excepciones conscientes a la regla de "Configuración y variables de entorno"; la otra es `src/main.ts`, que lee `PORT` porque lo necesita antes de crear la app. Ningún otro archivo lee `process.env`.
 
 **Quién las corre**
 - En el Sprint 1 los cinco compartimos una sola base en Neon. Por eso **solo Elizabeth ejecuta `migration:run` y `migration:generate`.**
@@ -412,6 +415,12 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - **Render**, con despliegue automático en cada push a `develop`. URL: https://dinno-backend.onrender.com (health: `/v1/health`).
 - `.github/workflows/ci-cd.yml` tiene dos jobs. `checks` corre en cada PR hacia `develop` y en cada push a `develop`: Node 24, `npm ci`, lint, typecheck, test, test:e2e y build. `verify-deployment` corre solo en cada push a `develop`, después de `checks`, y espera a que `/v1/health` devuelva el commit del push.
 - `PORT` lo asigna Render; no lo fijes. Las variables se configuran en el panel de Render, nunca en el repositorio.
+
+### Migración a Azure (pendiente)
+Tres cosas dependen hoy de Render y hay que resolverlas al pasar a Azure:
+- **Ambiente desplegado:** `isDeployedEnvironment` (`identity-access/auth/deployed-environment.ts`) lo detecta por `RENDER` o `NODE_ENV=production`. En Azure no existe `RENDER`: hay que asegurar `NODE_ENV=production`. Si falta, el usuario de desarrollo y el emulador de Firebase no se bloquean al arrancar, y la API escucha solo en `127.0.0.1`.
+- **Commit desplegado:** `GET /v1/health` lee `RENDER_GIT_COMMIT` (`app.service.ts`). En Azure hay que pasar el commit con otra variable desde el pipeline y leerla en su lugar; si no, `commit` llega en `null` y el job `verify-deployment` del CI nunca termina bien.
+- **WebSocket:** en Azure App Service hay que activar *Web sockets*. Con más de una instancia hace falta ARR affinity (sesiones pegajosas) o un adaptador compartido de Socket.IO (por ejemplo Redis), porque la sala `diners` vive en la memoria del proceso (ver "Tiempo real: eventos y WebSocket").
 
 ### Sprint 2 · Notas de implementación
 - `UserRole` tiene `RESTAURANT_ADMIN` y `DINER`. Nada de literales `'restaurant_admin'` en el código; `users.role` lleva un check con los dos valores.
