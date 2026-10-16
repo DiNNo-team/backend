@@ -3,11 +3,9 @@
 Esquema vigente de PostgreSQL (Neon). **Se actualiza en el mismo PR que cambia el esquema.**
 Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md](../CLAUDE.md), subsección "Migraciones".
 
-Última migración aplicada: `1791342586330-AddRestaurantIsOpen` (2026-10-08).
+Última migración aplicada: `1792087341885-AddDinerRoleAndRestaurantLocation` (2026-10-15).
 
-> Las cinco migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`) y `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08). Todo lo que se documenta abajo existe en Neon, salvo lo marcado como *pendiente*.
-
-> **Pendiente de aplicar en Neon:** `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, rama `feature/s2-cuentas-roles`; Elizabeth). Agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`. Se aplica antes de fusionar la rama a `develop`.
+> Las seis migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15). Todo lo que se documenta abajo existe en Neon.
 
 ## Tablas
 
@@ -27,8 +25,8 @@ Todas las tablas tienen `id`, `created_at` y `updated_at`:
 | `category` | `varchar(50)` | NULL. Solo uno de los valores de la lista de categorías (`CHK_restaurants_category`); ver "Decisiones" |
 | `address` | `varchar(255)` | NULL |
 | `is_open` | `boolean` | NOT NULL, por defecto `true`. Estado Abierto/Cerrado del restaurante (PBI 8); ver "Decisiones" |
-| `latitude` | `numeric(9,6)` | NULL. Entre -90 y 90 (`CHK_restaurants_latitude`). *Pendiente* (Sprint 2) |
-| `longitude` | `numeric(9,6)` | NULL. Entre -180 y 180 (`CHK_restaurants_longitude`). *Pendiente* (Sprint 2) |
+| `latitude` | `numeric(9,6)` | NULL. Entre -90 y 90 (`CHK_restaurants_latitude`). Sprint 2 |
+| `longitude` | `numeric(9,6)` | NULL. Entre -180 y 180 (`CHK_restaurants_longitude`). Sprint 2 |
 
 - `CHK_restaurants_location_pair`: las dos coordenadas o ninguna. Sin coordenadas, el restaurante no aparece en la búsqueda del comensal.
 - La base solo exige rangos válidos en el planeta; **la restricción a Bogotá la pone la API** (contrato del Sprint 2, `CLAUDE.md` sección 10).
@@ -55,9 +53,9 @@ Horario de atención: una fila por cada día que el restaurante **abre**. Un dí
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `firebase_uid` | `varchar(128)` | NULL, único (`UQ_users_firebase_uid`); NULL para usuarios de prueba sin UID |
-| `email` | `varchar(255)` | NOT NULL, único (`UQ_users_email`). En minúsculas y sin espacios (`CHK_users_email_normalized`, *pendiente*) |
-| `display_name` | `varchar(60)` | NULL. Nombre para mostrar del comensal; NULL en cuentas de restaurante. *Pendiente* (Sprint 2) |
-| `role` | `varchar(50)` | NOT NULL. `'restaurant_admin'` o `'diner'` (`CHK_users_role`, *pendiente*; valores de `UserRole`). Cambiar la lista exige una migración escrita a mano que borre y vuelva a crear el check |
+| `email` | `varchar(255)` | NOT NULL, único (`UQ_users_email`). En minúsculas y sin espacios (`CHK_users_email_normalized`) |
+| `display_name` | `varchar(60)` | NULL. Nombre para mostrar del comensal; NULL en cuentas de restaurante. Sprint 2 |
+| `role` | `varchar(50)` | NOT NULL. `'restaurant_admin'` o `'diner'` (`CHK_users_role`; valores de `UserRole`). Cambiar la lista exige una migración escrita a mano que borre y vuelva a crear el check |
 | `restaurant_id` | `uuid` | NULL = usuario que aún no registra su restaurante (onboarding), o comensal. FK → `restaurants.id` |
 
 - Desde el Sprint 2 el backend no crea usuarios al iniciar sesión. Una fila de `users` existe solo si se habilitó a mano como restaurante ("Restaurantes habilitados") o si la app la creó como comensal con `POST /v1/diners/me`.
