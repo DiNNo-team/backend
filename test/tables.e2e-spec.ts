@@ -1,5 +1,6 @@
 import { INestApplication, Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
@@ -100,6 +101,7 @@ describe('Tables (e2e)', () => {
           ignoreEnvFile: true,
           load: [() => ({ DEV_USER_ENABLED: 'true', DEV_USER_ID: OWNER_ID })],
         }),
+        EventEmitterModule.forRoot(),
         RestaurantOperationsModule,
       ],
     })

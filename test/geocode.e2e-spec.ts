@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
@@ -57,6 +58,7 @@ describe('Geocode (e2e)', () => {
             }),
           ],
         }),
+        EventEmitterModule.forRoot(),
         RestaurantOperationsModule,
       ],
     })

@@ -6,13 +6,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { Request } from 'express';
 import { Repository } from 'typeorm';
 import { sessionExpired } from '../auth/auth-errors.js';
 import { isDeployedEnvironment } from '../auth/deployed-environment.js';
 import { User } from '../users/user.entity.js';
 import type { RequestIdentity } from './current-user-data.js';
-import { CurrentUserResolver } from './current-user.resolver.js';
+import {
+  CurrentUserResolver,
+  type IdentityRequest,
+} from './current-user.resolver.js';
 
 export const DEV_USER_HEADER = 'x-dev-user-id';
 
@@ -60,7 +62,7 @@ export class DevUserResolver
   }
 
   // Always a registered user, with the role of its row (restaurant_admin or diner).
-  async resolve(request: Request): Promise<RequestIdentity> {
+  async resolve(request: IdentityRequest): Promise<RequestIdentity> {
     if (!this.enabled) {
       throw sessionExpired();
     }

@@ -6,6 +6,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import type { Redis } from 'ioredis';
 import { DataSource } from 'typeorm';
@@ -29,6 +30,9 @@ const logger = new Logger('Database');
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // Internal events between modules (Sprint 2, real time): registered once
+    // here, global. restaurant-operations emits, search-availability listens.
+    EventEmitterModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {

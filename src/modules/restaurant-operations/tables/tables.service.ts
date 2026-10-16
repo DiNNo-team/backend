@@ -4,10 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { isUniqueViolation } from '../../../common/database/unique-violation.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
+import {
+  availabilityAffected,
+  RESTAURANT_AVAILABILITY_AFFECTED,
+} from '../shared/availability-affected.event.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
 import type { CreateTableDto } from './dto/create-table.dto.js';
 import type { UpdateTableDto } from './dto/update-table.dto.js';
@@ -38,6 +43,7 @@ export class TablesService {
   constructor(
     @InjectRepository(Table) private readonly tables: Repository<Table>,
     private readonly statusLog: TableStatusLog,
+    private readonly events: EventEmitter2,
   ) {}
 
   async create(
@@ -56,7 +62,12 @@ export class TablesService {
       isActive: true,
     });
 
-    return this.writeIdentifier(() => this.tables.save(table), identifier);
+    const saved = await this.writeIdentifier(
+      () => this.tables.save(table),
+      identifier,
+    );
+    this.emitAvailabilityAffected(ownerId);
+    return saved;
   }
 
   async findAll(restaurantId: string | null): Promise<Table[]> {
@@ -70,7 +81,8 @@ export class TablesService {
   }
 
   // Status change and log entry share one transaction: if the log fails, the
-  // status change is rolled back.
+  // status change is rolled back. The availability event goes out after the
+  // commit, and only if the status really changed.
   async updateStatus(
     user: CurrentUserData,
     tableId: string,
@@ -78,40 +90,46 @@ export class TablesService {
   ): Promise<Table> {
     const ownerId = requireRestaurant(user.restaurantId);
 
-    return this.tables.manager.transaction(async (manager) => {
-      // Row lock: concurrent changes to the same table queue up, so each log
-      // entry gets the real previous status.
-      const table = await manager.findOne(Table, {
-        where: { id: tableId, restaurantId: ownerId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!table) {
-        throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
-      }
-      if (!table.isActive) {
-        throw new ConflictException(TABLE_INACTIVE_MESSAGE);
-      }
-      // Same status is a valid no-op (the web's "Deshacer" relies on it):
-      // nothing changed, so nothing is written or logged.
-      if (table.status === status) {
-        return table;
-      }
+    const { table, changed } = await this.tables.manager.transaction(
+      async (manager) => {
+        // Row lock: concurrent changes to the same table queue up, so each log
+        // entry gets the real previous status.
+        const table = await manager.findOne(Table, {
+          where: { id: tableId, restaurantId: ownerId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!table) {
+          throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+        }
+        if (!table.isActive) {
+          throw new ConflictException(TABLE_INACTIVE_MESSAGE);
+        }
+        // Same status is a valid no-op (the web's "Deshacer" relies on it):
+        // nothing changed, so nothing is written, logged or emitted.
+        if (table.status === status) {
+          return { table, changed: false };
+        }
 
-      const previousStatus = table.status;
-      table.status = status;
-      const saved = await manager.save(table);
-      await this.statusLog.record(
-        {
-          tableId: saved.id,
-          previousStatus,
-          newStatus: status,
-          userId: user.userId,
-          changedAt: new Date(),
-        },
-        manager,
-      );
-      return saved;
-    });
+        const previousStatus = table.status;
+        table.status = status;
+        const saved = await manager.save(table);
+        await this.statusLog.record(
+          {
+            tableId: saved.id,
+            previousStatus,
+            newStatus: status,
+            userId: user.userId,
+            changedAt: new Date(),
+          },
+          manager,
+        );
+        return { table: saved, changed: true };
+      },
+    );
+    if (changed) {
+      this.emitAvailabilityAffected(ownerId);
+    }
+    return table;
   }
 
   // Edit: identifier and/or capacity. Works on inactive tables too and never
@@ -179,7 +197,7 @@ export class TablesService {
   ): Promise<Table> {
     const ownerId = requireRestaurant(user.restaurantId);
 
-    return this.tables.manager.transaction(async (manager) => {
+    const updated = await this.tables.manager.transaction(async (manager) => {
       // Same row lock as updateStatus: the log always gets the real previous state.
       const table = await manager.findOne(Table, {
         where: { id: tableId, restaurantId: ownerId },
@@ -214,6 +232,16 @@ export class TablesService {
       );
       return saved;
     });
+    this.emitAvailabilityAffected(ownerId);
+    return updated;
+  }
+
+  // Call only after the write is committed: the listeners read the database.
+  private emitAvailabilityAffected(restaurantId: string): void {
+    this.events.emit(
+      RESTAURANT_AVAILABILITY_AFFECTED,
+      availabilityAffected(restaurantId),
+    );
   }
 
   // "4", "04" and "Mesa 4" are the same table (table-identifier.ts). The unique

@@ -6,6 +6,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { DecodedIdToken } from 'firebase-admin/auth';
@@ -209,6 +210,7 @@ describe('Accounts and roles (e2e)', () => {
             }),
           ],
         }),
+        EventEmitterModule.forRoot(),
         RestaurantOperationsModule,
         DinerProbeModule,
       ],

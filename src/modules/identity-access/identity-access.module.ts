@@ -17,6 +17,7 @@ import { RolesGuard } from './roles/roles.guard.js';
 import { DinersController } from './diners/diners.controller.js';
 import { DinersService } from './diners/diners.service.js';
 import { MeController } from './users/me.controller.js';
+import { DinerSocketAuthenticator } from './realtime/diner-socket-authenticator.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
@@ -38,8 +39,15 @@ import { MeController } from './users/me.controller.js';
     RolesGuard,
     UsersService,
     DinersService,
+    DinerSocketAuthenticator,
   ],
-  exports: [CurrentUserResolver, CurrentUserGuard, RolesGuard, UsersService],
+  exports: [
+    CurrentUserResolver,
+    CurrentUserGuard,
+    RolesGuard,
+    UsersService,
+    DinerSocketAuthenticator,
+  ],
 })
 export class IdentityAccessModule implements OnModuleInit {
   constructor(private readonly config: ConfigService) {}

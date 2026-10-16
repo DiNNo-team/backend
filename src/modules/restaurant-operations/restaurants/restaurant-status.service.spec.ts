@@ -1,3 +1,4 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { ForbiddenException, HttpException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import { RESTAURANT_REQUIRED_CODE } from '../shared/restaurant-required.js';
@@ -33,6 +34,7 @@ function createService() {
   };
   const service = new RestaurantStatusService(
     restaurants as unknown as Repository<Restaurant>,
+    { emit: vi.fn() } as unknown as EventEmitter2,
   );
   return { service, restaurants };
 }
@@ -131,10 +133,8 @@ describe('RestaurantStatusService', () => {
 
       await expect(result).rejects.toThrow('not found');
       await expect(result).rejects.not.toBeInstanceOf(HttpException);
-      // The update matched no row, so nothing changed.
-      await expect(restaurants.update.mock.results[0].value).resolves.toEqual({
-        affected: 0,
-      });
+      // It fails on the read of the current state, before writing anything.
+      expect(restaurants.update).not.toHaveBeenCalled();
     });
   });
 });
