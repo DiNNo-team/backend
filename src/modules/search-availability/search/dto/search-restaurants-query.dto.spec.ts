@@ -178,6 +178,30 @@ describe('SearchRestaurantsQueryDto', () => {
         ).resolves.toEqual([SEARCH_MESSAGES.RADIUS_INVALID]);
       },
     );
+
+    // Only plain decimals, like lat, lng and partySize: Number() would read
+    // these as 2 (or as a number at all).
+    it.each(['0x2', '2e0', '+2', 'Infinity', ' ', ['2', '5']])(
+      'rejects radiusKm=%j even if Number() would read a number',
+      async (radiusKm) => {
+        await expect(
+          messagesFor({ zone: 'calle-72', radiusKm }),
+        ).resolves.toEqual([SEARCH_MESSAGES.RADIUS_INVALID]);
+      },
+    );
+
+    it('accepts a valid radius with surrounding spaces', async () => {
+      await expect(
+        validate({ zone: 'calle-72', radiusKm: ' 2 ' }),
+      ).resolves.toEqual({ zone: 'calle-72', radiusKm: 2 });
+    });
+
+    it('defaults to 2 km when radiusKm is missing', async () => {
+      await expect(validate({ zone: 'calle-72' })).resolves.toEqual({
+        zone: 'calle-72',
+        radiusKm: 2,
+      });
+    });
   });
 
   describe('category', () => {

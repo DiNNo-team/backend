@@ -458,6 +458,11 @@ describe('Search (e2e)', () => {
         'El radio (radiusKm) debe ser 1, 2, 5 o 10.',
       ],
       [
+        'radiusKm=0x2 (only plain decimals)',
+        'zone=calle-72&radiusKm=0x2',
+        'El radio (radiusKm) debe ser 1, 2, 5 o 10.',
+      ],
+      [
         'an unknown parameter',
         'zone=calle-72&restaurantId=x',
         'El campo "restaurantId" no se permite. Quítalo de la solicitud.',

@@ -58,8 +58,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Tus pendientes:**
   - **Seed:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`.
   - Probar el login con un token real de Firebase contra Render.
-  - Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 11). **Antes de fusionar esta rama a `develop`:** desde ahora, con `FIREBASE_AUTH_EMULATOR_HOST` definida o `DEV_USER_ENABLED=true`, la app no arranca en Render.
-  - Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.
+  - ~~Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 11). **Antes de fusionar esta rama a `develop`:** desde ahora, con `FIREBASE_AUTH_EMULATOR_HOST` definida o `DEV_USER_ENABLED=true`, la app no arranca en Render.~~ **Hecho** (confirmado por Elizabeth el 2026-10-15).
+  - ~~Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.~~ **Hecho** (confirmado por Elizabeth el 2026-10-15).
   - Aplicar en Neon la migración de cada rama antes de fusionar su PR (ver "Reglas nuevas de este sprint").
   - Revisar los PR del backend.
 - **Los horarios no van en `restaurants`, van en otra tabla (`restaurant_schedules`, una fila por día abierto).** La edición no los puede copiar sola. Además, si un campo de horarios entra en `RestaurantFieldsDto` sin una propiedad con el mismo nombre en `Restaurant`, `npm run typecheck` falla en `restaurant-edit.service.ts` (el `Pick` de `RestaurantChanges`).
@@ -228,6 +228,13 @@ Resuelta el 2026-10-15 (`feature/s2-cuentas-roles`, detalle en el Historial):
 - ~~**Join de la bitácora a `users`** (excepción del Sprint 1)~~: los correos salen de `UsersService.findEmailsByIds`.
 
 ## Historial
+
+- **2026-10-15 · Elizabeth · Ajustes de la revisión de integración del Sprint 2 (`chore/sprint2-ajustes-backend`).** Sin cambios de esquema, de rutas, de respuestas ni de Swagger; sin dependencias nuevas. El contrato (`CLAUDE.md`, sección 10) no cambia.
+  - **`radiusKm` estricto:** usa `toNumberOrNaN`, igual que `lat`, `lng` y `partySize`. `0x2`, `2e0`, `+2`, `Infinity` y vacío ahora dan `400` con el mensaje de siempre (antes `0x2` y `2e0` pasaban como 2); `' 2 '` se acepta y sin `radiusKm` sigue siendo 2.
+  - **Comentario de `SERVER_ERROR`** en `availability.gateway.ts`: ya es parte del contrato, y con ese código la app reintenta con espera creciente (5 s, 15 s, 30 s) además de consultar cada 60 s. Solo el comentario.
+  - **Abrir y cerrar el restaurante de forma atómica:** `PATCH /v1/restaurants/me/status` ya no lee y luego escribe; es una sola sentencia condicional (`WHERE id = :id AND is_open <> :isOpen`) y emite `availability.changed` solo si `affected === 1`. Dos cambios simultáneos al mismo estado emiten un solo evento, y una escritura que falla no emite. La respuesta HTTP no cambia (`{ isOpen }` con el estado final) y `RESTAURANT_REQUIRED` sigue igual.
+  - **Archivos de Sergio que se tocaron:** `restaurants/restaurant-status.service.ts` (solo el método `update`), `restaurants/restaurant-status.service.spec.ts` (el repositorio simulado aplica la condición; pruebas nuevas: cambio real, mismo estado, dos peticiones simultáneas y fallo de escritura; la del restaurante inexistente ya no espera que no se llame a `update`, sino que no se emita) y `test/restaurant-status.e2e-spec.ts` (el repositorio simulado aplica la condición y cambia el `where` esperado). Si tu e2e simula `update` del repositorio de `Restaurant` para esta ruta, recibe `{ id, isOpen: Not(<nuevo>) }`.
+  - **Pendientes de Elizabeth del Sprint 1 cerrados:** variables de Render y regla de checks obligatorios en GitHub (confirmado el 2026-10-15).
 
 - **2026-10-15 · Elizabeth · Tiempo real: eventos y WebSocket (`feature/s2-tiempo-real`, PBI 5.1).** Sin cambios de esquema ni de las rutas HTTP.
   - **Qué quedó listo:** el evento `availability.changed` por Socket.IO para comensales (mismo host, `/socket.io`, sala `diners`), con autenticación en el handshake y los códigos de `connect_error` del contrato (más `EMAIL_NOT_VERIFIED`). `restaurant-operations` emite un evento interno después de guardar; `search-availability` recalcula y envía. Detalle en `CLAUDE.md`, sección 11, "Tiempo real: eventos y WebSocket". Script de QA: `scripts/listen-availability.mjs`.

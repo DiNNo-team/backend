@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
+import { Not, type FindOperator } from 'typeorm';
 import { configureApp } from './../src/app.setup.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
@@ -111,14 +112,21 @@ describe('Restaurant status (e2e)', () => {
         const found = stored.get(id);
         return Promise.resolve(found ? { ...found } : null);
       }),
-      // Writes only the given columns, like Repository.update.
-      update: vi.fn(({ id }: { id: string }, changes: Partial<Restaurant>) => {
-        const found = stored.get(id);
-        if (found) {
-          stored.set(id, { ...found, ...changes });
-        }
-        return Promise.resolve({ affected: found ? 1 : 0 });
-      }),
+      // Like the conditional Repository.update of the service: changes only
+      // the given columns, and only if isOpen is Not(the new value).
+      update: vi.fn(
+        (
+          { id, isOpen }: { id: string; isOpen: FindOperator<boolean> },
+          changes: Partial<Restaurant>,
+        ) => {
+          const found = stored.get(id);
+          const matches = found !== undefined && found.isOpen !== isOpen.value;
+          if (matches) {
+            stored.set(id, { ...found, ...changes });
+          }
+          return Promise.resolve({ affected: matches ? 1 : 0 });
+        },
+      ),
     };
 
     await createApp(true);
@@ -189,7 +197,7 @@ describe('Restaurant status (e2e)', () => {
     expect(stored.get(OTHER_RESTAURANT_ID)?.isOpen).toBe(true);
     expect(restaurants.update).toHaveBeenCalledTimes(1);
     expect(restaurants.update).toHaveBeenCalledWith(
-      { id: RESTAURANT_ID },
+      { id: RESTAURANT_ID, isOpen: Not(false) },
       { isOpen: false },
     );
   });
