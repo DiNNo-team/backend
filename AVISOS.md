@@ -62,6 +62,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - ~~Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.~~ **Hecho** (confirmado por Elizabeth el 2026-10-15).
   - Aplicar en Neon la migración de cada rama antes de fusionar su PR (ver "Reglas nuevas de este sprint").
   - Revisar los PR del backend.
+  - **Seed (Santiago):** integrar `src/seed-data/restaurants.json` (`feature/s2-seed-restaurantes`) a `seed.ts` y correrlo en Neon. Ojo: `npm run seed` corre `dist/seed.js` y `nest build` no copia el `.json` a `dist/`. Los `ownerEmail` van con `restaurante-01` a `15@dinno.test`.
 - **Los horarios no van en `restaurants`, van en otra tabla (`restaurant_schedules`, una fila por día abierto).** La edición no los puede copiar sola. Además, si un campo de horarios entra en `RestaurantFieldsDto` sin una propiedad con el mismo nombre en `Restaurant`, `npm run typecheck` falla en `restaurant-edit.service.ts` (el `Pick` de `RestaurantChanges`).
 - **Carrera conocida en el identificador de mesa:** el índice `UQ_tables_restaurant_id_identifier` compara `lower(trim(identifier))`, así que no cubre que "4" y "04" lleguen a la vez en dos peticiones simultáneas. El chequeo de repetidos de la aplicación (`assertIdentifierAvailable`, en `tables.service.ts`) lo cubre salvo en esa carrera. Es un riesgo bajo y aceptado (hay un dueño por restaurante). Solución futura posible: un índice sobre la clave normalizada.
 
@@ -94,7 +95,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - **`POST /v1/restaurants` y `PATCH /v1/restaurants/me`** aceptan `latitude` y `longitude` (números): **las dos o ninguna**, dentro de Bogotá (latitud 4.45 a 4.85, longitud -74.25 a -73.95), se aceptan con más decimales y **se guardan redondeadas a 6**. **No se pueden borrar:** `null` da `400`. En el `PATCH`, enviar solo las coordenadas es una edición válida. La obligatoriedad al registrar la impone tu formulario: el backend las deja opcionales para no romper la web actual.
   - **Las respuestas** de `POST /v1/restaurants`, `GET` y `PATCH /v1/restaurants/me` traen `latitude` y `longitude` (`number | null`). **El aviso «Completa tu ubicación» se basa en `latitude === null` en `GET /v1/restaurants/me`.**
 
-**Santiago:** formato del archivo de los 15 restaurantes reales. Entrégalo el **viernes 16** como `src/seed-data/restaurants.json` en una rama `feature/s2-seed-restaurantes`, con PR para Elizabeth. **No ejecutes el seed en Neon.** Cada elemento:
+**Santiago:** formato del archivo de los 15 restaurantes reales. ~~Entrégalo el **viernes 16** como `src/seed-data/restaurants.json` en una rama `feature/s2-seed-restaurantes`, con PR para Elizabeth.~~ **Entregado** el 2026-10-22 en `feature/s2-seed-restaurantes` (ver «Historial»). **No ejecutes el seed en Neon.** Cada elemento:
 ```json
 {
   "name": "Nombre real",
@@ -133,6 +134,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Te falta en la web:** el formulario del registro del restaurante en `/onboarding`, con sus validaciones: "Tu restaurante" (nombre y categoría), "Ubicación" (dirección) y "Horarios" (con el `HoursEditor` del kit). Registro y edición validan igual, en la web y en el backend (`RestaurantFieldsDto`). Luego, su integración con `POST /v1/restaurants` y la prueba del recorrido con el usuario de onboarding (no con `demo@example.com`).
 
 ### Sergio
+- **Nuevo (QA de disponibilidad, Santiago):** cuando Elizabeth corra el seed con los 15 restaurantes reales, el caso límite del 30 % está en Piazza Italia Calle 93: 3 de 10 mesas libres = Pocas mesas. Se ve después de las 12:00 (abre a mediodía).
 - **Nuevo (QA de tiempo real): script para ver llegar `availability.changed`.** Con la API en local (`npm run start:dev`, usuario de desarrollo activo), en otra terminal:
   - `node scripts/listen-availability.mjs --dev-user-id <uuid del comensal>` (el de `comensal@example.com`, que imprime el seed). Debe decir "Conectado … como comensal".
   - Cambia el estado de una mesa, desactívala o reactívala, crea una, abre o cierra el restaurante, o edita su horario o ubicación desde la web o Swagger: cada cambio imprime una línea con la hora y `{ restaurantId, availability, isOpenNow, isSearchable }`. Repetir el mismo estado de una mesa o del restaurante no imprime nada, y editar el identificador o la capacidad de una mesa tampoco.
@@ -228,6 +230,10 @@ Resuelta el 2026-10-15 (`feature/s2-cuentas-roles`, detalle en el Historial):
 - ~~**Join de la bitácora a `users`** (excepción del Sprint 1)~~: los correos salen de `UsersService.findEmailsByIds`.
 
 ## Historial
+
+- **2026-10-22 · Santiago · Datos de los 15 restaurantes reales para el seed (`feature/s2-seed-restaurantes`, PBI 6.1).** Sin cambios de esquema ni migraciones (las columnas que usan ya existen en Neon), sin cambios en la API y sin dependencias nuevas. No toca `seed.ts`.
+  - **Qué quedó listo:** `src/seed-data/restaurants.json` (15 restaurantes con el formato de la sección de Santiago) y `restaurants.spec.ts` (revisa los criterios del reparto con `computeAvailability`, suponiendo la demo entre semana de 9:00 a 11:00 a. m., `DEMO_WINDOW`).
+  - **Por verificar:** nombre, dirección y horario salen de fuentes públicas; mesas, estados, `isOpen` y correos son datos de prueba.
 
 - **2026-10-15 · Elizabeth · Ajustes de la revisión de integración del Sprint 2 (`chore/sprint2-ajustes-backend`).** Sin cambios de esquema, de rutas, de respuestas ni de Swagger; sin dependencias nuevas. El contrato (`CLAUDE.md`, sección 10) no cambia.
   - **`radiusKm` estricto:** usa `toNumberOrNaN`, igual que `lat`, `lng` y `partySize`. `0x2`, `2e0`, `+2`, `Infinity` y vacío ahora dan `400` con el mensaje de siempre (antes `0x2` y `2e0` pasaban como 2); `' 2 '` se acepta y sin `radiusKm` sigue siendo 2.
