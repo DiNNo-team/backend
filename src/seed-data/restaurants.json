@@ -3,8 +3,8 @@
     "name": "Abasto Quinta Camacho",
     "category": "colombian",
     "address": "Calle 69A #9-09, Quinta Camacho, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.653271,
+    "longitude": -74.058989,
     "isOpen": true,
     "ownerEmail": "restaurante-01@dinno.test",
     "schedules": [
@@ -106,8 +106,8 @@
     "name": "Abasto Usaquén",
     "category": "colombian",
     "address": "Calle 118 #5-41, Usaquén, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.694586,
+    "longitude": -74.030153,
     "isOpen": true,
     "ownerEmail": "restaurante-02@dinno.test",
     "schedules": [
@@ -221,8 +221,8 @@
     "name": "Juan Valdez Café Emaús",
     "category": "cafe",
     "address": "Calle 70 #6-09, Zona G, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.652411,
+    "longitude": -74.055852,
     "isOpen": true,
     "ownerEmail": "restaurante-03@dinno.test",
     "schedules": [
@@ -309,56 +309,26 @@
     ]
   },
   {
-    "name": "McDonald's Quinta Camacho",
+    "name": "McDonald's Parque 93",
     "category": "fast_food",
-    "address": "Carrera 9 #71-99, Quinta Camacho, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "address": "Carrera 12 #93-86, Parque de la 93, Bogotá",
+    "latitude": 4.676391,
+    "longitude": -74.048427,
     "isOpen": true,
     "ownerEmail": "restaurante-04@dinno.test",
     "schedules": [
       {
         "dayOfWeek": 1,
         "isOpen24h": false,
-        "opensAt": "07:00",
-        "closesAt": "22:00"
+        "opensAt": "06:00",
+        "closesAt": "23:59"
       },
-      {
-        "dayOfWeek": 2,
-        "isOpen24h": false,
-        "opensAt": "07:00",
-        "closesAt": "22:00"
-      },
-      {
-        "dayOfWeek": 3,
-        "isOpen24h": false,
-        "opensAt": "07:00",
-        "closesAt": "22:00"
-      },
-      {
-        "dayOfWeek": 4,
-        "isOpen24h": false,
-        "opensAt": "07:00",
-        "closesAt": "22:00"
-      },
-      {
-        "dayOfWeek": 5,
-        "isOpen24h": false,
-        "opensAt": "07:00",
-        "closesAt": "23:00"
-      },
-      {
-        "dayOfWeek": 6,
-        "isOpen24h": false,
-        "opensAt": "07:00",
-        "closesAt": "23:00"
-      },
-      {
-        "dayOfWeek": 7,
-        "isOpen24h": false,
-        "opensAt": "07:00",
-        "closesAt": "22:00"
-      }
+      { "dayOfWeek": 2, "isOpen24h": true },
+      { "dayOfWeek": 3, "isOpen24h": true },
+      { "dayOfWeek": 4, "isOpen24h": true },
+      { "dayOfWeek": 5, "isOpen24h": true },
+      { "dayOfWeek": 6, "isOpen24h": true },
+      { "dayOfWeek": 7, "isOpen24h": true }
     ],
     "tables": [
       {
@@ -424,21 +394,56 @@
     ]
   },
   {
-    "name": "McDonald's Calle 125",
-    "category": "fast_food",
-    "address": "Calle 125 #32-86, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "name": "Al Alma Parque 93",
+    "category": "cafe",
+    "address": "Calle 93A #11-49, Parque de la 93, Bogotá",
+    "latitude": 4.675482,
+    "longitude": -74.047531,
     "isOpen": true,
     "ownerEmail": "restaurante-05@dinno.test",
     "schedules": [
-      { "dayOfWeek": 1, "isOpen24h": true },
-      { "dayOfWeek": 2, "isOpen24h": true },
-      { "dayOfWeek": 3, "isOpen24h": true },
-      { "dayOfWeek": 4, "isOpen24h": true },
-      { "dayOfWeek": 5, "isOpen24h": true },
-      { "dayOfWeek": 6, "isOpen24h": true },
-      { "dayOfWeek": 7, "isOpen24h": true }
+      {
+        "dayOfWeek": 1,
+        "isOpen24h": false,
+        "opensAt": "08:00",
+        "closesAt": "19:00"
+      },
+      {
+        "dayOfWeek": 2,
+        "isOpen24h": false,
+        "opensAt": "08:00",
+        "closesAt": "19:00"
+      },
+      {
+        "dayOfWeek": 3,
+        "isOpen24h": false,
+        "opensAt": "08:00",
+        "closesAt": "19:00"
+      },
+      {
+        "dayOfWeek": 4,
+        "isOpen24h": false,
+        "opensAt": "08:00",
+        "closesAt": "19:00"
+      },
+      {
+        "dayOfWeek": 5,
+        "isOpen24h": false,
+        "opensAt": "08:00",
+        "closesAt": "21:00"
+      },
+      {
+        "dayOfWeek": 6,
+        "isOpen24h": false,
+        "opensAt": "08:00",
+        "closesAt": "21:00"
+      },
+      {
+        "dayOfWeek": 7,
+        "isOpen24h": false,
+        "opensAt": "08:00",
+        "closesAt": "18:00"
+      }
     ],
     "tables": [
       {
@@ -468,59 +473,23 @@
       {
         "identifier": "05",
         "capacity": 4,
-        "status": "available",
+        "status": "reserved",
         "isActive": true
       },
       {
         "identifier": "06",
         "capacity": 4,
-        "status": "occupied",
-        "isActive": true
-      },
-      {
-        "identifier": "07",
-        "capacity": 4,
         "status": "available",
-        "isActive": true
-      },
-      {
-        "identifier": "08",
-        "capacity": 4,
-        "status": "reserved",
-        "isActive": true
-      },
-      {
-        "identifier": "09",
-        "capacity": 6,
-        "status": "available",
-        "isActive": true
-      },
-      {
-        "identifier": "10",
-        "capacity": 6,
-        "status": "occupied",
-        "isActive": true
-      },
-      {
-        "identifier": "11",
-        "capacity": 6,
-        "status": "available",
-        "isActive": true
-      },
-      {
-        "identifier": "12",
-        "capacity": 8,
-        "status": "occupied",
         "isActive": true
       }
     ]
   },
   {
-    "name": "Cosechas Parque de los Hippies",
+    "name": "Oakberry Zona T",
     "category": "healthy",
-    "address": "Calle 60 #7-36, Chapinero, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "address": "Carrera 13 #84-04, Zona T, Bogotá",
+    "latitude": 4.667812,
+    "longitude": -74.053845,
     "isOpen": true,
     "ownerEmail": "restaurante-06@dinno.test",
     "schedules": [
@@ -528,43 +497,43 @@
         "dayOfWeek": 1,
         "isOpen24h": false,
         "opensAt": "08:00",
-        "closesAt": "18:00"
+        "closesAt": "20:00"
       },
       {
         "dayOfWeek": 2,
         "isOpen24h": false,
         "opensAt": "08:00",
-        "closesAt": "18:00"
+        "closesAt": "20:00"
       },
       {
         "dayOfWeek": 3,
         "isOpen24h": false,
         "opensAt": "08:00",
-        "closesAt": "18:00"
+        "closesAt": "20:00"
       },
       {
         "dayOfWeek": 4,
         "isOpen24h": false,
         "opensAt": "08:00",
-        "closesAt": "18:00"
+        "closesAt": "20:00"
       },
       {
         "dayOfWeek": 5,
         "isOpen24h": false,
         "opensAt": "08:00",
-        "closesAt": "18:00"
+        "closesAt": "20:00"
       },
       {
         "dayOfWeek": 6,
         "isOpen24h": false,
         "opensAt": "08:00",
-        "closesAt": "18:00"
+        "closesAt": "20:00"
       },
       {
         "dayOfWeek": 7,
         "isOpen24h": false,
         "opensAt": "08:00",
-        "closesAt": "18:00"
+        "closesAt": "20:00"
       }
     ],
     "tables": [
@@ -595,55 +564,49 @@
     ]
   },
   {
-    "name": "Cosechas Galerías",
+    "name": "Kapira Restaurante Vegetariano",
     "category": "healthy",
-    "address": "Av. Carrera 30 #52-98, Galerías, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "address": "Calle 39A #21-51, La Soledad, Teusaquillo, Bogotá",
+    "latitude": 4.628514,
+    "longitude": -74.072186,
     "isOpen": true,
     "ownerEmail": "restaurante-07@dinno.test",
     "schedules": [
       {
         "dayOfWeek": 1,
         "isOpen24h": false,
-        "opensAt": "07:30",
-        "closesAt": "19:00"
+        "opensAt": "07:00",
+        "closesAt": "18:30"
       },
       {
         "dayOfWeek": 2,
         "isOpen24h": false,
-        "opensAt": "07:30",
-        "closesAt": "19:00"
+        "opensAt": "07:00",
+        "closesAt": "18:30"
       },
       {
         "dayOfWeek": 3,
         "isOpen24h": false,
-        "opensAt": "07:30",
-        "closesAt": "19:00"
+        "opensAt": "07:00",
+        "closesAt": "18:30"
       },
       {
         "dayOfWeek": 4,
         "isOpen24h": false,
-        "opensAt": "07:30",
-        "closesAt": "19:00"
+        "opensAt": "07:00",
+        "closesAt": "18:30"
       },
       {
         "dayOfWeek": 5,
         "isOpen24h": false,
-        "opensAt": "07:30",
-        "closesAt": "19:00"
+        "opensAt": "07:00",
+        "closesAt": "18:30"
       },
       {
         "dayOfWeek": 6,
         "isOpen24h": false,
-        "opensAt": "08:00",
-        "closesAt": "17:00"
-      },
-      {
-        "dayOfWeek": 7,
-        "isOpen24h": false,
-        "opensAt": "09:00",
-        "closesAt": "15:00"
+        "opensAt": "07:00",
+        "closesAt": "18:30"
       }
     ],
     "tables": [
@@ -674,55 +637,55 @@
     ]
   },
   {
-    "name": "Archie's Zona Rosa",
+    "name": "Piazza Italia Calle 93",
     "category": "italian",
-    "address": "Calle 82 #13-07, Zona Rosa, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "address": "Calle 93A #13A-21, Parque de la 93, Bogotá",
+    "latitude": 4.677053,
+    "longitude": -74.050164,
     "isOpen": true,
     "ownerEmail": "restaurante-08@dinno.test",
     "schedules": [
       {
         "dayOfWeek": 1,
         "isOpen24h": false,
-        "opensAt": "08:00",
-        "closesAt": "23:00"
+        "opensAt": "12:00",
+        "closesAt": "22:00"
       },
       {
         "dayOfWeek": 2,
         "isOpen24h": false,
-        "opensAt": "08:00",
-        "closesAt": "23:00"
+        "opensAt": "12:00",
+        "closesAt": "22:00"
       },
       {
         "dayOfWeek": 3,
         "isOpen24h": false,
-        "opensAt": "08:00",
-        "closesAt": "23:00"
+        "opensAt": "12:00",
+        "closesAt": "22:00"
       },
       {
         "dayOfWeek": 4,
         "isOpen24h": false,
-        "opensAt": "08:00",
+        "opensAt": "12:00",
         "closesAt": "23:00"
       },
       {
         "dayOfWeek": 5,
         "isOpen24h": false,
-        "opensAt": "08:00",
-        "closesAt": "00:00"
+        "opensAt": "12:00",
+        "closesAt": "23:00"
       },
       {
         "dayOfWeek": 6,
         "isOpen24h": false,
-        "opensAt": "08:00",
-        "closesAt": "00:00"
+        "opensAt": "12:00",
+        "closesAt": "23:00"
       },
       {
         "dayOfWeek": 7,
         "isOpen24h": false,
-        "opensAt": "08:00",
-        "closesAt": "23:00"
+        "opensAt": "12:00",
+        "closesAt": "20:00"
       }
     ],
     "tables": [
@@ -792,8 +755,8 @@
     "name": "Myriam Camhi Andino",
     "category": "cafe",
     "address": "Carrera 11 #82-71, C. C. Andino, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.666982,
+    "longitude": -74.0531,
     "isOpen": true,
     "ownerEmail": "restaurante-09@dinno.test",
     "schedules": [
@@ -883,8 +846,8 @@
     "name": "La Plaza de Andrés El Retiro",
     "category": "colombian",
     "address": "Calle 82 #11-75, C. C. El Retiro, piso 3, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.666147,
+    "longitude": -74.05412,
     "isOpen": true,
     "ownerEmail": "restaurante-10@dinno.test",
     "schedules": [
@@ -1010,8 +973,8 @@
     "name": "Crepes & Waffles Zona G",
     "category": "other",
     "address": "Carrera 9 #73-33, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.657489,
+    "longitude": -74.056284,
     "isOpen": true,
     "ownerEmail": "restaurante-11@dinno.test",
     "schedules": [
@@ -1134,11 +1097,11 @@
     ]
   },
   {
-    "name": "Wok Quinta Camacho",
+    "name": "WOK Calle 69",
     "category": "asian",
-    "address": "Carrera 9 #69A-63, Quinta Camacho, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "address": "Carrera 9 #69A-75, Quinta Camacho, Bogotá",
+    "latitude": 4.653822,
+    "longitude": -74.058389,
     "isOpen": true,
     "ownerEmail": "restaurante-12@dinno.test",
     "schedules": [
@@ -1240,8 +1203,8 @@
     "name": "Andrés D.C.",
     "category": "grill",
     "address": "Calle 82 #12-21, Zona T, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.666235,
+    "longitude": -74.054572,
     "isOpen": true,
     "ownerEmail": "restaurante-13@dinno.test",
     "schedules": [
@@ -1367,8 +1330,8 @@
     "name": "Sipote Burrito Andino",
     "category": "mexican",
     "address": "Carrera 11 #82-71, C. C. Andino, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.666813,
+    "longitude": -74.052619,
     "isOpen": false,
     "ownerEmail": "restaurante-14@dinno.test",
     "schedules": [
@@ -1458,8 +1421,8 @@
     "name": "Pesquera Jaramillo Parque de la 93",
     "category": "seafood",
     "address": "Calle 93A #11A-31, Parque de la 93, Bogotá",
-    "latitude": null,
-    "longitude": null,
+    "latitude": 4.676041,
+    "longitude": -74.04812,
     "isOpen": false,
     "ownerEmail": "restaurante-15@dinno.test",
     "schedules": [
