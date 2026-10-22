@@ -14,7 +14,7 @@ import { computeAvailability } from '../modules/search-availability/availability
 
 // Checks restaurants.json (the 15 real restaurants of the Sprint 2 seed)
 // against the criteria of the Sprint 2 plan, section 9, "Santiago (C)", and
-// the format agreed in AVISOS.md. Sources of each value: restaurants.sources.md.
+// the format agreed in AVISOS.md.
 
 interface SeedSchedule {
   dayOfWeek: number;

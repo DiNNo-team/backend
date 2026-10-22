@@ -232,7 +232,7 @@ Resuelta el 2026-10-15 (`feature/s2-cuentas-roles`, detalle en el Historial):
 ## Historial
 
 - **2026-10-22 · Santiago · Datos de los 15 restaurantes reales para el seed (`feature/s2-seed-restaurantes`, PBI 6.1).** Sin cambios de esquema ni migraciones (las columnas que usan ya existen en Neon), sin cambios en la API y sin dependencias nuevas. No toca `seed.ts`.
-  - **Qué quedó listo:** `src/seed-data/restaurants.json` (15 restaurantes con el formato de la sección de Santiago), `restaurants.sources.md` (fuente de cada dato y papel de cada uno en la demo) y `restaurants.spec.ts` (revisa los criterios del reparto con `computeAvailability`, suponiendo la demo entre semana de 9:00 a 11:00 a. m., `DEMO_WINDOW`).
+  - **Qué quedó listo:** `src/seed-data/restaurants.json` (15 restaurantes con el formato de la sección de Santiago) y `restaurants.spec.ts` (revisa los criterios del reparto con `computeAvailability`, suponiendo la demo entre semana de 9:00 a 11:00 a. m., `DEMO_WINDOW`).
   - **Por verificar:** nombre, dirección y horario salen de fuentes públicas; mesas, estados, `isOpen` y correos son datos de prueba.
 
 - **2026-10-15 · Elizabeth · Ajustes de la revisión de integración del Sprint 2 (`chore/sprint2-ajustes-backend`).** Sin cambios de esquema, de rutas, de respuestas ni de Swagger; sin dependencias nuevas. El contrato (`CLAUDE.md`, sección 10) no cambia.
