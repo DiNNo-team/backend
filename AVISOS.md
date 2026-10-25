@@ -7,6 +7,11 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+
+
+- **Nuevo (2026-10-25): Google Cloud (Maps) ya está configurado.** Detalle en «Equipo de Google Cloud». Dos reglas para todos:
+  - **Nadie entra a la consola de Google Cloud con la cuenta del equipo** salvo Santiago. Los inicios de sesión desde muchos equipos y redes dispararon el bloqueo antifraude de Google; las llaves se piden a Santiago por privado.
+  - **Nadie pulsa «Actualizar» en el banner de la prueba gratuita:** pasa la cuenta a pago completo y Google podría cobrar a la tarjeta de un integrante.
 - **Nuevo: en local la API ahora escucha solo en `127.0.0.1`.** Desde tu equipo todo sigue igual (`http://localhost:3000`). Si necesitas probar desde el celular u otro equipo, dilo en el grupo antes de abrirlo: con el usuario de desarrollo la API no pide credenciales y la base es la de producción, así que quedaría expuesta a toda la red. En Render nada cambia.
 - **Agrega a tu `.env`:** `DEV_USER_ENABLED=true` y `DEV_USER_ID=<uuid>`. **Sin eso, toda ruta protegida responde `401`.** Los uuid están en el chat del equipo.
 - **Los ids de la base son UUID (`string`), no enteros.**
@@ -56,6 +61,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Elizabeth
 - **Tus pendientes:**
+  - **Nuevo (2026-10-25): configurar la llave de Geocoding.** Santiago te la pasa por privado (`dinno-backend`). Ponla en `GOOGLE_GEOCODING_API_KEY` en Render (guardar y redesplegar) y en tu `.env`. Después, comprueba que `GET /v1/geocode?address=Cra. 11 #72-30, Bogotá` responde `200` en Render y avisa en el grupo: desde ese momento la web deja de recibir siempre `503`. Confírmale a Santiago cuando la tengas guardada para borrar el mensaje.
   - **Seed:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`.
   - Probar el login con un token real de Firebase contra Render.
   - ~~Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 11). **Antes de fusionar esta rama a `develop`:** desde ahora, con `FIREBASE_AUTH_EMULATOR_HOST` definida o `DEV_USER_ENABLED=true`, la app no arranca en Render.~~ **Hecho** (confirmado por Elizabeth el 2026-10-15).
@@ -87,15 +93,30 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - `restaurants` ya tiene `name`, `category`, `address` e `is_open`. Quien agregue una columna lo hace con su propia migración de `ALTER`. Nadie recrea la tabla.
 
 ### Equipo de Google Cloud (Jacobo, Santiago y Sergio)
-- **Nuevo: la llave del backend (`GOOGLE_GEOCODING_API_KEY`, Google Geocoding API) se entrega a Elizabeth por canal privado**, nunca por el grupo, un commit ni un PR. Ella la configura en Render y en su `.env`. Hasta entonces `GET /v1/geocode` responde `503` y la web muestra el mapa para mover el pin.
+- **Nuevo (2026-10-25, Santiago): Google Cloud (Maps) configurado.**
+  - **Proyecto:** `dinno-maps`, separado del proyecto de Firebase (`dinno`).
+  - **Facturación:** cuenta en **prueba gratuita** de `Sebastián`, que es su administrador. Vence alrededor del **23 de enero de 2027**; después, los mapas dejan de funcionar hasta que se decida otra cosa. La cuenta del equipo (`dinnoteam2026@gmail.com`) solo puede vincular proyectos: para ver costos y crear el presupuesto necesita los roles *Visualizador de cuentas de facturación* y *Billing Account Costs Manager* (pendiente de `<integrante>`).
+  - **APIs habilitadas en `dinno-maps` (solo estas):** Maps SDK for Android, Geocoding API y Maps JavaScript API. **Cambio respecto al reparto (sección 7):** se agregó Maps JavaScript API porque el mapa del formulario web es de Google y no Leaflet, ya que la política de Geocoding API exige mostrar sus resultados sobre un mapa de Google.
+  - **Llaves** (entregadas por privado; nunca en el repo, el grupo, un PR, capturas ni logs):
+    - `dinno-backend`: solo Geocoding API, sin restricción de aplicación (Render no tiene IP fija) → Elizabeth, en `GOOGLE_GEOCODING_API_KEY`.
+    - `dinno-android`: solo Maps SDK for Android, restringida a la app `com.dinno.app` y su SHA-1 → Sebastián.
+    - `dinno-web`: solo Maps JavaScript API, restringida al dominio de Vercel y a `http://localhost:5173` → web (formulario del restaurante).
+  - **Topes diarios:** la consola no permite editarlos en este proyecto (las cuotas diarias de Geocoding aparecen como no ajustables). La protección queda en las restricciones de las llaves, la prueba gratuita (no cobra a la tarjeta mientras nadie pulse «Actualizar») y la alerta de presupuesto.
+  - **Revisión de consumo:** cada lunes, en *Facturación → Informes* (Santiago).
+  - **Pendientes:**
+    - Presupuesto con alertas al 50 %, 90 % y 100 %, sobre todos los proyectos de la cuenta (`<integrante>`, o la cuenta del equipo cuando tenga los roles).
+    - El proyecto de Firebase (`dinno`) quedó con APIs de Maps habilitadas y vinculado a la misma cuenta de facturación (Firebase pasó al plan Blaze). Hay que deshabilitar sus APIs de Maps desde *Google Maps Platform → APIs y servicios* (filtro «Enabled»; ninguna es de Firebase) y desvincular su facturación para que vuelva al plan gratuito. Se hace cuando el equipo lo confirme.
+    - Agregar a `dinno-android` el SHA-1 de cada computador que compile la app (Sebastián se lo pasa a Santiago; el SHA-1 no es secreto).
+
+- **Nuevo: la llave del backend (`GOOGLE_GEOCODING_API_KEY`, Google Geocoding API) se entrega a  por canal privado**, nunca por el grupo, un commit ni un PR. Ella la configura en Render y en su `.env`. Hasta entonces `GET /v1/geocode` responde `503` y la web muestra el mapa para mover el pin.
 
 ### Santiago
-- **Nuevo (2026-10-24, Elizabeth): tus 15 restaurantes ya están en el seed** (`feat/sprint2-cierre-backend`). Cambios en tus archivos:
+- **Nuevo (2026-10-24, ): tus 15 restaurantes ya están en el seed** (`feat/sprint2-cierre-backend`). Cambios en tus archivos:
   - `restaurants.json`: el lunes de McDonald's Parque 93 cierra a las `00:00` en vez de `23:59`. Con el cierre excluyente, `23:59` dejaba cerrado el último minuto del lunes; `00:00` es cerrar a medianoche, sin nada para el día siguiente, y enlaza con el martes de 24 horas. Ninguna otra hora cambió.
   - `restaurants.spec.ts`: `RESTAURANT_CATEGORIES` y el tipo `Availability` se importan desde los `index.ts` de sus módulos; lo que esos `index.ts` no exportan se sigue importando de las carpetas internas, igual que `seed.ts`. Se quitaron los dos comentarios de las coordenadas «copiadas a mano». La prueba comprueba lo mismo de antes.
   - **Los demás horarios siguen «por verificar»** con fuentes públicas (ver «Pendientes para el Sprint 3»).
   - **Hora fija de la prueba:** `restaurants.spec.ts` supone la demo entre semana de 9:00 a 11:00 (`DEMO_WINDOW`). Si la demo cambia de día u hora, cambia `DEMO_WINDOW` y revisa que los datos sigan mostrando los tres niveles y un restaurante fuera de horario.
-  - El seed restablece en cada corrida lo que dice el archivo, estado de las mesas incluido: si cambias el archivo, el cambio llega a Neon la próxima vez que Elizabeth corra el seed.
+  - El seed restablece en cada corrida lo que dice el archivo, estado de las mesas incluido: si cambias el archivo, el cambio llega a Neon la próxima vez que  corra el seed.
 - **Nuevo (Sprint 2): ubicación del restaurante para el formulario de registro y de edición.** Contrato en `CLAUDE.md` (sección 10) y en Swagger (tags `geocode` y `restaurants`).
   - **`GET /v1/geocode?address=<texto>`** → `200 { latitude, longitude, formattedAddress }`, con 6 decimales y siempre dentro de Bogotá. **No exige restaurante registrado:** úsalo en `/onboarding` antes del `POST`. `address` va recortada, de 3 a 255 caracteres; si no cumple, `400` (`message` es una lista).
   - **`404 ADDRESS_NOT_FOUND`:** «No encontramos esa dirección en Bogotá. Mueve el pin al lugar correcto.» · **`503 GEOCODING_UNAVAILABLE`:** «No pudimos ubicar la dirección en este momento. Mueve el pin al lugar correcto.» **En los dos casos** muestra el mensaje y el mapa centrado en Bogotá para que el usuario mueva el pin. Ramifica por `errorCode`. Hasta que llegue la llave de Google, la respuesta siempre es `503`.
@@ -158,7 +179,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - Usa `GET /v1/table-logs` (con `?tableId=` para el filtro por mesa).
   - Verifica que cada cambio de estado, desactivación y reactivación genera su registro. Pedir el estado que la mesa ya tiene no genera registro (`CLAUDE.md`, "Bitácora de mesas").
 
-### Sebastián
+### Sebastián  
+- **Nuevo (2026-10-25, Santiago): llave de Google Maps para la app.** Santiago te la pasa por privado (`dinno-android`). Solo funciona con Maps SDK for Android y la app `com.dinno.app`. Va como variable de entorno en la configuración de Expo, fuera del repo. Pásale a Santiago el SHA-1 de cada computador que compile la app (`gradlew signingReport`, variante `debug`), para agregarlo a la restricción de la llave; sin eso el mapa no carga en ese computador. Anótalo también en el `AVISOS.md` de mobile.
 - **Nuevo (2026-10-24, Elizabeth): hallazgos #3 y #6 de tu revisión de mobile.**
   - **#3 «En Render solo aparece Casa 72»:** se resuelve cuando Elizabeth corra el seed en Neon; desde entonces aparecen también los 15 restaurantes reales, con los tres niveles de disponibilidad y varios pines.
   - **#6 «qué cuenta entra a la web como Casa 72»:** resuelto. Es `dinnoteam2026+casa72@gmail.com`; la clave se comparte por privado cuando exista la cuenta de Firebase. `dinnoteam2026@gmail.com` es el dueño de Casa16, no de Casa 72.
@@ -270,6 +292,12 @@ Lo que queda abierto al cerrar el backend del Sprint 2 (2026-10-24). Los dueños
 | `npm audit` | backend | Elizabeth | Sigue en «Deuda conocida» |
 
 ## Historial
+
+- **2026-10-25 · Santiago · Google Cloud (Maps) configurado.** Sin cambios de código, esquema ni dependencias.
+  - **Qué quedó listo:** el proyecto `dinno-maps` con facturación en prueba gratuita, las tres APIs del Sprint 2 y tres llaves restringidas (backend, Android y web). Detalle en «Equipo de Google Cloud».
+  - **Cambio respecto al reparto:** se agregó Maps JavaScript API (mapa de Google en la web en vez de Leaflet) y no hay topes diarios porque la consola no permite editarlos.
+  - **Qué pasó antes:** Google bloqueó por «actividad sospechosa» los registros de la prueba gratuita en la cuenta del equipo y en una cuenta personal (errores `OR-CBAT-12` y `OR-CBAT-14`). Las dos quedaron en revisión y la cuenta del equipo tiene cuentas de facturación sin usar (cerradas o incompletas); no se tocan. Por eso solo Santiago entra a la consola (ver «Acciones pendientes de todos»).
+  - **Para quién:** **Elizabeth:** configurar `GOOGLE_GEOCODING_API_KEY` en Render (ver tu sección). **Sebastián:** llave de la app y SHA-1 (ver tu sección). **Todos:** no pulsar «Actualizar» en el banner de la prueba.
 
 - **2026-10-24 · Elizabeth · Cierre del backend del Sprint 2 (`feat/sprint2-cierre-backend`).** Sin cambios de esquema, de la API ni dependencias nuevas.
   - **Seed completo con los 15 restaurantes de Santiago.** `npm run seed` crea cada restaurante de `src/seed-data/restaurants.json` con su dueño (`restaurant_admin`), horarios y mesas, en una sola transacción e idempotente. En cada corrida los 15 vuelven a quedar como dice el archivo (estado de las mesas incluido); Casa 72 se restablece como antes. Nada más se toca (cuentas del equipo, Casa16). `seed.ts` quedó como entrada, la lógica está en `src/seed-data/run-seed.ts`, y `nest-cli.json` copia el `.json` a `dist`. Detalle en `CLAUDE.md`, sección 11, «Datos de prueba: el seed». **Hay que correrlo en Neon** (Elizabeth).
