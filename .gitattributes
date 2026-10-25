@@ -1,0 +1,14 @@
+# Line endings: LF in the repository and on disk, on every OS (Prettier also
+# writes LF). Rule in CLAUDE.md, section 11.
+* text=auto eol=lf
+
+# Binaries: never converted. The repo has none today; listed so a first image
+# or font does not get corrupted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

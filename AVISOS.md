@@ -62,7 +62,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - ~~Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.~~ **Hecho** (confirmado por Elizabeth el 2026-10-15).
   - Aplicar en Neon la migración de cada rama antes de fusionar su PR (ver "Reglas nuevas de este sprint").
   - Revisar los PR del backend.
-  - **Seed (Santiago):** integrar `src/seed-data/restaurants.json` (`feature/s2-seed-restaurantes`) a `seed.ts` y correrlo en Neon. Ojo: `npm run seed` corre `dist/seed.js` y `nest build` no copia el `.json` a `dist/`. Los `ownerEmail` van con `restaurante-01` a `15@dinno.test`.
+  - ~~**Seed (Santiago):** integrar `src/seed-data/restaurants.json` (`feature/s2-seed-restaurantes`) a `seed.ts`.~~ **Hecho** el 2026-10-24 (`feat/sprint2-cierre-backend`, ver «Historial»).
+  - **Correr el seed en Neon** después de fusionar `feat/sprint2-cierre-backend`: crea los 15 restaurantes y pasa el dueño de Casa 72 a `dinnoteam2026+casa72@gmail.com`. Después, crear su cuenta de Firebase (pasos en «Historial», 2026-10-24).
 - **Los horarios no van en `restaurants`, van en otra tabla (`restaurant_schedules`, una fila por día abierto).** La edición no los puede copiar sola. Además, si un campo de horarios entra en `RestaurantFieldsDto` sin una propiedad con el mismo nombre en `Restaurant`, `npm run typecheck` falla en `restaurant-edit.service.ts` (el `Pick` de `RestaurantChanges`).
 - **Carrera conocida en el identificador de mesa:** el índice `UQ_tables_restaurant_id_identifier` compara `lower(trim(identifier))`, así que no cubre que "4" y "04" lleguen a la vez en dos peticiones simultáneas. El chequeo de repetidos de la aplicación (`assertIdentifierAvailable`, en `tables.service.ts`) lo cubre salvo en esa carrera. Es un riesgo bajo y aceptado (hay un dueño por restaurante). Solución futura posible: un índice sobre la clave normalizada.
 
@@ -89,6 +90,12 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Nuevo: la llave del backend (`GOOGLE_GEOCODING_API_KEY`, Google Geocoding API) se entrega a Elizabeth por canal privado**, nunca por el grupo, un commit ni un PR. Ella la configura en Render y en su `.env`. Hasta entonces `GET /v1/geocode` responde `503` y la web muestra el mapa para mover el pin.
 
 ### Santiago
+- **Nuevo (2026-10-24, Elizabeth): tus 15 restaurantes ya están en el seed** (`feat/sprint2-cierre-backend`). Cambios en tus archivos:
+  - `restaurants.json`: el lunes de McDonald's Parque 93 cierra a las `00:00` en vez de `23:59`. Con el cierre excluyente, `23:59` dejaba cerrado el último minuto del lunes; `00:00` es cerrar a medianoche, sin nada para el día siguiente, y enlaza con el martes de 24 horas. Ninguna otra hora cambió.
+  - `restaurants.spec.ts`: `RESTAURANT_CATEGORIES` y el tipo `Availability` se importan desde los `index.ts` de sus módulos; lo que esos `index.ts` no exportan se sigue importando de las carpetas internas, igual que `seed.ts`. Se quitaron los dos comentarios de las coordenadas «copiadas a mano». La prueba comprueba lo mismo de antes.
+  - **Los demás horarios siguen «por verificar»** con fuentes públicas (ver «Pendientes para el Sprint 3»).
+  - **Hora fija de la prueba:** `restaurants.spec.ts` supone la demo entre semana de 9:00 a 11:00 (`DEMO_WINDOW`). Si la demo cambia de día u hora, cambia `DEMO_WINDOW` y revisa que los datos sigan mostrando los tres niveles y un restaurante fuera de horario.
+  - El seed restablece en cada corrida lo que dice el archivo, estado de las mesas incluido: si cambias el archivo, el cambio llega a Neon la próxima vez que Elizabeth corra el seed.
 - **Nuevo (Sprint 2): ubicación del restaurante para el formulario de registro y de edición.** Contrato en `CLAUDE.md` (sección 10) y en Swagger (tags `geocode` y `restaurants`).
   - **`GET /v1/geocode?address=<texto>`** → `200 { latitude, longitude, formattedAddress }`, con 6 decimales y siempre dentro de Bogotá. **No exige restaurante registrado:** úsalo en `/onboarding` antes del `POST`. `address` va recortada, de 3 a 255 caracteres; si no cumple, `400` (`message` es una lista).
   - **`404 ADDRESS_NOT_FOUND`:** «No encontramos esa dirección en Bogotá. Mueve el pin al lugar correcto.» · **`503 GEOCODING_UNAVAILABLE`:** «No pudimos ubicar la dirección en este momento. Mueve el pin al lugar correcto.» **En los dos casos** muestra el mensaje y el mapa centrado en Bogotá para que el usuario mueva el pin. Ramifica por `errorCode`. Hasta que llegue la llave de Google, la respuesta siempre es `503`.
@@ -134,6 +141,10 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Te falta en la web:** el formulario del registro del restaurante en `/onboarding`, con sus validaciones: "Tu restaurante" (nombre y categoría), "Ubicación" (dirección) y "Horarios" (con el `HoursEditor` del kit). Registro y edición validan igual, en la web y en el backend (`RestaurantFieldsDto`). Luego, su integración con `POST /v1/restaurants` y la prueba del recorrido con el usuario de onboarding (no con `demo@example.com`).
 
 ### Sergio
+- **Nuevo (2026-10-24, Elizabeth): cuenta de Casa 72 para la web y 15 restaurantes en Render.**
+  - Casa 72 tiene como dueño `dinnoteam2026+casa72@gmail.com` (antes `casa72@example.com`, que no recibía correo). Cuando Elizabeth cree su cuenta de Firebase, la clave se comparte por privado; con ella entras a la web como Casa 72. En local, el `DEV_USER_ID` de Casa 72 no cambia.
+  - Después de que Elizabeth corra el seed en Neon, la búsqueda en Render muestra los 15 restaurantes reales además de Casa 72. Sus dueños (`restaurante-XX@dinno.test`) no son correos reales: nadie entra a la web como ellos.
+  - Correr el seed no emite `availability.changed`: la app los ve en su siguiente consulta (cada 60 s o al volver a la pantalla).
 - **Nuevo (QA de disponibilidad, Santiago):** cuando Elizabeth corra el seed con los 15 restaurantes reales, el caso límite del 30 % está en Piazza Italia Calle 93: 3 de 10 mesas libres = Pocas mesas. Se ve después de las 12:00 (abre a mediodía).
 - **Nuevo (QA de tiempo real): script para ver llegar `availability.changed`.** Con la API en local (`npm run start:dev`, usuario de desarrollo activo), en otra terminal:
   - `node scripts/listen-availability.mjs --dev-user-id <uuid del comensal>` (el de `comensal@example.com`, que imprime el seed). Debe decir "Conectado … como comensal".
@@ -148,6 +159,10 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - Verifica que cada cambio de estado, desactivación y reactivación genera su registro. Pedir el estado que la mesa ya tiene no genera registro (`CLAUDE.md`, "Bitácora de mesas").
 
 ### Sebastián
+- **Nuevo (2026-10-24, Elizabeth): hallazgos #3 y #6 de tu revisión de mobile.**
+  - **#3 «En Render solo aparece Casa 72»:** se resuelve cuando Elizabeth corra el seed en Neon; desde entonces aparecen también los 15 restaurantes reales, con los tres niveles de disponibilidad y varios pines.
+  - **#6 «qué cuenta entra a la web como Casa 72»:** resuelto. Es `dinnoteam2026+casa72@gmail.com`; la clave se comparte por privado cuando exista la cuenta de Firebase. `dinnoteam2026@gmail.com` es el dueño de Casa16, no de Casa 72.
+  - Los dueños de los 15 restaurantes (`restaurante-XX@dinno.test`) no son correos reales: los restaurantes salen en la app, pero nadie entra a la web como ellos.
 - **Nuevo (app, Sprint 2): tiempo real listo en el backend (`availability.changed`).** Contrato en `CLAUDE.md`, sección 10, "Tiempo real".
   - **URL:** la misma del backend **sin** `/v1` (`https://dinno-backend.onrender.com`, o `http://localhost:3000` en local); ruta por defecto `/socket.io`.
   - **`auth` como función**, para que cada reconexión lleve un token vigente: `io(BASE_URL, { auth: async (cb) => cb({ token: await user.getIdToken() }) })`. Un token que vence no corta un socket abierto; la siguiente reconexión pide uno nuevo.
@@ -218,7 +233,7 @@ Riesgos aceptados para el Sprint 1, a revisar más adelante:
 - **Cuenta bloqueada por otro UID:** cuando el correo ya está vinculado a otro UID de Firebase (por ejemplo, una cuenta borrada y vuelta a crear), la API responde el mismo `401` "Tu sesión terminó" y la web entra en un bucle de login. Un `errorCode` propio necesita acordarse con la web; mientras tanto, el soporte está en `docs/database.md`.
 - **Firebase caído o lento:** no hay timeout propio; si Firebase no responde, la API contesta `401` en vez de `503`, y la web lo trata como sesión vencida.
 - **`/v1/health` no revisa la base:** responde `ok` aunque Neon no conteste. Agregarlo con Neon gratuito (que se duerme) puede hacer que Render reinicie el servicio en bucle.
-- **Finales de línea sin regla en el repo:** no hay `.gitattributes` ni `.editorconfig`, y Prettier (3.x, sin `endOfLine` en `.prettierrc`) usa LF. Hoy los archivos del repo están en LF; en Windows quedan en CRLF en el disco solo porque Git for Windows trae `core.autocrlf=true`. Riesgos: `npm run format` o `prettier --write` pasan a LF todos los archivos que toca, en el disco (git lo normaliza al hacer commit, pero el editor muestra el archivo como cambiado), y `prettier --check` marca todo el repo en Windows; y quien tenga `core.autocrlf=false` puede subir archivos en CRLF sin que nada lo detenga. Solución propuesta (en una rama propia, acordada con el equipo): `.gitattributes` con `* text=auto eol=lf` y `endOfLine: 'lf'` explícito en `.prettierrc`.
+- ~~**Finales de línea sin regla en el repo**~~: **resuelta en el backend el 2026-10-24** con `.gitattributes` (`* text=auto eol=lf`); falta en web y mobile (ver «Pendientes para el Sprint 3»). Lo que sigue es el contexto original. No hay `.editorconfig`, y Prettier (3.x, sin `endOfLine` en `.prettierrc`) usa LF. Hoy los archivos del repo están en LF; en Windows quedan en CRLF en el disco solo porque Git for Windows trae `core.autocrlf=true`. Riesgos: `npm run format` o `prettier --write` pasan a LF todos los archivos que toca, en el disco (git lo normaliza al hacer commit, pero el editor muestra el archivo como cambiado), y `prettier --check` marca todo el repo en Windows; y quien tenga `core.autocrlf=false` puede subir archivos en CRLF sin que nada lo detenga. Solución propuesta (en una rama propia, acordada con el equipo): `.gitattributes` con `* text=auto eol=lf` y `endOfLine: 'lf'` explícito en `.prettierrc`.
 - **Consola de Firebase:** revisar que solo estén habilitados Email/Password y Google, y que la vinculación de cuentas por correo esté activa (una cuenta por correo).
 
 Resuelta el 2026-10-15 (`feature/s2-cuentas-roles`, detalle en el Historial):
@@ -229,7 +244,47 @@ Resuelta el 2026-10-15 (`feature/s2-cuentas-roles`, detalle en el Historial):
 - ~~**Comentario viejo del usuario de desarrollo** ("until the real authentication replaces it")~~: reescrito; `isDeployedEnvironment` tiene su propio archivo.
 - ~~**Join de la bitácora a `users`** (excepción del Sprint 1)~~: los correos salen de `UsersService.findEmailsByIds`.
 
+## Pendientes para el Sprint 3
+
+Lo que queda abierto al cerrar el backend del Sprint 2 (2026-10-24). Los dueños son sugeridos: se confirman en la planeación.
+
+| Tema | Repo | Dueño sugerido | Detalle |
+|---|---|---|---|
+| `POST /diners/me` con correo ligado a otro UID | backend | Elizabeth | Hoy responde 401; evaluar 403 `RESTAURANT_ACCOUNT` o un código propio |
+| `ACCOUNT_CONFLICT` | backend + mobile | Elizabeth + Sebastián | Lo pidió Sebastián para cuentas de Firebase recreadas; no existe en ningún repo (ver «Deuda conocida», «Cuenta bloqueada por otro UID») |
+| Desactivar una mesa Ocupada o Reservada | backend + web | Equipo | Decidir junto con las reservas del Sprint 3 |
+| Límite de peticiones y de conexiones WebSocket por IP | backend | Elizabeth | Hoy no hay ninguno |
+| Adaptador de Redis para Socket.IO | backend | Elizabeth | Solo si hay más de una instancia (ver «Migración a Azure» en `CLAUDE.md` §11) |
+| PBI 2.2 «dirección o zona» | Azure | Equipo | El comensal solo busca por zona o ubicación; aclarar el PBI |
+| Ubicación obligatoria al registrar | web | Santiago | Volver a exigirla cuando estén las llaves de Google |
+| Horarios de `restaurants.json` | backend | Santiago | Verificar los horarios reales |
+| Términos de Google sobre guardar coordenadas de Geocoding | equipo | Equipo de Google Cloud | Revisar si se pueden guardar de forma permanente |
+| `.gitattributes` en web y mobile | web + mobile | Sebastián | Igual que en el backend |
+| CI en web y mobile | web + mobile | Sergio | Hoy no hay ninguna verificación antes de fusionar |
+| Typecheck de mobile con rutas tipadas | mobile | Sebastián | Regenerar `.expo/types` y confirmar que pasa |
+| Cuál es el `firebase_uid` de `onboarding@example.com` y `demo@example.com` | backend | Elizabeth | Pendiente del 2026-10-06, de antes de la vinculación por correo. Hoy esas cuentas solo sirven en local, con `DEV_USER_ID`. Para entrar a la web con Firebase hace falta un correo verificado, y `@example.com` no recibe correo: o se pasan a alias verificables como Casa 72 (cambio en el seed), o se crea la cuenta de Firebase y se guarda su UID a mano en Neon |
+| `onboarding@example.com` ya tiene restaurante | backend | Elizabeth | En Neon tiene un segundo restaurante llamado «Casa 72» (del 2026-10-22, sin ubicación ni mesas, con 7 horarios), de una prueba de registro. SQL preparado, sin ejecutar: `scripts/sql/2026-10-24-cleanup-onboarding-restaurant.sql` (comprueba antes de borrar, deja a onboarding sin restaurante y borra ese restaurante y sus horarios). El seed avisa mientras siga con restaurante |
+| Correos reales habilitados en `CLAUDE.md` §10 | los tres | Elizabeth | La §10 dice que el único correo real habilitado es `dinnoteam2026@gmail.com`; ahora también está `dinnoteam2026+casa72@gmail.com` (misma bandeja). La §10 se cambia en los tres repos el mismo día |
+| `endOfLine: 'lf'` explícito en `.prettierrc` | backend | Elizabeth | Prettier 3 ya usa LF por defecto, igual que `.gitattributes`; dejarlo explícito evita depender del valor por defecto |
+| Formato de `roles.decorator.ts` | backend | Jacobo | Es el único archivo `.ts` que no cumple Prettier; por eso `npm run format` todavía cambiaría código ajeno |
+| `npm audit` | backend | Elizabeth | Sigue en «Deuda conocida» |
+
 ## Historial
+
+- **2026-10-24 · Elizabeth · Cierre del backend del Sprint 2 (`feat/sprint2-cierre-backend`).** Sin cambios de esquema, de la API ni dependencias nuevas.
+  - **Seed completo con los 15 restaurantes de Santiago.** `npm run seed` crea cada restaurante de `src/seed-data/restaurants.json` con su dueño (`restaurant_admin`), horarios y mesas, en una sola transacción e idempotente. En cada corrida los 15 vuelven a quedar como dice el archivo (estado de las mesas incluido); Casa 72 se restablece como antes. Nada más se toca (cuentas del equipo, Casa16). `seed.ts` quedó como entrada, la lógica está en `src/seed-data/run-seed.ts`, y `nest-cli.json` copia el `.json` a `dist`. Detalle en `CLAUDE.md`, sección 11, «Datos de prueba: el seed». **Hay que correrlo en Neon** (Elizabeth).
+  - **Casa 72 tiene como dueño `dinnoteam2026+casa72@gmail.com`** (antes `casa72@example.com`): mismo usuario y mismo `id`, así que el `DEV_USER_ID` de Casa 72 sigue sirviendo en local. El seed deja su `firebase_uid` en `null` al cambiar el correo, y el primer inicio de sesión con el correo verificado lo vincula. Pasos para crear su cuenta de Firebase:
+    1. En la consola de Firebase: *Authentication → Add user*, con ese correo y una contraseña.
+    2. Entrar a la web con ese correo y esa contraseña.
+    3. En la pantalla de verificación, *Reenviar*.
+    4. Abrir el enlace en la bandeja de `dinnoteam2026@gmail.com`.
+
+    Las credenciales se comparten por privado, nunca en el repo.
+  - **Horario nuevo de Casa 72** (el seed lo restablece en cada corrida): de lunes a jueves 08:00–23:00, viernes 08:00–02:00 del día siguiente, sábado 11:00–02:00 y domingo 11:00–21:00. Antes abría a las 11:00 todos los días, así que estaba cerrada durante la demo de la mañana entre semana.
+  - **Los 15 restaurantes usan correos `restaurante-XX@dinno.test`:** aparecen en la app, pero nadie puede entrar a la web como su dueño.
+  - **`.gitattributes` en el backend** (`* text=auto eol=lf`, binarios marcados). No se renormalizó nada: el repositorio ya estaba en LF.
+  - **Cerrados:** «integrar `restaurants.json` en `seed.ts`» (Elizabeth), el #6 de mobile («qué cuenta entra a la web como Casa 72») y, cuando se corra el seed en Neon, el #3 de mobile («en Render solo aparece Casa 72»). Los `AVISOS.md` de web y mobile se sincronizan después.
+  - **Archivos de otros integrantes que se tocaron:** **Santiago:** `src/seed-data/restaurants.json` (solo el cierre del lunes de McDonald's) y `src/seed-data/restaurants.spec.ts` (imports y dos comentarios; ver su sección).
 
 - **2026-10-22 · Santiago · Datos de los 15 restaurantes reales para el seed (`feature/s2-seed-restaurantes`, PBI 6.1).** Sin cambios de esquema ni migraciones (las columnas que usan ya existen en Neon), sin cambios en la API y sin dependencias nuevas. No toca `seed.ts`.
   - **Qué quedó listo:** `src/seed-data/restaurants.json` (15 restaurantes con el formato de la sección de Santiago) y `restaurants.spec.ts` (revisa los criterios del reparto con `computeAvailability`, suponiendo la demo entre semana de 9:00 a 11:00 a. m., `DEMO_WINDOW`).

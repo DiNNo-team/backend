@@ -233,7 +233,8 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 NestJS **12**, TypeORM **1.x**, TypeScript **6**, Node **24**, Vitest **4**. Lee `package.json` y consulta https://docs.nestjs.com y https://typeorm.io para la versión instalada; no confíes en APIs de versiones anteriores.
 
 ### Comandos
-- **No correr `prettier --write` sobre carpetas completas mientras no exista `.gitattributes`:** en Windows cambia los finales de línea de archivos ajenos. Formatear solo los archivos propios del cambio.
+- **Finales de línea:** `.gitattributes` fija LF en el repositorio y en el disco (`* text=auto eol=lf`, igual que Prettier) y marca los binarios. No se corre `git add --renormalize`: el repositorio ya está en LF. Un archivo que en Windows siga en CRLF en el disco pasa a LF la próxima vez que git lo escriba, sin cambio de contenido.
+- **Formatear solo los archivos propios del cambio**, nunca `prettier --write` sobre carpetas completas (ni `npm run format`): reformatea código ajeno.
 
 ```bash
 npm install          # siempre primero, y después de cada pull
@@ -314,6 +315,21 @@ Los módulos `reservations-checkin` y `notifications` existen pero todavía no t
 **Advertencia: índice escrito a mano**
 - `UQ_tables_restaurant_id_identifier` está sobre `(restaurant_id, lower(trim(identifier)))` y vive escrito a mano en la migración `CreateInitialTables`, porque `@Index` no acepta expresiones.
 - Por eso la entidad `Table` lo declara con `{ synchronize: false }`. **No quites esa línea:** si falta, el próximo `migration:generate` genera un `DROP INDEX` y se pierde la regla de identificadores únicos sin que nadie lo note.
+
+### Datos de prueba: el seed (Elizabeth)
+- **Cómo se corre:** `npm run seed` compila (`nest build`) y ejecuta `dist/seed.js` con el `.env`. **Contra Neon solo lo corre Elizabeth.** Nunca es una migración ni llega a Render solo.
+- **Archivos:** `src/seed.ts` es solo la entrada (conexión, transacción y log); la lógica está en `src/seed-data/run-seed.ts` (`runSeed(manager, restaurantes)`) y el archivo de Santiago se lee con `loadRealRestaurants()` (`src/seed-data/real-restaurants.ts`). `nest-cli.json` copia `seed-data/*.json` a `dist` (`assets`). Lee las entidades por nombre (`manager.getRepository('Restaurant')`) e importa de las carpetas internas de los módulos lo que su `index.ts` no exporta, porque vive fuera de ellos.
+- **Qué crea:** `onboarding@example.com` (sin restaurante), `demo@example.com` (sin restaurante, reservado para la demo), `dinnoteam2026@gmail.com` (restaurante habilitado, sin restaurante del seed), `comensal@example.com` (comensal), Casa 72 con su dueño `dinnoteam2026+casa72@gmail.com` y 8 mesas, y los 15 restaurantes de `src/seed-data/restaurants.json`, cada uno con su dueño `restaurant_admin` (`restaurante-XX@dinno.test`), horarios y mesas.
+- **Todo o nada:** corre en una sola transacción; si algo falla, no queda nada a medias.
+- **Idempotente; al repetirlo:**
+  - Los usuarios se buscan por correo y no se cambian (un rol distinto solo deja un aviso), salvo el cambio de dueño de Casa 72.
+  - Casa 72 restablece categoría, dirección, coordenadas y horarios; no toca su nombre ni sus mesas (crea solo las que falten).
+  - Los 15 restaurantes reales restablecen todo lo del archivo: nombre, categoría, dirección, coordenadas, `is_open`, horarios y la capacidad, el estado y si está activa cada mesa del archivo (por identificador). Las mesas que no están en el archivo no se tocan. Un correo del archivo que ya existe como comensal detiene el seed.
+  - Los horarios se borran y se vuelven a insertar (cambian sus `id`, nada apunta a ellos).
+  - Lo que cambia el seed no pasa por los servicios: no escribe en la bitácora ni emite `availability.changed`.
+  - No toca otras cuentas ni otros restaurantes (por ejemplo, Casa16).
+- **Dueño de Casa 72:** una base que todavía tiene `casa72@example.com` pasa ese mismo usuario (mismo `id`, el usuario de desarrollo de Casa 72) a `dinnoteam2026+casa72@gmail.com` con `firebase_uid` en `null`; el primer inicio de sesión con ese correo verificado lo vincula. Si existen los dos correos a la vez, el seed se detiene.
+- **Pruebas:** `run-seed.spec.ts` corre el seed contra una base en memoria (creación, segunda corrida idéntica, restablecimiento, cambio de dueño, cuentas ajenas); `restaurants.spec.ts` revisa el archivo de Santiago.
 
 ### Bitácora de mesas (`restaurant-operations/table-logs/`, Sergio)
 - **Contrato:** la clase abstracta `TableStatusLog` (`tables/table-status-log.ts`), con un método `record(change, manager)`. `change` es `TableStatusChange`: `tableId`, `previousStatus`, `newStatus` (`TableLogStatus`: `available`, `reserved`, `occupied` o `inactive`), `userId` y `changedAt`. El contrato vive en `tables/` y `table-logs/` lo implementa, así que `tables/` nunca importa de `table-logs/`.
