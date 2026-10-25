@@ -138,7 +138,7 @@ Nadie recrea una tabla ni toca columnas de otra persona.
 
 Un correo es de restaurante solo si existe en `users` con `role = 'restaurant_admin'`. El backend ya no crea usuarios automáticamente. Para habilitar un correo:
 `INSERT INTO users (email, role) VALUES ('correo@dominio.com', 'restaurant_admin');`
-El correo va en minúsculas y sin espacios. En el primer inicio de sesión (Google o correo y clave con el correo verificado), el backend vincula su `firebase_uid`. Por ahora el único correo real habilitado es `dinnoteam2026@gmail.com`.
+El correo va en minúsculas y sin espacios. En el primer inicio de sesión (Google o correo y clave con el correo verificado), el backend vincula su `firebase_uid`. Por ahora los correos reales habilitados son `dinnoteam2026@gmail.com` y `dinnoteam2026+casa72@gmail.com` (dueño de Casa 72, lo crea el seed; su correo llega a la misma bandeja). Los `restaurante-XX@dinno.test` del seed no son correos reales: nadie puede entrar con ellos.
 
 ## Reiniciar los datos de prueba
 

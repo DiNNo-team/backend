@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { RESTAURANT_CATEGORIES } from '../modules/restaurant-operations/restaurants/restaurant.entity.js';
+import { RESTAURANT_CATEGORIES } from '../modules/restaurant-operations/index.js';
+import type { Availability } from '../modules/search-availability/index.js';
+// Not in the modules' index.ts: same criterion as seed.ts, which also lives
+// outside the modules and reads their internals.
 import {
   isInsideBogota,
   roundCoordinate,
 } from '../modules/restaurant-operations/shared/bogota-location.js';
 import { TABLE_STATUSES } from '../modules/restaurant-operations/tables/table.entity.js';
 import type {
-  Availability,
   RestaurantSnapshot,
   TableStatusSnapshot,
 } from '../modules/search-availability/availability/availability.types.js';
@@ -34,7 +36,6 @@ interface SeedRestaurant {
   name: string;
   category: string;
   address: string;
-  // null until someone copies them by hand from Google Maps.
   latitude: number | null;
   longitude: number | null;
   isOpen: boolean;
@@ -206,7 +207,6 @@ describe('restaurants.json (Sprint 2 seed data)', () => {
       })
       .map((restaurant) => restaurant.name);
 
-    // Missing coordinates are copied by hand from Google Maps.
     expect(problems).toEqual([]);
   });
 

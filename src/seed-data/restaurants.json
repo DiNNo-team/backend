@@ -321,7 +321,7 @@
         "dayOfWeek": 1,
         "isOpen24h": false,
         "opensAt": "06:00",
-        "closesAt": "23:59"
+        "closesAt": "00:00"
       },
       { "dayOfWeek": 2, "isOpen24h": true },
       { "dayOfWeek": 3, "isOpen24h": true },

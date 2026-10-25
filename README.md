@@ -238,19 +238,23 @@ Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `
   - un usuario **sin restaurante** (para probar el onboarding);
   - `demo@example.com`, también sin restaurante, **reservado para la demo del Día 7: no lo uses
     para probar**;
-  - un usuario con el restaurante **Casa 72** (el restaurante de prueba del equipo) y 8 mesas
-    (Disponibles, Reservadas, Ocupadas y una Inactiva). El seed es la fuente de verdad de Casa 72:
-    en cada corrida restablece su categoría, dirección, coordenadas y horarios (borra los que
-    tenga e inserta los del seed). No toca su nombre ni sus mesas;
+  - `dinnoteam2026+casa72@gmail.com` con el restaurante **Casa 72** (el restaurante de prueba del
+    equipo) y 8 mesas (Disponibles, Reservadas, Ocupadas y una Inactiva). El seed es la fuente de
+    verdad de Casa 72: en cada corrida restablece su categoría, dirección, coordenadas y horarios
+    (borra los que tenga e inserta los del seed). No toca su nombre ni sus mesas;
+  - los **15 restaurantes reales** de `src/seed-data/restaurants.json` (Santiago), cada uno con su
+    dueño `restaurante-XX@dinno.test`, horarios y mesas. En cada corrida vuelven a quedar como dice
+    el archivo, estado de las mesas incluido;
   - `comensal@example.com`, con rol `diner` ("Comensal de prueba"), para probar las rutas del
     comensal;
-  - `dinnoteam2026@gmail.com`, el único correo real habilitado como restaurante, sin restaurante
-    asignado por el seed.
+  - `dinnoteam2026@gmail.com`, habilitado como restaurante, sin restaurante asignado por el seed.
 
-  Se puede correr varias veces: no duplica nada y no cambia usuarios ni mesas que ya existen (si
-  un correo ya existe con otro rol, solo lo avisa); a Casa 72 la deja siempre igual. Al final imprime los ids de los usuarios de prueba
-  para usarlos en `DEV_USER_ID`. Como la base es compartida, normalmente ya están creados:
-  pide los ids en el grupo antes de correrlo. No es una migración, así que nunca llega a Render.
+  Se puede correr varias veces: no duplica nada, no cambia usuarios que ya existen (si un correo
+  ya existe con otro rol, solo lo avisa) y corre en una transacción, así que un error no deja nada
+  a medias. Detalle de qué restablece en el [CLAUDE.md](CLAUDE.md) (sección 11, "Datos de prueba:
+  el seed"). Al final imprime los ids de los usuarios de prueba para usarlos en `DEV_USER_ID`.
+  Como la base es compartida, normalmente ya están creados: pide los ids en el grupo antes de
+  correrlo. No es una migración, así que nunca llega a Render.
 
   Después de probar un registro, el usuario de onboarding queda con restaurante. Para
   devolverlo a su estado inicial, ver [Reiniciar los datos de prueba](docs/database.md#reiniciar-los-datos-de-prueba).
