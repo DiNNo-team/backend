@@ -13,7 +13,7 @@ import {
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
   CurrentUserGuard,
-  RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
+  DINER_ENDPOINT_ACCOUNT_EXAMPLES,
   Roles,
   SESSION_UNAUTHORIZED_RESPONSE,
   UserRole,
@@ -30,13 +30,14 @@ import {
   geocodingUnavailable,
 } from './geocoding-errors.js';
 
-// Address → coordinates for the restaurant location form. It does not call
-// requireRestaurant on purpose: the registration form uses it before the
-// restaurant exists, so it never answers RESTAURANT_REQUIRED.
+// Address → coordinates for both roles: the restaurant location form (web)
+// and the diner's search by address (app: geocode, then search by lat/lng).
+// It does not call requireRestaurant on purpose: the registration form uses
+// it before the restaurant exists, so it never answers RESTAURANT_REQUIRED.
 @ApiTags('geocode')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
-@Roles(UserRole.RESTAURANT_ADMIN)
+@Roles(UserRole.RESTAURANT_ADMIN, UserRole.DINER)
 @UseGuards(CurrentUserGuard)
 @Controller('geocode')
 export class GeocodeController {
@@ -46,7 +47,7 @@ export class GeocodeController {
   @ApiOperation({
     summary: 'Ubicar una dirección de Bogotá',
     description:
-      'Convierte una dirección en coordenadas con Google Geocoding, restringido a Bogotá. Solo para restaurantes; no exige tener el restaurante registrado (lo usa el formulario de registro). Si no encuentra la dirección (404) o el servicio no responde (503), la web muestra el mapa centrado en Bogotá para mover el pin.',
+      'Convierte una dirección en coordenadas con Google Geocoding, restringido a Bogotá. Para restaurantes (formulario de ubicación; no exige tener el restaurante registrado) y comensales (búsqueda por dirección: con latitude y longitude, la app llama a GET /v1/search/restaurants). Los mensajes de 404 y 503 son neutros: cada cliente muestra su propio texto según el errorCode.',
   })
   @ApiOkResponse({
     description: 'Coordenadas dentro de Bogotá, con 6 decimales.',
@@ -77,13 +78,15 @@ export class GeocodeController {
   })
   @ApiForbiddenResponse({
     description:
-      'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED) o es de comensal (DINER_ACCOUNT). Nunca responde RESTAURANT_REQUIRED.',
+      'La cuenta de Firebase todavía no tiene perfil (errorCode: PROFILE_REQUIRED): la app crea el perfil de comensal con POST /v1/diners/me y reintenta. Nunca responde RESTAURANT_REQUIRED.',
     type: ErrorResponseDto,
-    examples: RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
+    examples: {
+      profileRequired: DINER_ENDPOINT_ACCOUNT_EXAMPLES.profileRequired,
+    },
   })
   @ApiNotFoundResponse({
     description:
-      'No hay un resultado para la dirección dentro de Bogotá. La web muestra el mapa centrado en Bogotá para mover el pin.',
+      'No hay un resultado para la dirección dentro de Bogotá. La web muestra el mapa centrado en Bogotá para mover el pin; la app pide otra dirección.',
     type: ErrorResponseDto,
     example: {
       statusCode: 404,
@@ -94,7 +97,7 @@ export class GeocodeController {
   })
   @ApiServiceUnavailableResponse({
     description:
-      'El servicio de mapas no está disponible: sin llave configurada, cuota agotada, error de Google o tiempo de espera (5 s). La web muestra el mapa centrado en Bogotá para mover el pin.',
+      'El servicio de mapas no está disponible: sin llave configurada, cuota agotada, error de Google o tiempo de espera (5 s). La web muestra el mapa centrado en Bogotá para mover el pin; la app ofrece buscar por zona o por su ubicación.',
     type: ErrorResponseDto,
     example: {
       statusCode: 503,

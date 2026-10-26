@@ -129,8 +129,7 @@ describe('Geocode (e2e)', () => {
     expect(res.body).toEqual({
       statusCode: 404,
       error: 'Not Found',
-      message:
-        'No encontramos esa dirección en Bogotá. Mueve el pin al lugar correcto.',
+      message: 'No encontramos esa dirección en Bogotá.',
       errorCode: 'ADDRESS_NOT_FOUND',
     });
   });
@@ -143,8 +142,7 @@ describe('Geocode (e2e)', () => {
     expect(res.body).toEqual({
       statusCode: 503,
       error: 'Service Unavailable',
-      message:
-        'No pudimos ubicar la dirección en este momento. Mueve el pin al lugar correcto.',
+      message: 'No pudimos ubicar la dirección en este momento.',
       errorCode: 'GEOCODING_UNAVAILABLE',
     });
   });
@@ -202,23 +200,34 @@ describe('Geocode (e2e)', () => {
     ]);
   });
 
-  it('returns 403 DINER_ACCOUNT for a diner, without geocoding', async () => {
-    const res = await geocode({ address: ADDRESS }, 'diner').expect(403);
+  it('returns 200 for a diner (search by address)', async () => {
+    const res = await geocode({ address: ADDRESS }, 'diner').expect(200);
+
+    expect(res.body).toEqual({
+      latitude: 4.655671,
+      longitude: -74.057006,
+      formattedAddress: 'Cra. 11 #72-30, Bogotá, Colombia',
+    });
+    expect(geocoder.geocode).toHaveBeenCalledWith(ADDRESS);
+  });
+
+  it('returns the same 404 to a diner', async () => {
+    geocoder.geocode.mockResolvedValue({ kind: 'not_found' });
+
+    const res = await geocode({ address: ADDRESS }, 'diner').expect(404);
+
+    expect(res.body.errorCode).toBe('ADDRESS_NOT_FOUND');
+  });
+
+  it('returns 403 PROFILE_REQUIRED for an account without profile, without geocoding', async () => {
+    const res = await geocode({ address: ADDRESS }, 'noProfile').expect(403);
 
     expect(res.body).toEqual({
       statusCode: 403,
       error: 'Forbidden',
-      message:
-        'Esta es una cuenta de comensal. Para buscar mesa, usa la app DiNNo.',
-      errorCode: 'DINER_ACCOUNT',
+      message: 'Completa tu perfil para continuar.',
+      errorCode: 'PROFILE_REQUIRED',
     });
-    expect(geocoder.geocode).not.toHaveBeenCalled();
-  });
-
-  it('returns 403 ACCOUNT_NOT_ENABLED for an account without profile', async () => {
-    const res = await geocode({ address: ADDRESS }, 'noProfile').expect(403);
-
-    expect(res.body.errorCode).toBe('ACCOUNT_NOT_ENABLED');
     expect(geocoder.geocode).not.toHaveBeenCalled();
   });
 
@@ -252,6 +261,15 @@ describe('Geocode (e2e)', () => {
       '503',
     ]);
     expect(route.get.security).toBeDefined();
+    // Both roles pass: the only account 403 is the account without profile.
+    expect(
+      Object.values(
+        route.get.responses['403'].content['application/json'].examples,
+      ).map(
+        (example) =>
+          (example as { value: { errorCode: string } }).value.errorCode,
+      ),
+    ).toEqual(['PROFILE_REQUIRED']);
     expect(route.get.parameters).toEqual([
       expect.objectContaining({ name: 'address', in: 'query', required: true }),
     ]);

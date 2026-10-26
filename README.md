@@ -276,6 +276,13 @@ lee **de la base** en cada petición.
   curl http://localhost:3000/v1/<ruta> -H "x-dev-user-id: 3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f"
   ```
 
+- **Con `DEV_USER_ENABLED=true`, la API local ignora los tokens de Firebase:** todas las
+  peticiones entran como el usuario de desarrollo, aunque traigan `Authorization: Bearer`. Para
+  probar con tokens reales, levanta una segunda instancia con el usuario de desarrollo apagado en
+  el propio comando, sin tocar tu `.env` (las variables del comando ganan sobre las del `.env`):
+  `DEV_USER_ENABLED=false PORT=3001 npm run start:dev` (en PowerShell:
+  `$env:DEV_USER_ENABLED='false'; $env:PORT='3001'; npm run start:dev`). Las cuentas de prueba
+  están en el `CLAUDE.md`, sección 10.
 - En Render no funciona: si la variable está en `true`, la app no arranca (ver la sección 7).
   Al arrancar en local con el usuario de desarrollo activo, Nest deja un aviso en la consola.
 - En el código: `@UseGuards(CurrentUserGuard)` y `@CurrentUser() user: CurrentUserData`,
