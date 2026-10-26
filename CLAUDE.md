@@ -23,7 +23,7 @@
 | Jacobo | Autenticación (login y control de acceso); pantalla del restaurante |
 | Sergio | Estado abierto/cerrado del restaurante y bitácora de cambios de mesas |
 
-**Sprint 2 (actual): Búsqueda y disponibilidad para el comensal (15–21 oct). Sprint 1 cerrado: Restaurante operativo.** Un restaurante puede iniciar sesión, registrar y editar sus datos, crear y administrar mesas, cambiar su estado, marcarse como abierto o cerrado y ver la bitácora, todo en el ambiente desplegado.
+**Sprint 2 (actual, en cierre): Búsqueda y disponibilidad para el comensal. Planeado del 15 al 21 oct; sigue abierto mientras se cierran las pruebas con cuentas reales en el ambiente desplegado (26 oct). Sprint 1 cerrado: Restaurante operativo.** Un restaurante puede iniciar sesión, registrar y editar sus datos, crear y administrar mesas, cambiar su estado, marcarse como abierto o cerrado y ver la bitácora, todo en el ambiente desplegado.
 
 ---
 
@@ -144,7 +144,8 @@ Una tarea está lista solo si:
 
 ### Cuentas y roles
 - Roles posibles: `restaurant_admin` (solo web) y `diner` (solo app). Cada cuenta tiene **un solo rol**.
-- **Lista de restaurantes habilitados** = filas de `users` con rol `restaurant_admin`. Para habilitar un correo se inserta una fila (ver `docs/database.md` del backend). No hay registro público de restaurantes. Por ahora el único correo real habilitado es `dinnoteam2026@gmail.com`.
+- **Lista de restaurantes habilitados** = filas de `users` con rol `restaurant_admin`. Para habilitar un correo se inserta una fila (ver `docs/database.md` del backend). No hay registro público de restaurantes.
+- **Cuentas de prueba (Firebase, correo verificable):** `dinnoteam2026@gmail.com` (restaurante Casa16), `dinnoteam2026+casa72@gmail.com` (restaurante Casa 72) y `dinnoteam2026+comensal@gmail.com` (comensal). Las credenciales están en Discord (#usuarios-restaurante y #usuarios-comensal), **nunca** en el repo. Una cuenta nueva usa un alias `dinnoteam2026+algo@gmail.com` (llega a la misma bandeja). Los dueños de los 15 restaurantes reales del seed (`restaurante-XX@dinno.test`) son solo datos: no tienen cuenta de Firebase ni inician sesión.
 - **El backend ya no crea usuarios automáticamente.** El único endpoint que crea un usuario es `POST /v1/diners/me`, y siempre lo crea con el rol `diner`.
 - Resolución del usuario en cada petición: token válido → se busca por `firebase_uid` → si no aparece y el correo está verificado, se busca por correo y se vincula el UID (igual que en el Sprint 1) → si no existe, la cuenta queda **sin perfil**.
 
@@ -160,9 +161,9 @@ Una tarea está lista solo si:
 | Restaurante en endpoint de comensal | 403 | `RESTAURANT_ACCOUNT` | Esta es una cuenta de restaurante. Administra tu restaurante desde la web. |
 | Restaurante habilitado sin restaurante registrado | 403 | `RESTAURANT_REQUIRED` | Primero registra tu restaurante. *(sin cambios)* |
 
-- **Endpoints de restaurante:** todos los del Sprint 1 (`/v1/restaurants`, `/v1/restaurants/me*`, `/v1/tables*`, `/v1/table-logs`) y `/v1/geocode`.
+- **Endpoints de restaurante:** todos los del Sprint 1 (`/v1/restaurants`, `/v1/restaurants/me*`, `/v1/tables*`, `/v1/table-logs`).
 - **Endpoints de comensal:** `/v1/search/*` y `/v1/restaurants/:id/public`.
-- **Ambos roles:** `GET /v1/me`.
+- **Ambos roles:** `GET /v1/me` y `GET /v1/geocode` (una cuenta sin perfil recibe `PROFILE_REQUIRED` en los dos).
 - La forma del error no cambia: `{ statusCode, message, error, errorCode? }`. Los clientes deciden por `errorCode`, nunca por el texto.
 
 ### Endpoints nuevos o modificados
@@ -175,7 +176,7 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 | GET | `/search/zones` | diner | — | 200 `[{ id, name, latitude, longitude }]` |
 | GET | `/search/restaurants` | diner | `lat` + `lng` **o** `zone` · `radiusKm` ∈ {1, 2, 5, 10} (por defecto 2) · `category?` · `partySize?` (1–20) | 200 `[{ id, name, category, address, latitude, longitude, distanceKm, availability }]`, ordenado por distancia, máximo 50 |
 | GET | `/restaurants/:id/public` | diner | `lat?` + `lng?` (juntos o ninguno) | 200 `{ id, name, category, address, latitude, longitude, schedules[], isOpenNow, availability, distanceKm? }` · 404 `RESTAURANT_NOT_FOUND` |
-| GET | `/geocode` | restaurant_admin | `address` (3–255 caracteres) | 200 `{ latitude, longitude, formattedAddress }` · 404 `ADDRESS_NOT_FOUND` · 503 `GEOCODING_UNAVAILABLE` |
+| GET | `/geocode` | ambos (el restaurante no necesita tener restaurante registrado) | `address` (3–255 caracteres) | 200 `{ latitude, longitude, formattedAddress }` · 404 `ADDRESS_NOT_FOUND` «No encontramos esa dirección en Bogotá.» · 503 `GEOCODING_UNAVAILABLE` «No pudimos ubicar la dirección en este momento.» · sin perfil → 403 `PROFILE_REQUIRED`. Los mensajes son neutros: cada cliente muestra su propio texto según el `errorCode` |
 | POST | `/restaurants` | restaurant_admin | agrega `latitude?`, `longitude?` | la respuesta agrega `latitude`, `longitude` (number \| null) |
 | PATCH | `/restaurants/me` | restaurant_admin | agrega `latitude?`, `longitude?` | igual que arriba |
 | GET | `/restaurants/me` | restaurant_admin | — | agrega `latitude`, `longitude` (number \| null) |
@@ -183,6 +184,7 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 **Reglas de los campos:**
 - `latitude` y `longitude` son `number` en JSON, con hasta 6 decimales. Se aceptan con más de 6: el backend las **redondea** a 6 antes de guardar (no es un error), y las respuestas traen el valor redondeado. Se envían **los dos o ninguno** (si llega solo uno → 400). Deben estar dentro de Bogotá: latitud entre 4.45 y 4.85, longitud entre -74.25 y -73.95 (fuera → 400). En el backend las coordenadas son opcionales para no romper la web actual; la obligatoriedad al registrar la impone el formulario web.
 - Búsqueda: `lat`/`lng` y `zone` son excluyentes (los dos o ninguno → 400). `lat`/`lng` pueden estar fuera de Bogotá (simplemente no habrá resultados). Una `zone` desconocida, una `category` inválida, un `radiusKm` fuera de la lista o un `partySize` fuera de rango → 400 con un mensaje en español.
+- **Búsqueda por dirección (app):** la búsqueda no recibe `address`. La app llama a `GET /geocode?address=…`, muestra «Resultados cerca de: `formattedAddress`» y busca con `GET /search/restaurants?lat=…&lng=…` usando `latitude` y `longitude`. Con `404` o `503` la app muestra su propio texto y ofrece buscar por zona o por ubicación. Una dirección que existe en Bogotá se acepta aunque el comensal pensara en otra ciudad (las direcciones colombianas se repiten entre ciudades): por eso se muestra `formattedAddress`.
 - `distanceKm`: número en km con 2 decimales. El formato para mostrar («a 650 m», «a 1,4 km») lo hace la app.
 - `category`: `colombian`, `italian`, `mexican`, `asian`, `grill`, `fast_food`, `healthy`, `seafood`, `cafe`, `other` (los mismos del Sprint 1).
 - `schedules[]` del detalle: el mismo formato que `GET /restaurants/me`: `{ dayOfWeek (1 = lunes … 7 = domingo), isOpen24h, opensAt: "HH:MM" | null, closesAt: "HH:MM" | null }`. Si `closesAt < opensAt`, el horario cierra al día siguiente. Los días cerrados no aparecen.
@@ -222,6 +224,9 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 | Búsqueda, zonas, disponibilidad, filtros y detalle público | 15 oct (PR #37) |
 | `GET /geocode` y coordenadas en POST/PATCH | 15 oct (PR #38) |
 | WebSocket `availability.changed` | 15 oct (PR #40) |
+| Seed con los 15 restaurantes reales en Neon y Casa 72 con dueño `dinnoteam2026+casa72@gmail.com` | 24 oct (PR #44) |
+| Llave real de Google Geocoding en local y en Render: `GET /geocode` ya no responde siempre `503` | 26 oct |
+| `GET /geocode` para comensales (búsqueda por dirección) y mensajes neutros en 404 y 503 | pendiente: rama `docs/sprint2-cierre-contrato`, 26 oct |
 
 ---
 
@@ -406,10 +411,20 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 
 ### Geocodificación y ubicación del restaurante (`restaurant-operations/geocoding/`, Elizabeth)
 - **Límites de Bogotá:** una sola fuente, `BOGOTA_BOUNDS`, `isInsideBogota` y `roundCoordinate` en `restaurant-operations/shared/bogota-location.ts`. Los usan el DTO de coordenadas y el geocodificador; no se repiten los números en otro lugar.
-- **Puerto y adaptador:** `Geocoder` (`geocoder.ts`) con `geocode(address)` → `GeocodeResult`, una unión `found` / `not_found` / `unavailable`; el adaptador nunca lanza. `GoogleGeocoder` (`google-geocoder.ts`) usa el `fetch` de Node con `AbortSignal.timeout(5000)`, arma la URL con `URLSearchParams` (`components=locality:Bogotá|country:CO`, `language=es`, `region=co`), redondea a 6 decimales y responde `not_found` si el resultado queda fuera de Bogotá o si es demasiado general: cuando **todos** los `types` del primer resultado están entre `locality`, `political`, `administrative_area_level_1`, `administrative_area_level_2` y `country` (por ejemplo "Bogotá, Colombia" para una dirección que Google no entiende). Un barrio (`neighborhood`, `sublocality`) o algo más preciso (`route`, `street_address`, `premise`, `establishment`, `intersection`…) se acepta. `partial_match` no se usa como criterio. Un resultado sin `types` (o con una lista vacía) es una respuesta inesperada: `unavailable`. Se registra con `{ provide: Geocoder, useClass: GoogleGeocoder }`; las pruebas lo reemplazan con `.overrideProvider(Geocoder)`.
+- **Puerto y adaptador:** `Geocoder` (`geocoder.ts`) con `geocode(address)` → `GeocodeResult`, una unión `found` / `not_found` / `unavailable`; el adaptador nunca lanza. `GoogleGeocoder` (`google-geocoder.ts`) usa el `fetch` de Node con `AbortSignal.timeout(5000)`, arma la URL con `URLSearchParams` (`components=locality:Bogotá|country:CO`, `language=es`, `region=co`), redondea a 6 decimales y responde `not_found` si el resultado queda fuera de Bogotá o si es demasiado general: cuando **todos** los `types` del primer resultado están entre `locality`, `political`, `administrative_area_level_1`, `administrative_area_level_2` y `country` (por ejemplo "Bogotá, Colombia" para una dirección que Google no entiende). Un barrio (`neighborhood`, `sublocality`) o algo más preciso (`route`, `street_address`, `premise`, `establishment`, `intersection`…) se acepta. `partial_match` y `geometry.location_type` no se usan como criterio.
+  - **Por qué (medido el 2026-10-26 con 25 direcciones contra Google):**
+    - Las 14 direcciones únicas del seed y 4 válidas de prueba se aceptan.
+    - Las 5 inexistentes o de otra ciudad (`Carrera 300 # 500-99`, `Calle 999 # 999-99`, `… Pitalito`, `… Medellín`, `Avenida Siempre Viva 742`) ya dan `404`, porque Google responde «Bogotá, Colombia» (`locality`, `political`).
+    - El único hueco es «asdfghjkl qwerty 999999» → `200` con «Cra. 85 #20-33». Llega con la misma forma (`partial_match: true`, `ROOFTOP`, tipos de establecimiento) que dos direcciones válidas del seed: «Calle 93A #11-49» (Al Alma) y «Calle 82 #12-21» (Andrés D.C.). Ninguna regla sobre esos campos rechaza el texto sin sentido sin rechazar esas dos.
+    - Exigir `street_address`, `premise`, `subpremise`, `route` o `intersection` en `types` también rechaza 4 direcciones del seed: centros comerciales, parques y restaurantes que Google devuelve como establecimiento.
+    - Por eso no se cambió la regla.
+  - **La protección está en los clientes:** la web muestra el pin para que el dueño lo confirme o lo mueva antes de guardar, y la app muestra «Resultados cerca de: `formattedAddress`».
+  - **Direcciones repetidas entre ciudades:** las direcciones colombianas se repiten entre ciudades. Una dirección que existe en Bogotá se acepta aunque el usuario pensara en otra ciudad; por eso los clientes muestran `formattedAddress`.
+  - **Ambiguo, rechazado por los límites:** `Calle 5 # 4-20` sin ciudad → Google la ubica en Chía (latitud 4.852, justo fuera de Bogotá) → `404`.
+- Un resultado sin `types` (o con una lista vacía) es una respuesta inesperada: `unavailable`. Se registra con `{ provide: Geocoder, useClass: GoogleGeocoder }`; las pruebas lo reemplazan con `.overrideProvider(Geocoder)`.
 - **Sin llave** (`GOOGLE_GEOCODING_API_KEY` vacía o sin definir): la app arranca, no se llama a Google y `GET /v1/geocode` responde `503 GEOCODING_UNAVAILABLE`.
 - **La llave nunca se registra:** ni ella ni la URL (que la lleva) ni la dirección van a logs, errores ni respuestas. El adaptador solo deja un WARN con el `status` de Google o el tipo de error (`timeout`, `HTTP 500`, `invalid JSON`…).
-- **`GET /v1/geocode`** (`geocode.controller.ts`): `@Roles(UserRole.RESTAURANT_ADMIN)` + `CurrentUserGuard`, **sin** `requireRestaurant` (el formulario de registro lo usa antes de que exista el restaurante). `address` recortada, de 3 a 255 caracteres y sin caracteres invisibles.
+- **`GET /v1/geocode`** (`geocode.controller.ts`): `@Roles(UserRole.RESTAURANT_ADMIN, UserRole.DINER)` + `CurrentUserGuard`, **sin** `requireRestaurant` (el formulario de registro lo usa antes de que exista el restaurante). El comensal lo usa para buscar por dirección (§10). Como la ruta acepta `diner`, `RolesGuard` responde `PROFILE_REQUIRED` a una cuenta sin perfil, igual que `GET /v1/me`; no hay otro `403` de cuenta. `address` recortada, de 3 a 255 caracteres y sin caracteres invisibles. Los mensajes de `404` y `503` son neutros (`geocoding-errors.ts`): la web y la app ponen su propio texto según el `errorCode`.
 - **Coordenadas del restaurante:** `latitude` y `longitude` están en `RestaurantFieldsDto` con `RestaurantCoordinateField` (`restaurants/dto/restaurant-location-fields.ts`), así que POST y PATCH validan igual: opcionales, las dos o ninguna, dentro de Bogotá, `null` rechazado y redondeadas a 6 decimales antes de guardar. `RestaurantResponseDto` las devuelve como `number | null`.
 
 ### Tiempo real: eventos y WebSocket (Elizabeth)

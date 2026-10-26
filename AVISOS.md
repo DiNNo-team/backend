@@ -61,15 +61,15 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Elizabeth
 - **Tus pendientes:**
-  - **Nuevo (2026-10-25): configurar la llave de Geocoding.** Santiago te la pasa por privado (`dinno-backend`). Ponla en `GOOGLE_GEOCODING_API_KEY` en Render (guardar y redesplegar) y en tu `.env`. Después, comprueba que `GET /v1/geocode?address=Cra. 11 #72-30, Bogotá` responde `200` en Render y avisa en el grupo: desde ese momento la web deja de recibir siempre `503`. Confírmale a Santiago cuando la tengas guardada para borrar el mensaje.
+  - ~~**Recibir y configurar `GOOGLE_GEOCODING_API_KEY`** en Render y en tu `.env`, y comprobar `GET /v1/geocode` en Render.~~ **Hecho** el 2026-10-26: `200` en local y en Render (ver «Historial»). Falta avisar en el grupo y confirmarle a Santiago para que borre el mensaje.
   - **Seed:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`.
-  - Probar el login con un token real de Firebase contra Render.
+  - ~~Probar el inicio de sesión con un token real de Firebase contra Render.~~ **Hecho** el 2026-10-26 con las tres cuentas: Casa16, Casa 72 y el comensal (ver «Historial»).
   - ~~Revisar las variables de Render: `FIREBASE_PROJECT_ID` definida; `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` sin definir (CLAUDE.md, sección 11). **Antes de fusionar esta rama a `develop`:** desde ahora, con `FIREBASE_AUTH_EMULATOR_HOST` definida o `DEV_USER_ENABLED=true`, la app no arranca en Render.~~ **Hecho** (confirmado por Elizabeth el 2026-10-15).
   - ~~Configurar en GitHub la regla de `develop` que exija el job `checks` del CI antes de fusionar.~~ **Hecho** (confirmado por Elizabeth el 2026-10-15).
   - Aplicar en Neon la migración de cada rama antes de fusionar su PR (ver "Reglas nuevas de este sprint").
   - Revisar los PR del backend.
   - ~~**Seed (Santiago):** integrar `src/seed-data/restaurants.json` (`feature/s2-seed-restaurantes`) a `seed.ts`.~~ **Hecho** el 2026-10-24 (`feat/sprint2-cierre-backend`, ver «Historial»).
-  - **Correr el seed en Neon** después de fusionar `feat/sprint2-cierre-backend`: crea los 15 restaurantes y pasa el dueño de Casa 72 a `dinnoteam2026+casa72@gmail.com`. Después, crear su cuenta de Firebase (pasos en «Historial», 2026-10-24).
+  - ~~**Correr el seed en Neon** después de fusionar `feat/sprint2-cierre-backend`.~~ **Hecho:** en Neon están los 15 restaurantes con sus dueños y Casa 72 tiene como dueño `dinnoteam2026+casa72@gmail.com` (comprobado el 2026-10-26). Su cuenta de Firebase quedó creada y verificada el 2026-10-26, y el primer inicio de sesión vinculó su `firebase_uid`.
 - **Los horarios no van en `restaurants`, van en otra tabla (`restaurant_schedules`, una fila por día abierto).** La edición no los puede copiar sola. Además, si un campo de horarios entra en `RestaurantFieldsDto` sin una propiedad con el mismo nombre en `Restaurant`, `npm run typecheck` falla en `restaurant-edit.service.ts` (el `Pick` de `RestaurantChanges`).
 - **Carrera conocida en el identificador de mesa:** el índice `UQ_tables_restaurant_id_identifier` compara `lower(trim(identifier))`, así que no cubre que "4" y "04" lleguen a la vez en dos peticiones simultáneas. El chequeo de repetidos de la aplicación (`assertIdentifierAvailable`, en `tables.service.ts`) lo cubre salvo en esa carrera. Es un riesgo bajo y aceptado (hay un dueño por restaurante). Solución futura posible: un índice sobre la clave normalizada.
 
@@ -107,8 +107,11 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - Presupuesto con alertas al 50 %, 90 % y 100 %, sobre todos los proyectos de la cuenta (`<integrante>`, o la cuenta del equipo cuando tenga los roles).
     - El proyecto de Firebase (`dinno`) quedó con APIs de Maps habilitadas y vinculado a la misma cuenta de facturación (Firebase pasó al plan Blaze). Hay que deshabilitar sus APIs de Maps desde *Google Maps Platform → APIs y servicios* (filtro «Enabled»; ninguna es de Firebase) y desvincular su facturación para que vuelva al plan gratuito. Se hace cuando el equipo lo confirme.
     - Agregar a `dinno-android` el SHA-1 de cada computador que compile la app (Sebastián se lo pasa a Santiago; el SHA-1 no es secreto).
+    - **Nuevo (2026-10-26, Elizabeth): revisar el proyecto de Firebase.**
+      - Confirmar en la consola que el proyecto que usan la web, la app y el backend, con id **`dinno-8f55c`** (sale en `VITE_FIREBASE_PROJECT_ID`), está activo y no aparece como pendiente de eliminación. Si se elimina, nadie podría iniciar sesión en la web ni en la app.
+      - Revisar el paso del proyecto «dinno» al plan Blaze (punto de arriba): confirmar si «dinno» es ese mismo `dinno-8f55c` y si debe volver al plan gratuito. Decidirlo con el equipo antes de tocarlo.
 
-- **Nuevo: la llave del backend (`GOOGLE_GEOCODING_API_KEY`, Google Geocoding API) se entrega a  por canal privado**, nunca por el grupo, un commit ni un PR. Ella la configura en Render y en su `.env`. Hasta entonces `GET /v1/geocode` responde `503` y la web muestra el mapa para mover el pin.
+- ~~**La llave del backend (`GOOGLE_GEOCODING_API_KEY`, Google Geocoding API) se entrega a Elizabeth por canal privado.**~~ **Hecho:** desde el 2026-10-26 está configurada en Render y en el `.env` de Elizabeth, y `GET /v1/geocode` responde con coordenadas reales.
 
 ### Santiago
 - **Nuevo (2026-10-24, ): tus 15 restaurantes ya están en el seed** (`feat/sprint2-cierre-backend`). Cambios en tus archivos:
@@ -119,7 +122,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - El seed restablece en cada corrida lo que dice el archivo, estado de las mesas incluido: si cambias el archivo, el cambio llega a Neon la próxima vez que  corra el seed.
 - **Nuevo (Sprint 2): ubicación del restaurante para el formulario de registro y de edición.** Contrato en `CLAUDE.md` (sección 10) y en Swagger (tags `geocode` y `restaurants`).
   - **`GET /v1/geocode?address=<texto>`** → `200 { latitude, longitude, formattedAddress }`, con 6 decimales y siempre dentro de Bogotá. **No exige restaurante registrado:** úsalo en `/onboarding` antes del `POST`. `address` va recortada, de 3 a 255 caracteres; si no cumple, `400` (`message` es una lista).
-  - **`404 ADDRESS_NOT_FOUND`:** «No encontramos esa dirección en Bogotá. Mueve el pin al lugar correcto.» · **`503 GEOCODING_UNAVAILABLE`:** «No pudimos ubicar la dirección en este momento. Mueve el pin al lugar correcto.» **En los dos casos** muestra el mensaje y el mapa centrado en Bogotá para que el usuario mueva el pin. Ramifica por `errorCode`. Hasta que llegue la llave de Google, la respuesta siempre es `503`.
+  - **`404 ADDRESS_NOT_FOUND`** y **`503 GEOCODING_UNAVAILABLE`**: **en los dos casos** muestra el mapa centrado en Bogotá para que el usuario mueva el pin. Ramifica por `errorCode`. **Cambio del 2026-10-26:** el `message` del backend ahora es neutro («No encontramos esa dirección en Bogotá.» y «No pudimos ubicar la dirección en este momento.»), porque el comensal también usa la ruta. La web muestra su propio texto por `errorCode`, por ejemplo para el 404: «No encontramos esa dirección en Bogotá. Mueve el pin al lugar correcto.». Desde el 2026-10-26 la llave de Google está configurada: `503` solo sale si Google no responde.
   - **`POST /v1/restaurants` y `PATCH /v1/restaurants/me`** aceptan `latitude` y `longitude` (números): **las dos o ninguna**, dentro de Bogotá (latitud 4.45 a 4.85, longitud -74.25 a -73.95), se aceptan con más decimales y **se guardan redondeadas a 6**. **No se pueden borrar:** `null` da `400`. En el `PATCH`, enviar solo las coordenadas es una edición válida. La obligatoriedad al registrar la impone tu formulario: el backend las deja opcionales para no romper la web actual.
   - **Las respuestas** de `POST /v1/restaurants`, `GET` y `PATCH /v1/restaurants/me` traen `latitude` y `longitude` (`number | null`). **El aviso «Completa tu ubicación» se basa en `latitude === null` en `GET /v1/restaurants/me`.**
 
@@ -163,7 +166,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ### Sergio
 - **Nuevo (2026-10-24, Elizabeth): cuenta de Casa 72 para la web y 15 restaurantes en Render.**
-  - Casa 72 tiene como dueño `dinnoteam2026+casa72@gmail.com` (antes `casa72@example.com`, que no recibía correo). Cuando Elizabeth cree su cuenta de Firebase, la clave se comparte por privado; con ella entras a la web como Casa 72. En local, el `DEV_USER_ID` de Casa 72 no cambia.
+  - Casa 72 tiene como dueño `dinnoteam2026+casa72@gmail.com` (antes `casa72@example.com`, que no recibía correo). Su cuenta de Firebase ya existe y está verificada (2026-10-26): las credenciales están en Discord (#usuarios-restaurante), y con ellas entras a la web como Casa 72. En local, el `DEV_USER_ID` de Casa 72 no cambia.
   - Después de que Elizabeth corra el seed en Neon, la búsqueda en Render muestra los 15 restaurantes reales además de Casa 72. Sus dueños (`restaurante-XX@dinno.test`) no son correos reales: nadie entra a la web como ellos.
   - Correr el seed no emite `availability.changed`: la app los ve en su siguiente consulta (cada 60 s o al volver a la pantalla).
 - **Nuevo (QA de disponibilidad, Santiago):** cuando Elizabeth corra el seed con los 15 restaurantes reales, el caso límite del 30 % está en Piazza Italia Calle 93: 3 de 10 mesas libres = Pocas mesas. Se ve después de las 12:00 (abre a mediodía).
@@ -182,8 +185,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 ### Sebastián  
 - **Nuevo (2026-10-25, Santiago): llave de Google Maps para la app.** Santiago te la pasa por privado (`dinno-android`). Solo funciona con Maps SDK for Android y la app `com.dinno.app`. Va como variable de entorno en la configuración de Expo, fuera del repo. Pásale a Santiago el SHA-1 de cada computador que compile la app (`gradlew signingReport`, variante `debug`), para agregarlo a la restricción de la llave; sin eso el mapa no carga en ese computador. Anótalo también en el `AVISOS.md` de mobile.
 - **Nuevo (2026-10-24, Elizabeth): hallazgos #3 y #6 de tu revisión de mobile.**
-  - **#3 «En Render solo aparece Casa 72»:** se resuelve cuando Elizabeth corra el seed en Neon; desde entonces aparecen también los 15 restaurantes reales, con los tres niveles de disponibilidad y varios pines.
-  - **#6 «qué cuenta entra a la web como Casa 72»:** resuelto. Es `dinnoteam2026+casa72@gmail.com`; la clave se comparte por privado cuando exista la cuenta de Firebase. `dinnoteam2026@gmail.com` es el dueño de Casa16, no de Casa 72.
+  - **#3 «En Render solo aparece Casa 72»:** **resuelto.** El seed ya corrió en Neon, y la búsqueda en Render muestra también los restaurantes reales, con los tres niveles de disponibilidad (comprobado el 2026-10-26).
+  - **#6 «qué cuenta entra a la web como Casa 72»:** resuelto. Es `dinnoteam2026+casa72@gmail.com`; la cuenta de Firebase ya existe y está verificada (2026-10-26), con las credenciales en Discord. `dinnoteam2026@gmail.com` es el dueño de Casa16, no de Casa 72.
   - Los dueños de los 15 restaurantes (`restaurante-XX@dinno.test`) no son correos reales: los restaurantes salen en la app, pero nadie entra a la web como ellos.
 - **Nuevo (app, Sprint 2): tiempo real listo en el backend (`availability.changed`).** Contrato en `CLAUDE.md`, sección 10, "Tiempo real".
   - **URL:** la misma del backend **sin** `/v1` (`https://dinno-backend.onrender.com`, o `http://localhost:3000` en local); ruta por defecto `/socket.io`.
@@ -277,21 +280,57 @@ Lo que queda abierto al cerrar el backend del Sprint 2 (2026-10-24). Los dueños
 | Desactivar una mesa Ocupada o Reservada | backend + web | Equipo | Decidir junto con las reservas del Sprint 3 |
 | Límite de peticiones y de conexiones WebSocket por IP | backend | Elizabeth | Hoy no hay ninguno |
 | Adaptador de Redis para Socket.IO | backend | Elizabeth | Solo si hay más de una instancia (ver «Migración a Azure» en `CLAUDE.md` §11) |
-| PBI 2.2 «dirección o zona» | Azure | Equipo | El comensal solo busca por zona o ubicación; aclarar el PBI |
-| Ubicación obligatoria al registrar | web | Santiago | Volver a exigirla cuando estén las llaves de Google |
+| PBI 2.2 «dirección o zona»: búsqueda por dirección en la app | mobile | Sebastián | El backend ya está listo: `GET /v1/geocode` acepta comensales desde el 2026-10-26. Falta la pantalla: geocode → «Resultados cerca de: `formattedAddress`» → búsqueda con `lat`/`lng` (ver el `AVISOS.md` de mobile) |
+| Ubicación obligatoria al registrar | web | Santiago | Volver a exigirla: las llaves de Google ya están (2026-10-26) |
 | Horarios de `restaurants.json` | backend | Santiago | Verificar los horarios reales |
 | Términos de Google sobre guardar coordenadas de Geocoding | equipo | Equipo de Google Cloud | Revisar si se pueden guardar de forma permanente |
 | `.gitattributes` en web y mobile | web + mobile | Sebastián | Igual que en el backend |
 | CI en web y mobile | web + mobile | Sergio | Hoy no hay ninguna verificación antes de fusionar |
 | Typecheck de mobile con rutas tipadas | mobile | Sebastián | Regenerar `.expo/types` y confirmar que pasa |
 | Cuál es el `firebase_uid` de `onboarding@example.com` y `demo@example.com` | backend | Elizabeth | Pendiente del 2026-10-06, de antes de la vinculación por correo. Hoy esas cuentas solo sirven en local, con `DEV_USER_ID`. Para entrar a la web con Firebase hace falta un correo verificado, y `@example.com` no recibe correo: o se pasan a alias verificables como Casa 72 (cambio en el seed), o se crea la cuenta de Firebase y se guarda su UID a mano en Neon |
-| `onboarding@example.com` ya tiene restaurante | backend | Elizabeth | En Neon tiene un segundo restaurante llamado «Casa 72» (del 2026-10-22, sin ubicación ni mesas, con 7 horarios), de una prueba de registro. SQL preparado, sin ejecutar: `scripts/sql/2026-10-24-cleanup-onboarding-restaurant.sql` (comprueba antes de borrar, deja a onboarding sin restaurante y borra ese restaurante y sus horarios). El seed avisa mientras siga con restaurante |
-| Correos reales habilitados en `CLAUDE.md` §10 | los tres | Elizabeth | La §10 dice que el único correo real habilitado es `dinnoteam2026@gmail.com`; ahora también está `dinnoteam2026+casa72@gmail.com` (misma bandeja). La §10 se cambia en los tres repos el mismo día |
 | `endOfLine: 'lf'` explícito en `.prettierrc` | backend | Elizabeth | Prettier 3 ya usa LF por defecto, igual que `.gitattributes`; dejarlo explícito evita depender del valor por defecto |
 | Formato de `roles.decorator.ts` | backend | Jacobo | Es el único archivo `.ts` que no cumple Prettier; por eso `npm run format` todavía cambiaría código ajeno |
 | `npm audit` | backend | Elizabeth | Sigue en «Deuda conocida» |
 
 ## Historial
+
+- **2026-10-26 · Elizabeth · Búsqueda por dirección para el comensal y mensajes neutros de geocodificación (`docs/sprint2-cierre-contrato`, PBI 2.2).** Cambio en la API, sin cambios de esquema ni dependencias. **Afecta a web y mobile** (sección 7).
+  - **`GET /v1/geocode` acepta los dos roles** (`@Roles(UserRole.RESTAURANT_ADMIN, UserRole.DINER)`). El restaurante sigue igual: no necesita restaurante registrado. El comensal lo usa para buscar por dirección: geocode → «Resultados cerca de: `formattedAddress`» → `GET /v1/search/restaurants?lat=…&lng=…`. La búsqueda no recibe `address`.
+  - **Códigos de cuenta:** una cuenta sin perfil recibe `403 PROFILE_REQUIRED` (antes `ACCOUNT_NOT_ENABLED`), igual que `GET /v1/me`. Ya no existe `DINER_ACCOUNT` en esta ruta.
+  - **Mensajes neutros:** `404 ADDRESS_NOT_FOUND` «No encontramos esa dirección en Bogotá.» y `503 GEOCODING_UNAVAILABLE` «No pudimos ubicar la dirección en este momento.». Cada cliente pone su propio texto según el `errorCode`. Las respuestas no cambian de forma.
+  - **Regla de geocodificación sin cambios.** Se midieron 25 direcciones directamente contra Google. Ninguna regla sobre `partial_match`, `location_type` o `types` rechaza «asdfghjkl qwerty 999999» sin rechazar direcciones válidas del seed. Datos y motivo en `CLAUDE.md` §11, «Geocodificación».
+  - **Pruebas:**
+    - `google-geocoder.spec.ts` suma 7 casos con respuestas reales de Google.
+    - `test/geocode.e2e-spec.ts` cubre: comensal `200` y `404`, sin perfil `403 PROFILE_REQUIRED`, mensajes nuevos, y que Swagger documente solo ese `403`.
+    - Ya no está el caso `403 DINER_ACCOUNT`.
+  - **Prueba real en local:** con el usuario de desarrollo del comensal, «Cra. 11 #72-30» → `200` y la búsqueda a 2 km de ese punto → 7 restaurantes de la Calle 72 (Casa 72 a 0,25 km). Con Casa 72, la misma dirección → `200`.
+  - **`CLAUDE.md` §10** (igual en los tres repos): fila de `/geocode` con los dos roles y los mensajes, «Ambos roles», el flujo «Búsqueda por dirección (app)» y la fila «Cuándo está listo».
+  - **Avisos:** a Sebastián en el `AVISOS.md` de mobile y a Santiago y Sebastián en el de frontend.
+
+- **2026-10-26 · Elizabeth · Llave de Geocoding configurada y pruebas con tokens reales (`docs/sprint2-cierre-contrato`).** Solo documentación: sin cambios de código, esquema, API ni dependencias. Render servía `develop` (`19f3b28`).
+  - **Geocodificación real** (`GOOGLE_GEOCODING_API_KEY` en local y en Render; 7 llamadas a `/v1/geocode` en total, 5 de ellas llegaron a Google):
+    - «Av. Calle 72 con Cra. 9, Chapinero, Bogotá» → `200`, a 26 m de las coordenadas de Casa 72;
+    - «Cra. 11 #72-30» → `200` dentro de Bogotá, igual en local y en Render;
+    - «Calle 10 #43A-30, Medellín» → `404 ADDRESS_NOT_FOUND`;
+    - «asdfghjkl qwerty 999999» → `200` con una dirección real de Bogotá (coincidencia parcial de Google). **Decisión (Elizabeth):** se deja así, y el dueño siempre confirma o mueve el pin antes de guardar (`CLAUDE.md` §11, «Geocodificación»);
+    - comensal → `403 DINER_ACCOUNT`.
+
+    El log de la API no muestra la llave, la URL de Google ni la dirección.
+  - **Cuentas y roles con tokens reales** (local con `DEV_USER_ENABLED=false` y Render, mismos resultados): `GET /v1/me` del comensal (`diner`) y de Casa16 (`restaurant_admin` con su restaurante); `POST /v1/diners/me` dos veces → `200` y `200`, y con Casa16 → `403 RESTAURANT_ACCOUNT`; comensal en rutas de restaurante (incluido `/v1/geocode`) → `403 DINER_ACCOUNT`; Casa16 en rutas de comensal → `403 RESTAURANT_ACCOUNT`; sin token o con un token inválido → `401`. **Casa 72:**
+    - primero respondió `INVALID_LOGIN_CREDENTIALS`, porque la cuenta todavía no existía;
+    - después de crearla, `401 EMAIL_NOT_VERIFIED`, que es lo correcto con el correo sin verificar;
+    - ya verificada: `GET /v1/me` → `200 restaurant_admin` con Casa 72, `POST /v1/diners/me` y las rutas de comensal → `403 RESTAURANT_ACCOUNT`, y `GET /v1/tables` → `200`, en local y en Render.
+
+    El primer inicio de sesión vinculó su `firebase_uid` por correo: ya no está en `NULL`.
+  - **Búsqueda y detalle:** zonas, `calle-72` con radio 2 y 10, `category=colombian`, `partySize=6` y el detalle de Casa 72 y de Pesquera Jaramillo (cerrado a mano, `closed`) dan respuestas idénticas en Render y en local, en el mismo minuto.
+  - **Tiempo real de punta a punta en Render:** con `listen-availability.mjs` conectado con el token del comensal, cada cambio de Casa 72 hecho con su token emitió un `availability.changed` en menos de 1 s:
+    - ocupar Mesa 7 → `few`;
+    - cerrar → `closed` con `isSearchable: false`;
+    - abrir → `few`;
+    - liberar Mesa 7 → `few`.
+
+    Repetir el mismo estado de la mesa no emitió nada. Antes, la prueba se había hecho también en local, con el usuario de desarrollo, y dio los mismos eventos. Casa 72 quedó como estaba (`is_open = true`, Mesas 7 y 8 libres): solo cambian los `updated_at` y la bitácora, que registra la prueba. **WebSocket en Render:** Casa16 → `RESTAURANT_ACCOUNT`; el comensal estuvo conectado 10 s sin errores; sin token o con un token inválido → `UNAUTHORIZED`.
+  - **Cerrados:** recibir la llave de Geocoding, probar el inicio de sesión con un token real contra Render (las tres cuentas), la cuenta de Firebase de Casa 72, correr el seed en Neon, la fila de la §10 de los tres repos (cuentas de prueba sincronizadas en `CLAUDE.md` §10, mismo texto en backend, web y mobile) y el restaurante de prueba de `onboarding@example.com` (ya no tiene restaurante en Neon).
 
 - **2026-10-25 · Santiago · Google Cloud (Maps) configurado.** Sin cambios de código, esquema ni dependencias.
   - **Qué quedó listo:** el proyecto `dinno-maps` con facturación en prueba gratuita, las tres APIs del Sprint 2 y tres llaves restringidas (backend, Android y web). Detalle en «Equipo de Google Cloud».

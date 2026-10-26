@@ -21,6 +21,9 @@ interface GoogleGeocodeResponse {
 // A result whose types are all in this list is the whole city (or wider),
 // not a place in it: Google answers "Bogotá, Colombia" for an address it does
 // not understand. A neighborhood or anything more precise is accepted.
+// partial_match and location_type are not criteria: measured on 2026-10-26, a
+// nonsense address came back with the same shape (partial, ROOFTOP, an
+// establishment) as two valid seed addresses (CLAUDE.md §11).
 const TOO_GENERAL_TYPES = new Set([
   'locality',
   'political',

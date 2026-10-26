@@ -207,6 +207,135 @@ describe('GoogleGeocoder', () => {
     );
   });
 
+  // First results observed from Google on 2026-10-26 with our parameters
+  // (coordinates rounded). partial_match and location_type are not criteria.
+  describe('responses observed from Google', () => {
+    function observed(result: {
+      formatted_address: string;
+      lat: number;
+      lng: number;
+      partial_match: boolean;
+      location_type: string;
+      types: string[];
+    }) {
+      const { lat, lng, location_type, ...rest } = result;
+      return {
+        status: 'OK',
+        results: [
+          { ...rest, geometry: { location: { lat, lng }, location_type } },
+        ],
+      };
+    }
+
+    it.each([
+      [
+        'an exact street address',
+        'Calle 72 # 10-34',
+        {
+          formatted_address: 'Cl 72 #10-34, Bogotá, Colombia',
+          lat: 4.657168,
+          lng: -74.057517,
+          partial_match: false,
+          location_type: 'ROOFTOP',
+          types: ['street_address', 'subpremise'],
+        },
+      ],
+      [
+        'an intersection (GEOMETRIC_CENTER)',
+        'Av. Calle 72 con Cra. 9, Chapinero, Bogotá',
+        {
+          formatted_address: 'Cl 72 & Cra. 9, Chapinero, Bogotá, Colombia',
+          lat: 4.655901,
+          lng: -74.057029,
+          partial_match: false,
+          location_type: 'GEOMETRIC_CENTER',
+          types: ['intersection'],
+        },
+      ],
+      [
+        'a partial match on a valid seed address (an establishment)',
+        'Calle 93A #11-49, Parque de la 93, Bogotá',
+        {
+          formatted_address:
+            'Cl. 93a #11-49, Chapinero, Bogotá, Cundinamarca, Colombia',
+          lat: 4.67577,
+          lng: -74.047503,
+          partial_match: true,
+          location_type: 'ROOFTOP',
+          types: ['establishment', 'food', 'point_of_interest', 'restaurant'],
+        },
+      ],
+      // Known gap, kept on purpose: same shape as the valid partial match
+      // above, so no rule on Google's fields can tell them apart.
+      [
+        'a partial match on a nonsense address (known gap)',
+        'asdfghjkl qwerty 999999',
+        {
+          formatted_address: 'Cra. 85 #20- 33, Bogotá, Colombia',
+          lat: 4.636479,
+          lng: -74.160107,
+          partial_match: true,
+          location_type: 'ROOFTOP',
+          types: ['establishment', 'food', 'point_of_interest', 'restaurant'],
+        },
+      ],
+    ])('accepts %s', async (_case, address, result) => {
+      fetchMock.mockResolvedValue(jsonResponse(observed(result)));
+
+      await expect(geocoder().geocode(address)).resolves.toEqual({
+        kind: 'found',
+        latitude: result.lat,
+        longitude: result.lng,
+        formattedAddress: result.formatted_address,
+      });
+    });
+
+    it.each([
+      [
+        'a street that does not exist (partial, APPROXIMATE, the whole city)',
+        'Calle 999 # 999-99',
+        {
+          formatted_address: 'Bogotá, Colombia',
+          lat: 4.710989,
+          lng: -74.072092,
+          partial_match: true,
+          location_type: 'APPROXIMATE',
+          types: ['locality', 'political'],
+        },
+      ],
+      [
+        'an address of another city (Google falls back to Bogotá)',
+        'Calle 10 #43A-30, Medellín',
+        {
+          formatted_address: 'Bogotá, Colombia',
+          lat: 4.710989,
+          lng: -74.072092,
+          partial_match: true,
+          location_type: 'APPROXIMATE',
+          types: ['locality', 'political'],
+        },
+      ],
+      [
+        'an exact address just outside the bounds (Chía)',
+        'Calle 5 # 4-20',
+        {
+          formatted_address: 'Cl. 5 #4-20, Chía, Cundinamarca, Colombia',
+          lat: 4.852389,
+          lng: -74.057541,
+          partial_match: false,
+          location_type: 'RANGE_INTERPOLATED',
+          types: ['street_address'],
+        },
+      ],
+    ])('answers not found for %s', async (_case, address, result) => {
+      fetchMock.mockResolvedValue(jsonResponse(observed(result)));
+
+      await expect(geocoder().geocode(address)).resolves.toEqual({
+        kind: 'not_found',
+      });
+    });
+  });
+
   it('answers not found for ZERO_RESULTS', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ status: 'ZERO_RESULTS', results: [] }),
