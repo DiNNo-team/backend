@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -37,6 +38,7 @@ import {
 import { CAPACITY_RANGE, CreateTableDto } from './dto/create-table.dto.js';
 import { TableResponseDto } from './dto/table-response.dto.js';
 import { UpdateTableDto } from './dto/update-table.dto.js';
+import { PLAN_X_RANGE, SaveTablePlanDto } from './dto/save-table-plan.dto.js';
 import {
   STATUS_INVALID,
   UpdateTableStatusDto,
@@ -52,6 +54,7 @@ import {
   TABLE_ALREADY_ACTIVE_MESSAGE,
   TABLE_ALREADY_INACTIVE_MESSAGE,
   TABLE_INACTIVE_MESSAGE,
+  PLAN_PROBLEM_MESSAGES,
   TABLE_NOT_FOUND_MESSAGE,
   TablesService,
 } from './tables.service.js';
@@ -155,6 +158,52 @@ export class TablesController {
     @CurrentUser() user: CurrentUserData,
   ): Promise<TableResponseDto[]> {
     const tables = await this.tablesService.findAll(user.restaurantId);
+    return tables.map((table) => TableResponseDto.fromEntity(table));
+  }
+
+  @Put('plan')
+  @ApiOperation({
+    summary: 'Guardar el plano de mesas del restaurante',
+    description:
+      'Reemplaza el plano completo: cada mesa ubicada con su celda (x, y) y, si se quiere, su forma. Las mesas del restaurante que no vengan en la lista quedan sin ubicar (planX, planY y planShape en null). Gana el último que guarda. El tamaño de cada mesa sale de su forma y su capacidad (tables/table-plan.ts): ninguna puede salirse de la grilla de 20 × 30 celdas ni quedar encima de otra. No cambia el estado, no se registra en la bitácora y no afecta la disponibilidad. Responde la lista completa, igual que GET /v1/tables.',
+  })
+  @ApiOkResponse({
+    description: 'Todas las mesas del restaurante, con su posición nueva.',
+    type: TableResponseDto,
+    isArray: true,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Celda fuera de rango, forma inválida, mesa repetida, una mesa que se sale de la grilla o dos mesas superpuestas, o campos no permitidos. message es una lista.',
+    type: ErrorResponseDto,
+    examples: {
+      overlap: {
+        summary: 'Dos mesas superpuestas',
+        value: {
+          statusCode: 400,
+          message: [PLAN_PROBLEM_MESSAGES.overlap],
+          error: 'Bad Request',
+        },
+      },
+      range: {
+        summary: 'Columna fuera de la grilla',
+        value: {
+          statusCode: 400,
+          message: [PLAN_X_RANGE],
+          error: 'Bad Request',
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  async savePlan(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: SaveTablePlanDto,
+  ): Promise<TableResponseDto[]> {
+    const tables = await this.tablesService.savePlan(
+      user.restaurantId,
+      dto.tables,
+    );
     return tables.map((table) => TableResponseDto.fromEntity(table));
   }
 

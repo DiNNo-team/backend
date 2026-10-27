@@ -4,6 +4,12 @@ import {
   type Table,
   type TableStatus,
 } from '../table.entity.js';
+import {
+  PLAN_COLUMNS,
+  PLAN_ROWS,
+  TABLE_SHAPES,
+  type TableShape,
+} from '../table-plan.js';
 
 export class TableResponseDto {
   @ApiProperty({
@@ -33,6 +39,37 @@ export class TableResponseDto {
   })
   isActive: boolean;
 
+  @ApiProperty({
+    type: 'integer',
+    nullable: true,
+    minimum: 0,
+    maximum: PLAN_COLUMNS - 1,
+    example: 4,
+    description:
+      'Columna de la esquina superior izquierda de la mesa en el plano (PUT /v1/tables/plan). null = la mesa no está ubicada; planX y planY son null juntos.',
+  })
+  planX: number | null;
+
+  @ApiProperty({
+    type: 'integer',
+    nullable: true,
+    minimum: 0,
+    maximum: PLAN_ROWS - 1,
+    example: 2,
+    description:
+      'Fila de la esquina superior izquierda de la mesa en el plano. null = la mesa no está ubicada.',
+  })
+  planY: number | null;
+
+  @ApiProperty({
+    enum: TABLE_SHAPES,
+    nullable: true,
+    example: null,
+    description:
+      'Forma en el plano: square = cuadrada, round = redonda, rect = rectangular. null = rectangular según la capacidad.',
+  })
+  planShape: TableShape | null;
+
   static fromEntity(table: Table): TableResponseDto {
     return {
       id: table.id,
@@ -40,6 +77,11 @@ export class TableResponseDto {
       capacity: table.capacity,
       status: table.status,
       isActive: table.isActive,
+      // A just-created table comes back from save() without these columns: it
+      // is not on the plan yet.
+      planX: table.planX ?? null,
+      planY: table.planY ?? null,
+      planShape: table.planShape ?? null,
     };
   }
 }
