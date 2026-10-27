@@ -47,6 +47,9 @@ function storedTable(overrides: Partial<Table>): Table {
     isActive: true,
     createdAt: new Date('2026-10-04T12:00:00Z'),
     updatedAt: new Date('2026-10-04T12:00:00Z'),
+    planX: null,
+    planY: null,
+    planShape: null,
     ...overrides,
   };
 }
@@ -159,6 +162,9 @@ describe('Tables · edit and deactivate (e2e)', () => {
         capacity: 6,
         status: 'occupied',
         isActive: true,
+        planX: null,
+        planY: null,
+        planShape: null,
       });
       expect(statusLog.record).not.toHaveBeenCalled();
     });

@@ -15,12 +15,14 @@ import {
 } from '../shared/availability-affected.event.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
 import type { CreateTableDto } from './dto/create-table.dto.js';
+import type { PlanTableDto } from './dto/save-table-plan.dto.js';
 import type { UpdateTableDto } from './dto/update-table.dto.js';
 import {
   identifierTakenMessage,
   normalizeTableIdentifier,
 } from './table-identifier.js';
 import { Table, type TableStatus } from './table.entity.js';
+import { findPlanProblem, type PlanProblem } from './table-plan.js';
 import { TableStatusLog } from './table-status-log.js';
 
 const UNIQUE_IDENTIFIER_INDEX = 'UQ_tables_restaurant_id_identifier';
@@ -37,6 +39,14 @@ export const TABLE_ALREADY_ACTIVE_MESSAGE =
   'Esta mesa ya está activa. Actualiza la lista de mesas.';
 export const NO_TABLE_CHANGES_MESSAGE =
   'No hay cambios para guardar. Cambia el identificador o la capacidad de la mesa.';
+export const PLAN_TABLE_REPEATED_MESSAGE =
+  'Una mesa aparece dos veces en el plano. Envía cada mesa una sola vez.';
+export const PLAN_PROBLEM_MESSAGES: Record<PlanProblem, string> = {
+  'out-of-bounds':
+    'Una mesa se sale del plano. Muévela hacia adentro e intenta de nuevo.',
+  overlap:
+    'Dos mesas quedaron una encima de otra. Sepáralas e intenta de nuevo.',
+};
 
 @Injectable()
 export class TablesService {
@@ -176,6 +186,68 @@ export class TablesService {
         changes.identifier ?? table.identifier,
       );
       return { ...table, ...changes };
+    });
+  }
+
+  // Floor plan (manual v2.0, 13.10): the whole plan at once, and the last save
+  // wins. Tables of the restaurant missing from the list end up unplaced. The
+  // position never changes availability, so nothing goes to the log and no
+  // event is emitted. Answers the full list, like findAll.
+  async savePlan(
+    restaurantId: string | null,
+    items: PlanTableDto[],
+  ): Promise<Table[]> {
+    const ownerId = requireRestaurant(restaurantId);
+    if (new Set(items.map((item) => item.id)).size !== items.length) {
+      throw new BadRequestException([PLAN_TABLE_REPEATED_MESSAGE]);
+    }
+
+    return this.tables.manager.transaction(async (manager) => {
+      // Locks every table of the restaurant: an edit of the capacity (which
+      // changes the footprint) or another save waits for this one.
+      const tables = await manager.find(Table, {
+        where: { restaurantId: ownerId },
+        order: { createdAt: 'ASC', id: 'ASC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const byId = new Map(tables.map((table) => [table.id, table]));
+      const placed = items.map((item) => {
+        const table = byId.get(item.id);
+        // Same 404 as the other routes: never reveal another restaurant's table.
+        if (!table) {
+          throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+        }
+        return { ...item, shape: item.shape ?? null, capacity: table.capacity };
+      });
+      const problem = findPlanProblem(placed);
+      if (problem) {
+        throw new BadRequestException([PLAN_PROBLEM_MESSAGES[problem]]);
+      }
+
+      const plan = new Map(placed.map((item) => [item.id, item]));
+      for (const table of tables) {
+        const item = plan.get(table.id);
+        const next = {
+          planX: item?.x ?? null,
+          planY: item?.y ?? null,
+          planShape: item?.shape ?? null,
+        };
+        if (
+          next.planX === table.planX &&
+          next.planY === table.planY &&
+          next.planShape === table.planShape
+        ) {
+          continue;
+        }
+        // Only the plan columns: a stale status must never be written back.
+        await manager.update(
+          Table,
+          { id: table.id, restaurantId: ownerId },
+          next,
+        );
+        Object.assign(table, next);
+      }
+      return tables;
     });
   }
 

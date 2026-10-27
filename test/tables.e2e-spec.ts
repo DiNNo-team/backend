@@ -54,6 +54,9 @@ function storedTable(overrides: Partial<Table>): Table {
     isActive: true,
     createdAt: new Date('2026-10-04T12:00:00Z'),
     updatedAt: new Date('2026-10-04T12:00:00Z'),
+    planX: null,
+    planY: null,
+    planShape: null,
     ...overrides,
   };
 }
@@ -160,6 +163,9 @@ describe('Tables (e2e)', () => {
         capacity: 4,
         status: 'available',
         isActive: true,
+        planX: null,
+        planY: null,
+        planShape: null,
       });
       expect(tables.save).toHaveBeenCalledWith(
         expect.objectContaining({ restaurantId: RESTAURANT_ID }),
@@ -244,9 +250,15 @@ describe('Tables (e2e)', () => {
   });
 
   describe('GET /v1/tables', () => {
-    it('returns active and inactive tables in the repository order', async () => {
+    it('returns active and inactive tables in the repository order, with their place on the plan', async () => {
       tables.find.mockResolvedValueOnce([
-        storedTable({ id: TABLE_ID, identifier: 'Mesa 2' }),
+        storedTable({
+          id: TABLE_ID,
+          identifier: 'Mesa 2',
+          planX: 1,
+          planY: 2,
+          planShape: 'round',
+        }),
         storedTable({
           id: '4a3b2c1d-0e9f-4a8b-9c7d-6e5f4a3b2c1d',
           identifier: 'Mesa 10',
@@ -266,6 +278,9 @@ describe('Tables (e2e)', () => {
           capacity: 4,
           status: 'available',
           isActive: true,
+          planX: 1,
+          planY: 2,
+          planShape: 'round',
         },
         {
           id: '4a3b2c1d-0e9f-4a8b-9c7d-6e5f4a3b2c1d',
@@ -273,6 +288,9 @@ describe('Tables (e2e)', () => {
           capacity: 6,
           status: 'available',
           isActive: false,
+          planX: null,
+          planY: null,
+          planShape: null,
         },
       ]);
       expect(tables.find).toHaveBeenCalledWith({
@@ -307,6 +325,9 @@ describe('Tables (e2e)', () => {
         capacity: 4,
         status: 'occupied',
         isActive: true,
+        planX: null,
+        planY: null,
+        planShape: null,
       });
       expect(txManager.findOne).toHaveBeenCalledWith(Table, {
         where: { id: TABLE_ID, restaurantId: RESTAURANT_ID },
