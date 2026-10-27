@@ -9,6 +9,11 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
 
+- **Nuevo (2026-10-27): `CLAUDE.md` apunta al manual de identidad v2.0** (secciones 2 y 8, iguales en los tres repos), y la sección 8 suma la decisión del plano de mesas. El v1.1 queda como histórico.
+- **Nuevo (2026-10-27): plano de mesas** (rama `feat/sprint2-plano-mesas`, aprobado por Sebastián como decisión D4 de la renovación v2.0; falta la revisión de Elizabeth).
+  - **Base:** la migración `1793084146913-AddTablePlan` agrega a `tables` las columnas `plan_x`, `plan_y` y `plan_shape`, todas NULL, con sus checks (`docs/database.md`). **Elizabeth la aplica en Neon antes de fusionar el PR:** sin ella, todas las rutas de `/v1/tables` responden `500` en Render, porque la entidad ya pide esas columnas.
+  - **API:** `PUT /v1/tables/plan` con `{ tables: [{ id, x, y, shape? }] }` reemplaza el plano completo y responde la lista entera; gana el último que guarda. Valida que las mesas sean del restaurante (`404`) y que ninguna se salga de la grilla ni quede encima de otra (`400`). No escribe en la bitácora ni emite `availability.changed`.
+  - **Respuestas:** todas las de `/v1/tables` agregan `planX`, `planY` y `planShape` (`null` mientras la mesa no esté ubicada). Es un cambio aditivo; la app móvil no usa `/v1/tables`.
 - **Nuevo (2026-10-25): Google Cloud (Maps) ya está configurado.** Detalle en «Equipo de Google Cloud». Dos reglas para todos:
   - **Nadie entra a la consola de Google Cloud con la cuenta del equipo** salvo Santiago. Los inicios de sesión desde muchos equipos y redes dispararon el bloqueo antifraude de Google; las llaves se piden a Santiago por privado.
   - **Nadie pulsa «Actualizar» en el banner de la prueba gratuita:** pasa la cuenta a pago completo y Google podría cobrar a la tarjeta de un integrante.

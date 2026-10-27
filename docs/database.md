@@ -69,8 +69,18 @@ Horario de atención: una fila por cada día que el restaurante **abre**. Un dí
 | `capacity` | `smallint` | NOT NULL, entre 1 y 20 (`CHK_tables_capacity`) |
 | `status` | `varchar(20)` | NOT NULL, por defecto `'available'`; solo `'available'`, `'reserved'` u `'occupied'` (`CHK_tables_status`) |
 | `is_active` | `boolean` | NOT NULL, por defecto `true` |
+| `plan_x` | `smallint` | NULL. Columna de la esquina superior izquierda de la mesa en el plano, de 0 a 19 (`CHK_tables_plan_x`) |
+| `plan_y` | `smallint` | NULL. Fila de esa esquina, de 0 a 29 (`CHK_tables_plan_y`). `plan_x` y `plan_y` van juntas o las dos en NULL (`CHK_tables_plan_pair`): NULL = la mesa no está en el plano |
+| `plan_shape` | `varchar(10)` | NULL; solo `'square'`, `'round'` o `'rect'` (`CHK_tables_plan_shape`). NULL = rectangular según la capacidad |
 
 Estados en la interfaz: `available` = Disponible, `reserved` = Reservada, `occupied` = Ocupada. `is_active = false` = Inactiva.
+
+**Plano de mesas** (migración `1793084146913-AddTablePlan`, manual de identidad v2.0, 13.10):
+- Es una grilla fija de 20 × 30 celdas: las posiciones son celdas, no píxeles, así que el plano es el mismo en cualquier pantalla. Las mesas existentes quedan sin ubicar (las tres columnas en NULL).
+- El tamaño de cada mesa sale de su forma y su capacidad (`tables/table-plan.ts`, `tableFootprint`): cuadrada o redonda, 3 × 3; rectangular, 3 × 2 hasta 4 personas, 4 × 2 hasta 8 y 5 × 2 desde 9. La web usa la misma tabla (`features/tables/plan/plan-geometry.ts`); `table-plan.spec.ts` y `plan-geometry.test.ts` la fijan en los dos lados.
+- Que ninguna mesa se salga de la grilla ni quede encima de otra lo valida `PUT /v1/tables/plan` (depende del tamaño, así que no es un check de la base).
+- Editar la capacidad no mueve la mesa: si crece y queda encima de otra, la web la marca en el modo edición y no deja guardar hasta moverla.
+- La posición no es estado: no se registra en la bitácora ni cambia la disponibilidad.
 
 ### `table_logs` · entidad `TableLog`
 
