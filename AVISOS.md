@@ -9,9 +9,10 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
 
+- **Nuevo (2026-11-03): Contratos del Sprint 3 publicados en CLAUDE.md §12. Leer antes de empezar cualquier tarea del sprint.**
 - **Nuevo (2026-10-27): `CLAUDE.md` apunta al manual de identidad v2.0** (secciones 2 y 8, iguales en los tres repos), y la sección 8 suma la decisión del plano de mesas. El v1.1 queda como histórico.
 - **Nuevo (2026-10-27): plano de mesas** (rama `feat/sprint2-plano-mesas`, aprobado por Sebastián como decisión D4 de la renovación v2.0; falta la revisión de Elizabeth).
-  - **Base:** la migración `1793084146913-AddTablePlan` agrega a `tables` las columnas `plan_x`, `plan_y` y `plan_shape`, todas NULL, con sus checks (`docs/database.md`). **Elizabeth la aplica en Neon antes de fusionar el PR:** sin ella, todas las rutas de `/v1/tables` responden `500` en Render, porque la entidad ya pide esas columnas.
+  - **Base:** la migración `1793084146913-AddTablePlan` agrega a `tables` las columnas `plan_x`, `plan_y` y `plan_shape`, todas NULL, con sus checks (`docs/database.md`). **Pendiente de Elizabeth: verificar que AddTablePlan esté aplicada en Neon** (el PR #47 ya está fusionado). Sin ella, todas las rutas de `/v1/tables` responden `500` en Render, porque la entidad ya pide esas columnas.
   - **API:** `PUT /v1/tables/plan` con `{ tables: [{ id, x, y, shape? }] }` reemplaza el plano completo y responde la lista entera; gana el último que guarda. Valida que las mesas sean del restaurante (`404`) y que ninguna se salga de la grilla ni quede encima de otra (`400`). No escribe en la bitácora ni emite `availability.changed`.
   - **Respuestas:** todas las de `/v1/tables` agregan `planX`, `planY` y `planShape` (`null` mientras la mesa no esté ubicada). Es un cambio aditivo; la app móvil no usa `/v1/tables`.
 - **Nuevo (2026-10-25): Google Cloud (Maps) ya está configurado.** Detalle en «Equipo de Google Cloud». Dos reglas para todos:
@@ -38,7 +39,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - **Recurso de otro restaurante:** responde `404`, con el mismo mensaje que si el recurso no existiera. Así la API no revela que existe algo de otro restaurante. Ya se aplica en las mesas.
     - **Cuenta que no es de restaurante:** responde `403` `DINER_ACCOUNT` (comensal) o `ACCOUNT_NOT_ENABLED` (sin perfil), con los textos del contrato (`CLAUDE.md`, sección 10). El front ramifica por `errorCode`, igual que con "sin restaurante". (cambió el 2026-10-15, ver Historial) Ya está implementado (`@Roles`, PR #30 de Jacobo) en todas las rutas de `restaurant-operations`: mesas, `GET` y `PATCH /v1/restaurants/me`, `POST /v1/restaurants`, `GET` y `PATCH /v1/restaurants/me/status` y `GET /v1/table-logs` (ver "Control de acceso por rol" más abajo).
 - **Código compartido entre módulos:** va en `src/common/`, solo si de verdad lo usan varios módulos y no es de ningún dominio. Nada de lógica de negocio (regla en el CLAUDE.md, sección 11).
-- **Los mensajes de error que puede ver el usuario siguen la sección 14 del manual de identidad v1.1:**
+- **Los mensajes de error que puede ver el usuario siguen la sección 14 del manual de identidad v2.0:**
   - Tuteo, frases cortas y sin culpar, qué pasó + qué hacer.
   - Sin códigos técnicos, emojis ni signos de exclamación, y con mayúscula inicial solamente.
   - Las palabras son las del glosario (14.1). Si el manual ya fija un texto en 14.2, se usa ese tal cual. Por ejemplo, el `401` dice "Tu sesión terminó. Inicia sesión de nuevo."
@@ -55,7 +56,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
     - `test/accounts.e2e-spec.ts`, `test/availability-wiring.e2e-spec.ts` y `test/table-logs.e2e-spec.ts` no los usan porque sus simulacros son distintos (más cuentas y un repositorio de usuarios que guarda, una base sin filtros, un query builder). Úsalos en una e2e nueva solo si te sirven tal cual.
   - **La migración se aplica en Neon antes de fusionar el PR, nunca después.** `develop` se despliega solo a Render y nadie corre las migraciones al desplegar: si el código llega primero, el backend pide columnas que todavía no existen y esas consultas responden `500`. En el orden contrario no pasa nada, siempre que las columnas nuevas acepten NULL o tengan valor por defecto. Lo mismo en local: todos usamos la misma base, así que una rama con columnas que Neon todavía no tiene falla en esas consultas hasta que se aplique su migración.
 - **E2e con el usuario de desarrollo apagado (`DEV_USER_ENABLED: 'false'`, por ejemplo para probar el `401`):** agrega `FIREBASE_PROJECT_ID: 'firebase-project-example'` al `load` de tu `ConfigModule.forRoot`, como `test/tables-edit.e2e-spec.ts`. Desde el login con Firebase, con el usuario de desarrollo apagado se usa el resolver de Firebase, que hace `getOrThrow('FIREBASE_PROJECT_ID')` al arrancar: sin esa clave el módulo no inicia y la prueba falla en el CI (que no tiene `.env`), aunque en local pase con tu `.env`. Es un valor de ejemplo: una petición sin token responde `401` antes de llamar a Firebase, así que no hay red ni credenciales.
-- **Las seis migraciones de `develop` ya están aplicadas en Neon** (la última, `1792087341885-AddDinerRoleAndRestaurantLocation`, el 2026-10-15; el seed ya escribió `latitude` y `longitude`): puedes hacer pull de `develop` sin riesgo.
+- **En `develop` hay siete migraciones; la última es `1793084146913-AddTablePlan`.** Las seis primeras ya están aplicadas en Neon (la sexta, `1792087341885-AddDinerRoleAndRestaurantLocation`, el 2026-10-15; el seed ya escribió `latitude` y `longitude`). **Pendiente de Elizabeth: verificar que AddTablePlan esté aplicada en Neon.** Hasta confirmarlo, las rutas de `/v1/tables` pueden responder `500` con el código de `develop`.
 - **Control de acceso por rol:** toda ruta nueva de restaurante lleva `@Roles(UserRole.RESTAURANT_ADMIN)` (importado de `identity-access/index.ts`) encima de `@UseGuards(CurrentUserGuard)`, en ese orden. Una cuenta que no es de restaurante responde `403` `DINER_ACCOUNT` (comensal) o `ACCOUNT_NOT_ENABLED` (sin perfil) (cambió el 2026-10-15, ver Historial). Afecta a las rutas nuevas de Sergio (abrir y cerrar restaurante y `GET /v1/table-logs`) y de Santiago (registro y consulta del restaurante).
   - **Jacobo:** las tres rutas de Sergio ya lo llevan, con tu aprobación: `GET` y `PATCH /v1/restaurants/me/status` y `GET /v1/table-logs` (PR #31). Mismo orden de decoradores y mismo `403` en Swagger que mesas; sus e2e prueban que un comensal recibe `DINER_ACCOUNT`.
 
@@ -65,7 +66,14 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 **Todos:** solo Elizabeth corre migraciones y seed contra Neon.
 
 ### Elizabeth
+- **Nuevo (2026-11-03): entregas del backend del Sprint 3** (`CLAUDE.md` §12.11; cada una en `develop` y desplegada en Render):
+  - **Día 1:** el contrato (§12). Mientras tanto, web y app trabajan con datos de ejemplo con exactamente esas formas.
+  - **Día 2:** `POST /v1/reservations`, `GET /v1/reservations/active`, `GET /v1/reservations/:id` y las reglas de mesas con reserva activa (§12.2).
+  - **Día 3:** cancelación, expiración automática, `GET /v1/restaurants/me/reservations` y check-in (se puede probar en Swagger).
+  - **Día 4:** WebSocket con salas y eventos de reserva. Hasta entonces, web y app consultan cada 30 s.
+  - **Día 5:** todo integrado en Render + Neon.
 - **Tus pendientes:**
+  - **Verificar que AddTablePlan esté aplicada en Neon** (ver «Acciones pendientes de todos»).
   - ~~**Recibir y configurar `GOOGLE_GEOCODING_API_KEY`** en Render y en tu `.env`, y comprobar `GET /v1/geocode` en Render.~~ **Hecho** el 2026-10-26: `200` en local y en Render (ver «Historial»). Falta avisar en el grupo y confirmarle a Santiago para que borre el mensaje.
   - **Seed:** guardar los `firebase_uid` de `onboarding@example.com` y `demo@example.com`.
   - ~~Probar el inicio de sesión con un token real de Firebase contra Render.~~ **Hecho** el 2026-10-26 con las tres cuentas: Casa16, Casa 72 y el comensal (ver «Historial»).
@@ -218,8 +226,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 - **Decisión (Sebastián, 2026-10-06): el campo se llama "Identificador", no "Nombre".** Lo dice el manual en 12.4, y la regla de mostrar "Mesa 04" (14.1) supone un identificador corto. Los mensajes del backend dicen "identificador", igual que la web: "Escribe el identificador de la mesa.", "Usa máximo 10 caracteres en el identificador de la mesa." y "Ya tienes una Mesa 04. Usa otro identificador.". En el código y en la API el campo sigue siendo `identifier`.
 - **El horario admite "Abierto 24 horas" (`is_open_24h`).** El HoursEditor del manual no tiene esa opción; hace falta agregarla al kit antes de que Santiago y Jacobo armen sus formularios (registro y edición del restaurante), porque los dos usan el `HoursEditor`.
 - Estados de mesa en el backend: `available`, `reserved` y `occupied`. `is_active` va aparte: es una mesa desactivada, no un estado.
-- **Una mesa inactiva conserva su estado:** la API puede devolver `status` `occupied` o `reserved` con `isActive: false`, porque desactivar no cambia el estado. En la pantalla, "Inactiva" tiene prioridad sobre el estado.
-- **Desactivar una mesa Ocupada o Reservada:** hoy el backend lo permite. Es una decisión de producto pendiente de confirmar por el equipo; hasta entonces sigue permitido.
+- **Una mesa inactiva conserva su estado:** la API puede devolver `status` `occupied` o `reserved` con `isActive: false`, porque desactivar no cambia el estado. En la pantalla, "Inactiva" tiene prioridad sobre el estado. **Cambia con `CLAUDE.md` §12.2:** desde el Día 2 del Sprint 3 solo se desactiva una mesa `available`.
+- **Desactivar una mesa Ocupada o Reservada:** ~~hoy el backend lo permite. Es una decisión de producto pendiente de confirmar por el equipo; hasta entonces sigue permitido.~~ **Decidido (2026-11-03, `CLAUDE.md` §12.2):** responde `409 TABLE_NOT_AVAILABLE_TO_DEACTIVATE` (primero se pasa a Disponible), y una mesa con reserva DiNNo activa responde `409 TABLE_HAS_ACTIVE_RESERVATION`. Detalle para la web en el `AVISOS.md` de frontend.
 - **Login con Firebase (PR #23 de Jacobo, ya en `develop`).** Así responde la API:
   - Las rutas protegidas aceptan `Authorization: Bearer <ID token de Firebase>` (`getIdToken()`, que se renueva solo).
   - `401` con "Tu sesión terminó. Inicia sesión de nuevo.": sin token o token inválido/vencido. Llévalo al login.
@@ -241,7 +249,11 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - **Tu "Deshacer" puede mandar el estado anterior sin miedo.** Si pides el estado que la mesa ya tiene, el backend no lo trata como error: responde 200 con la mesa tal cual.
   - **Qué hacer en la pantalla con cada error.** Todos traen en `message` un texto en español listo para mostrar.
     - **404:** la mesa ya no existe o no es de este restaurante, por ejemplo porque la lista que tienes en pantalla está desactualizada. Muestra el mensaje y recarga la lista de mesas.
-    - **409:** la mesa está inactiva, y una mesa inactiva no cambia de estado. Muestra el mensaje. Si el control de estados solo aparece en mesas activas, no debería pasar.
+    - **409:** la mesa está inactiva, y una mesa inactiva no cambia de estado. Muestra el mensaje. Si el control de estados solo aparece en mesas activas, no debería pasar. Este `409` sigue sin `errorCode`.
+    - **Nuevo (Sprint 3, `CLAUDE.md` §12.2): dos `409` con `errorCode`.** Ramifica por `errorCode` y muestra el texto de §12.2:
+      - `TABLE_HAS_ACTIVE_RESERVATION`: la mesa tiene una reserva DiNNo activa. Sale al cambiar el estado, al desactivar y al bajar la capacidad por debajo de las personas de la reserva.
+      - `TABLE_NOT_AVAILABLE_TO_DEACTIVATE`: se intentó desactivar una mesa que no está `available` (`POST /v1/tables/:id/deactivate`). Primero se pasa a Disponible.
+      - Si aplican los dos, gana `TABLE_HAS_ACTIVE_RESERVATION`.
     - **403 con `errorCode: "RESTAURANT_REQUIRED"`:** el usuario todavía no registró su restaurante. Llévalo al registro del restaurante, igual que en las demás rutas de mesas.
     - **400:** los datos no son válidos, porque el estado no es uno de los tres o el id está mal formado. Aquí `message` es una lista: muestra cada texto. Con la interfaz no debería pasar.
     - **401 y 500** funcionan igual que en el resto de la API.
@@ -258,7 +270,7 @@ Riesgos aceptados para el Sprint 1, a revisar más adelante:
 - **Sesiones revocadas:** `verifyIdToken` no usa `checkRevoked`, así que un token revocado sirve hasta que vence (máximo 1 hora). Activarlo exige credenciales de cuenta de servicio.
 - **TLS con Neon:** la conexión no verifica el certificado del servidor (`rejectUnauthorized: false`).
 - **Sin rate limiting:** ninguna ruta limita las peticiones por IP ni por usuario.
-- **WebSocket sin límite de conexiones por IP:** igual que el rate limiting de HTTP, nada limita cuántas conexiones abre una IP (cada handshake valida un token y consulta la base). Para el Sprint 3.
+- **WebSocket sin límite de conexiones por IP:** igual que el rate limiting de HTTP, nada limita cuántas conexiones abre una IP (cada handshake valida un token y consulta la base). Para el Sprint 4 (seguridad; `CLAUDE.md` §12.10).
 - **`npm audit`:** hay vulnerabilidades reportadas en dependencias; falta revisar y aplicar `npm audit fix`.
 - **Cuenta bloqueada por otro UID:** cuando el correo ya está vinculado a otro UID de Firebase (por ejemplo, una cuenta borrada y vuelta a crear), la API responde el mismo `401` "Tu sesión terminó" y la web entra en un bucle de login. Un `errorCode` propio necesita acordarse con la web; mientras tanto, el soporte está en `docs/database.md`.
 - **Firebase caído o lento:** no hay timeout propio; si Firebase no responde, la API contesta `401` en vez de `503`, y la web lo trata como sesión vencida.
@@ -282,9 +294,9 @@ Lo que queda abierto al cerrar el backend del Sprint 2 (2026-10-24). Los dueños
 |---|---|---|---|
 | `POST /diners/me` con correo ligado a otro UID | backend | Elizabeth | Hoy responde 401; evaluar 403 `RESTAURANT_ACCOUNT` o un código propio |
 | `ACCOUNT_CONFLICT` | backend + mobile | Elizabeth + Sebastián | Lo pidió Sebastián para cuentas de Firebase recreadas; no existe en ningún repo (ver «Deuda conocida», «Cuenta bloqueada por otro UID») |
-| Desactivar una mesa Ocupada o Reservada | backend + web | Equipo | Decidir junto con las reservas del Sprint 3 |
-| Límite de peticiones y de conexiones WebSocket por IP | backend | Elizabeth | Hoy no hay ninguno |
-| Adaptador de Redis para Socket.IO | backend | Elizabeth | Solo si hay más de una instancia (ver «Migración a Azure» en `CLAUDE.md` §11) |
+| ~~Desactivar una mesa Ocupada o Reservada~~ | backend + web | Equipo | **Decidido (2026-11-03):** solo se desactiva una mesa `available`; si no, `409` (`CLAUDE.md` §12.2) |
+| Límite de peticiones y de conexiones WebSocket por IP | backend | Elizabeth | Hoy no hay ninguno. **Pasa al Sprint 4** (seguridad; `CLAUDE.md` §12.10), igual que en «Deuda conocida» |
+| Adaptador de Redis para Socket.IO | backend | Elizabeth | **Pasa al Sprint 4**, con la migración a Azure (`CLAUDE.md` §12.7 y §12.10). Solo hace falta con más de una instancia (ver «Migración a Azure» en `CLAUDE.md` §11) |
 | PBI 2.2 «dirección o zona»: búsqueda por dirección en la app | mobile | Sebastián | El backend ya está listo: `GET /v1/geocode` acepta comensales desde el 2026-10-26. Falta la pantalla: geocode → «Resultados cerca de: `formattedAddress`» → búsqueda con `lat`/`lng` (ver el `AVISOS.md` de mobile) |
 | Ubicación obligatoria al registrar | web | Santiago | Volver a exigirla: las llaves de Google ya están (2026-10-26) |
 | Horarios de `restaurants.json` | backend | Santiago | Verificar los horarios reales |
@@ -298,6 +310,8 @@ Lo que queda abierto al cerrar el backend del Sprint 2 (2026-10-24). Los dueños
 | `npm audit` | backend | Elizabeth | Sigue en «Deuda conocida» |
 
 ## Historial
+
+- **2026-11-03 · Elizabeth · Contratos del Sprint 3 publicados (`sprint3-contratos`).** Solo documentación: sin cambios de código, esquema, API ni dependencias. `CLAUDE.md` §12 nueva (microreservas y check-in), igual en los tres repos; §1 marca el Sprint 3 como actual; §8 suma `source` y las entradas automáticas de la bitácora; §10 marca `GET /geocode` para comensales como fusionado (PR #46). Decidido: solo se desactiva una mesa `available` (§12.2). El adaptador de Redis y el límite de conexiones WebSocket pasan al Sprint 4. Avisos a Sebastián en los `AVISOS.md` de frontend y mobile.
 
 - **2026-10-26 · Elizabeth · Búsqueda por dirección para el comensal y mensajes neutros de geocodificación (`docs/sprint2-cierre-contrato`, PBI 2.2).** Cambio en la API, sin cambios de esquema ni dependencias. **Afecta a web y mobile** (sección 7).
   - **`GET /v1/geocode` acepta los dos roles** (`@Roles(UserRole.RESTAURANT_ADMIN, UserRole.DINER)`). El restaurante sigue igual: no necesita restaurante registrado. El comensal lo usa para buscar por dirección: geocode → «Resultados cerca de: `formattedAddress`» → `GET /v1/search/restaurants?lat=…&lng=…`. La búsqueda no recibe `address`.

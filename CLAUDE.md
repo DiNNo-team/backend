@@ -1,6 +1,6 @@
 # CLAUDE.md · DiNNo · backend
 
-> Instrucciones para Claude Code y para el equipo. Las secciones 1 a 10 son **iguales en los tres repositorios** (backend, frontend, mobile); la sección 11 es propia de este repositorio.
+> Instrucciones para Claude Code y para el equipo. Las secciones 1 a 10 y 12 son **iguales en los tres repositorios** (backend, frontend, mobile); la sección 11 es propia de este repositorio.
 > Si una regla cambia, se cambia en los tres repos en el mismo PR o en PRs del mismo día, y se avisa al equipo.
 
 ## 1. Contexto del proyecto
@@ -23,7 +23,7 @@
 | Jacobo | Autenticación (login y control de acceso); pantalla del restaurante |
 | Sergio | Estado abierto/cerrado del restaurante y bitácora de cambios de mesas |
 
-**Sprint 2 (actual, en cierre): Búsqueda y disponibilidad para el comensal. Planeado del 15 al 21 oct; sigue abierto mientras se cierran las pruebas con cuentas reales en el ambiente desplegado (26 oct). Sprint 1 cerrado: Restaurante operativo.** Un restaurante puede iniciar sesión, registrar y editar sus datos, crear y administrar mesas, cambiar su estado, marcarse como abierto o cerrado y ver la bitácora, todo en el ambiente desplegado.
+**Sprint 3 (actual): Microreservas y check-in (contratos en la sección 12). Sprint 2 cerrado: Búsqueda y disponibilidad para el comensal (contratos en la sección 10). Sprint 1 cerrado: Restaurante operativo.** Un restaurante puede iniciar sesión, registrar y editar sus datos, crear y administrar mesas, cambiar su estado, marcarse como abierto o cerrado y ver la bitácora, todo en el ambiente desplegado.
 
 ---
 
@@ -122,7 +122,7 @@ Las decisiones y contratos del Sprint 2 están en la sección 10.
 - **API:** prefijo `/v1`, contrato documentado en Swagger (`/docs`).
 - **Base de datos:** cambios de esquema solo con migraciones; nunca `synchronize`.
 - **Identificador de mesa:** corto ("04", "T1") y se muestra "Mesa 04"; "4", "04" y "Mesa 4" son la misma mesa; máximo 10 caracteres; en la interfaz se llama "Identificador" (manual 12.4).
-- **Bitácora de mesas:** cambiar el estado, desactivar (`<estado>` → `inactive`) y reactivar (`inactive` → `available`) se registran; editar el identificador o la capacidad no.
+- **Bitácora de mesas:** cambiar el estado, desactivar (`available` → `inactive`; desde §12.2 solo se desactiva una mesa `available`) y reactivar (`inactive` → `available`) se registran; editar el identificador o la capacidad no. Desde el Sprint 3, cada registro lleva `source` (`manual`, `reservation` o `system`) y las entradas automáticas (`system`, el vencimiento de una reserva) tienen `user_id` en `null` (§12.3).
 - **Plano de mesas:** la posición de cada mesa vive en `tables` (`plan_x`, `plan_y`, `plan_shape`, en NULL mientras no está ubicada) y se guarda con `PUT /v1/tables/plan`, que reemplaza el plano completo (gana el último que guarda). No se registra en la bitácora ni cambia la disponibilidad.
 - Nuevas decisiones: se agregan aquí, en una línea, en el mismo PR que las aplica.
 
@@ -227,7 +227,7 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 | WebSocket `availability.changed` | 15 oct (PR #40) |
 | Seed con los 15 restaurantes reales en Neon y Casa 72 con dueño `dinnoteam2026+casa72@gmail.com` | 24 oct (PR #44) |
 | Llave real de Google Geocoding en local y en Render: `GET /geocode` ya no responde siempre `503` | 26 oct |
-| `GET /geocode` para comensales (búsqueda por dirección) y mensajes neutros en 404 y 503 | pendiente: rama `docs/sprint2-cierre-contrato`, 26 oct |
+| `GET /geocode` para comensales (búsqueda por dirección) y mensajes neutros en 404 y 503 | 26 oct (PR #46) |
 
 ---
 
@@ -342,6 +342,7 @@ Los módulos `reservations-checkin` y `notifications` existen pero todavía no t
 - **Implementación real:** `DbTableStatusLog` (`table-logs/table-logs.recorder.ts`), registrada en `restaurant-operations.module.ts` como `{ provide: TableStatusLog, useClass: DbTableStatusLog }`. Inserta una fila en `table_logs` (entidad `TableLog`, `table-logs/table-log.entity.ts`).
 - **Cómo usarla desde otro servicio de mesas:** inyecta `TableStatusLog` (nunca `DbTableStatusLog` ni el repositorio de `TableLog`) y llama a `record(...)` **dentro de la misma transacción** que cambia la mesa, pasándole el `manager` de esa transacción. No atrapes su error: si el insert falla, la transacción se revierte y la mesa queda como estaba. Ejemplo completo: `updateStatus` y `changeActive` en `tables.service.ts`.
 - **Qué se registra:** cambiar el estado (`<anterior>` → `<nuevo>`), desactivar (`<estado real>` → `inactive`) y reactivar (`inactive` → `available`). **Qué no:** crear una mesa, editar identificador o capacidad, y pedir el estado que la mesa ya tiene (responde 200 sin escribir nada).
+- **Cambia con §12.2:** hoy desactivar conserva el estado real de la mesa (`reserved` u `occupied` incluidos). Desde el Día 2 del Sprint 3 solo se desactiva una mesa `available`.
 - **`inactive` solo existe en la bitácora**, nunca en `tables.status`. Si cambia `TABLE_LOG_STATUSES`, hace falta una migración escrita a mano que borre y vuelva a crear `CHK_table_logs_previous_status` y `CHK_table_logs_new_status` (TypeORM compara los checks solo por nombre).
 - **Requisitos de toda consulta sobre `table_logs`** (acordado con Elizabeth): (a) filtra siempre por el restaurante del usuario de la sesión, con un join a `tables` (`tables.restaurant_id`), nunca por un dato que mande el cliente (`table_logs` no tiene `restaurant_id`); (b) tiene una prueba e2e que confirma que el usuario de un restaurante no ve los registros de las mesas de otro.
 - **Pruebas e2e:** toda prueba que monte `RestaurantOperationsModule` necesita `.overrideProvider(getRepositoryToken(TableLog)).useValue({})`. Las que prueban mesas además reemplazan `TableStatusLog` por un mock.
@@ -464,3 +465,182 @@ Tres cosas dependen hoy de Render y hay que resolverlas al pasar a Azure:
 - Zona horaria: `Intl.DateTimeFormat` con `timeZone: 'America/Bogota'`. Sin librerías de fechas nuevas.
 - Geocodificación: Google Geocoding API con `GOOGLE_GEOCODING_API_KEY` (solo en Render y en `.env.example` sin valor; nunca en logs), restringida a Bogotá (`components=locality:Bogotá|country:CO`). Un resultado fuera de los límites de Bogotá → `ADDRESS_NOT_FOUND`. Sin llave, cuota agotada o timeout → `GEOCODING_UNAVAILABLE`.
 - Identificadores de mesa del seed: los existentes (`Mesa N`) se quedan como están para no duplicar mesas en Neon. Los restaurantes nuevos del seed usan identificadores cortos (`01`, `T1`).
+
+---
+
+## 12. Sprint 3 · Contratos (microreservas y check-in)
+
+> Responsable: Elizabeth. Si algo no está aquí, se pregunta antes de inventarlo. Los cambios a esta sección se anuncian en `AVISOS.md`.
+
+**Objetivo del sprint:**
+- Un comensal elige en la app un restaurante disponible, reserva una mesa por unos minutos y recibe un código y un temporizador. Puede cancelar la reserva o dejarla vencer.
+- El restaurante ve las reservas entrantes en la web sin recargar y valida el check-in con el código cuando el comensal llega.
+- Reserva, mesa y disponibilidad quedan siempre sincronizadas entre app, web y backend.
+
+### 12.1 La microreserva
+- **Estados:** `active` (Activa) · `cancelled` (Cancelada) · `expired` (Vencida) · `completed` (Cumplida). Solo se pasa de `active` a uno de los otros tres; nunca al revés.
+- **Vigencia:** 15 minutos, configurable con la variable `RESERVATION_TTL_MINUTES` (entero entre 2 y 15; por defecto 15). Para la demo de expiración se usa 3 en Render.
+- **Una sola reserva activa por comensal.** Si ya tiene una → 409 `ACTIVE_RESERVATION_EXISTS`.
+- **Personas:** de 1 a 20, igual que el filtro del Sprint 2. Si el comensal ya filtró por personas, la app lo trae precargado.
+- **Cuándo se puede reservar:** solo si el restaurante está abierto ahora (`is_open` y horario de Bogotá, la misma regla `isOpenNow` de disponibilidad) y tiene una mesa activa (`is_active`), con estado `available` y capacidad ≥ personas. Se reutilizan las reglas de disponibilidad del Sprint 2; no se duplican.
+- **Asignación de mesa:** la mesa libre más pequeña que alcance. Si hay empate, la de identificador menor. Así no se gasta una mesa de 8 en una pareja.
+- Una mesa que el restaurante puso en Reservada a mano nunca se asigna a una microreserva, porque no está `available`.
+- **Código:** 6 caracteres de mayúsculas y números, sin los que se confunden (0, O, 1, I, L). Alfabeto: `23456789ABCDEFGHJKMNPQRSTUVWXYZ`. Ejemplo: `K7M4QX`. Único entre las reservas activas. Al validarlo, el backend lo normaliza (quita espacios y pasa a mayúsculas).
+- **Temporizador:** manda la hora del servidor. Cada respuesta de reserva trae `expiresAt` y `serverTime`. La app calcula la diferencia con su propio reloj y cuenta hacia atrás con eso.
+- **Fechas:** todas las fechas de la API van en ISO 8601 UTC. `serverTime` es la hora del servidor al momento de responder.
+
+### 12.2 Mesas con reserva activa
+Una microreserva dura como máximo 15 minutos y siempre termina sola (check-in, cancelación o vencimiento), así que bloquear la mesa mientras tanto no deja nada trabado. Si el restaurante pudiera liberarla a mano, DiNNo podría asignársela a otro comensal mientras el primero va en camino. Si el comensal llega, el camino es el check-in, no cambiar el estado.
+
+| Acción del restaurante | Mesa con reserva DiNNo activa | Mesa Ocupada o Reservada a mano |
+|---|---|---|
+| Cambiar el estado (`PATCH /v1/tables/:id/status`) | 409 `TABLE_HAS_ACTIVE_RESERVATION` | Permitido |
+| Desactivar (`POST /v1/tables/:id/deactivate`) | 409 `TABLE_HAS_ACTIVE_RESERVATION` | 409 `TABLE_NOT_AVAILABLE_TO_DEACTIVATE` (primero se pasa a Disponible) |
+| Bajar la capacidad (`PATCH /v1/tables/:id`) | 409 `TABLE_HAS_ACTIVE_RESERVATION` solo si queda por debajo de las personas de la reserva | Permitido |
+| Editar el identificador | Permitido | Permitido |
+| Cerrar el restaurante | Permitido, con aviso; la reserva se respeta | Permitido |
+
+- Si aplican los dos 409, gana `TABLE_HAS_ACTIVE_RESERVATION`.
+- **Cambio de comportamiento frente al Sprint 2:** antes se podía desactivar una mesa `reserved` u `occupied` conservando su estado. Desde ahora solo se desactiva una mesa `available`.
+- Reactivar no cambia: la mesa vuelve como `available`.
+- **Cerrar el restaurante con reservas activas:** el cierre se hace igual. Las reservas existentes siguen hasta el check-in, la cancelación o el vencimiento, y no se aceptan nuevas (`RESTAURANT_CLOSED`).
+- **Mensajes en la web:**
+  - `TABLE_HAS_ACTIVE_RESERVATION` → «Esta mesa tiene una reserva de DiNNo en curso. Se libera sola cuando el comensal llegue, cancele o se venza la reserva.»
+  - `TABLE_NOT_AVAILABLE_TO_DEACTIVATE` → «Para desactivar esta mesa, primero márcala como Disponible.»
+  - Cerrar con reservas activas → «Tienes N reservas en curso; se mantendrán hasta que lleguen o se venzan.» (N = `activeReservationsCount`).
+
+### 12.3 Mesa y reserva siempre juntas
+
+| Evento | Reserva | Mesa | Bitácora: `source` | Bitácora: `user_id` |
+|---|---|---|---|---|
+| Crear microreserva | `active` | `available` → `reserved` | `reservation` | el comensal |
+| Cancelar (comensal) | `cancelled` | `reserved` → `available` | `reservation` | el comensal |
+| Vencer sin llegar | `expired` (no-show) | `reserved` → `available` | `system` | `null` |
+| Check-in válido | `completed` | `reserved` → `occupied` | `reservation` | el `restaurant_admin` |
+| Cambio manual (como hoy) | — | según el cambio | `manual` | el `restaurant_admin` |
+
+- Todo cambio de reserva y mesa va en una sola transacción: o se guardan los dos o ninguno.
+- **Bitácora (`table_logs`):**
+  - `user_id` pasa a ser nullable.
+  - Se agrega la columna `source` (`'manual'` | `'reservation'` | `'system'`). Los registros existentes quedan con `source = 'manual'`.
+  - `GET /v1/table-logs` empieza a devolver `source` y puede traer el usuario en `null`. La web lo muestra como "Automático".
+- La mesa vuelve a `available` solo si sigue en `reserved` por esa reserva. Nunca se pisa un estado que el restaurante cambió después.
+
+### 12.4 Concurrencia (dos personas, una mesa)
+- La creación bloquea las mesas candidatas dentro de la transacción (`SELECT … FOR UPDATE SKIP LOCKED`) y revalida su estado antes de confirmar.
+- **Defensa final en la base, con índices únicos parciales:**
+  - una reserva `active` por mesa;
+  - una reserva `active` por comensal;
+  - código único entre las reservas `active`.
+- Si dos solicitudes compiten por la última mesa, una gana y la otra recibe 409 `NO_TABLE_AVAILABLE`.
+
+### 12.5 Expiración
+- La fuente de verdad es `expires_at` en PostgreSQL. No se usa un temporizador en memoria ni en Redis.
+- Un proceso del backend corre cada 15 s y vence de una sola vez todas las reservas `active` cuyo `expires_at` ya pasó (`UPDATE … RETURNING`). Es idempotente: al arrancar el servicio, vence lo que haya quedado pendiente.
+- Además, cualquier lectura u operación sobre una reserva activa que ya pasó su `expires_at` la vence en ese momento y la devuelve como `expired`, aunque el proceso no haya pasado todavía.
+- La reserva vencida queda marcada como no-show (`expired_at` y `no_show = true`) para el Sprint 4 y la IA.
+
+### 12.6 Check-in
+- Lo hace el restaurante desde la web, escribiendo el código que le muestra el comensal.
+- Un código de otro restaurante responde igual que uno inexistente: no se revela que existe.
+- **Evento facturable:** cada check-in válido crea un registro en `check_ins` (restaurante, reserva, fecha y hora). Es único por reserva, así que nunca se cobra dos veces. El estado de cuenta se construye en el Sprint 4.
+- **La web nunca muestra el código de una reserva en la lista;** si lo mostrara, el check-in no comprobaría nada. Muestra nombre del comensal, personas, mesa y tiempo restante.
+
+| Situación | Respuesta | Qué ve el restaurante |
+|---|---|---|
+| Código válido | 200 | «Check-in confirmado · Mesa {tableIdentifier} · {partySize} personas · {dinerName}» |
+| No existe, formato inválido o es de otro restaurante | 404 `RESERVATION_CODE_NOT_FOUND` | «No encontramos una reserva con ese código en tu restaurante.» |
+| Vencida | 409 `RESERVATION_EXPIRED` | El `message` del backend, p. ej. «Esta reserva se venció a las 12:41. La mesa ya se liberó.» |
+| Ya usada | 409 `RESERVATION_ALREADY_USED` | El `message` del backend, p. ej. «Este código ya se usó a las 12:35.» |
+| Cancelada | 409 `RESERVATION_CANCELLED` | «El comensal canceló esta reserva.» |
+
+- En el mensaje de check-in confirmado, un `dinerName` en `null` se muestra como «Comensal», igual que en la lista de reservas.
+- **Errores:** se mantiene el formato actual `{ statusCode, message, error, errorCode }`, sin campos nuevos (§10 y CLAUDE.md del backend, §11 «API»).
+- **Regla general:** cada cliente elige su texto según el `errorCode`.
+- **Única excepción:** en `RESERVATION_EXPIRED` y `RESERVATION_ALREADY_USED`, el backend arma en `message` el texto final, con la hora de Bogotá en formato HH:mm de 24 h, y la web lo muestra tal cual.
+
+### 12.7 Tiempo real
+- Se amplía el WebSocket del Sprint 2: mismo gateway, mismo host y mismo handshake (token de Firebase).
+- Ahora también acepta cuentas `restaurant_admin` con restaurante registrado. Si el admin no tiene restaurante, el rechazo es `RESTAURANT_REQUIRED`.
+- **Salas:**
+  - El comensal entra a `diners` (como hoy) y a `diner:{userId}`.
+  - El restaurante entra solo a `restaurant:{restaurantId}`.
+  - Cada uno recibe solo lo suyo.
+- **Eventos nuevos:** `reservation.created`, `reservation.cancelled`, `reservation.expired`, `reservation.checked_in` y `table.status_changed`. `availability.changed` no cambia y sigue yendo solo a `diners`.
+- Los eventos salen solo después de guardar en la base.
+- **Respaldo:**
+  - Al reconectar o volver a la pantalla, el cliente vuelve a consultar.
+  - El panel de reservas de la web consulta además cada 30 s.
+  - La pantalla de reserva activa de la app consulta cada 30 s.
+- Redis sigue sin usarse para Socket.IO, porque Render corre una sola instancia. El adaptador de Redis pasa al Sprint 4, con la migración a Azure.
+
+### 12.8 Contratos de la API
+Todo va bajo `/v1`, con `Authorization: Bearer <token de Firebase>` y el formato de error actual.
+
+| Método | Ruta | Rol | Recibe | Devuelve |
+|---|---|---|---|---|
+| POST | `/v1/reservations` | diner | `{ restaurantId, partySize }` | 201 `Reservation` · 409 `NO_TABLE_AVAILABLE` / `ACTIVE_RESERVATION_EXISTS` / `RESTAURANT_CLOSED` · 404 si el restaurante no existe o no es visible (igual que el detalle público) · 400 validación |
+| GET | `/v1/reservations/active` | diner | — | 200 `{ reservation: Reservation \| null, serverTime }` |
+| GET | `/v1/reservations/:id` | diner (solo la suya) | — | 200 `Reservation` en cualquier estado (para mostrar el final) · 404 `RESERVATION_NOT_FOUND` si no existe o es de otro comensal |
+| POST | `/v1/reservations/:id/cancel` | diner (solo la suya) | — | 200 `Reservation` · 409 `RESERVATION_NOT_ACTIVE` · 404 `RESERVATION_NOT_FOUND` |
+| GET | `/v1/restaurants/me/reservations` | restaurant_admin | query `status?` = `active` \| `cancelled` \| `expired` \| `completed` (por defecto `active`) | 200 `RestaurantReservation[]`, la más próxima a vencer primero |
+| POST | `/v1/restaurants/me/check-ins` | restaurant_admin | `{ code }` | 200 `{ reservationId, tableIdentifier, partySize, dinerName, checkedInAt }` · errores de 12.6 |
+| PATCH | `/v1/tables/:id/status` · `PATCH /v1/tables/:id` · `POST /v1/tables/:id/deactivate` | restaurant_admin | igual que hoy | nuevos 409 `TABLE_HAS_ACTIVE_RESERVATION` / `TABLE_NOT_AVAILABLE_TO_DEACTIVATE` (12.2) |
+| GET · PATCH · POST | `/v1/restaurants/me` (GET y PATCH) · `/v1/restaurants` (POST) | restaurant_admin | igual que hoy | ahora incluyen `activeReservationsCount` (número). Las tres respuestas siguen siendo iguales; en el POST vale 0 |
+| GET | `/v1/table-logs` | restaurant_admin | igual que hoy | ahora incluye `source`; el usuario puede venir en `null` |
+
+- Un `restaurant_admin` que llama a las rutas de diner, o un diner que llama a las de `restaurant_admin`, recibe los errores de rol que ya existen (`DINER_ACCOUNT` / `RESTAURANT_ACCOUNT`).
+
+**`Reservation`** (la ve el comensal):
+`{ id, code, status, partySize, createdAt, expiresAt, serverTime, cancelledAt, expiredAt, checkedInAt, restaurant: { id, name, address, latitude, longitude }, table: { identifier, capacity } }`
+- `code` solo viene cuando `status = active`; en los demás estados es `null`.
+- `cancelledAt`, `expiredAt` y `checkedInAt` vienen en `null` cuando no aplican.
+
+**`RestaurantReservation`** (la ve el restaurante, nunca trae el código):
+`{ id, status, partySize, dinerName, tableId, tableIdentifier, createdAt, expiresAt, serverTime }`
+- `dinerName` sale del `displayName` del comensal y puede ser `null`. En ese caso la web muestra "Comensal", en la lista y en el mensaje de check-in confirmado (12.6).
+
+**WebSocket** (Socket.IO, mismo host):
+
+| Evento | Sala | Datos |
+|---|---|---|
+| `reservation.created` | `restaurant:{restaurantId}` | `RestaurantReservation` |
+| `reservation.cancelled` · `reservation.expired` · `reservation.checked_in` | `restaurant:{restaurantId}` y `diner:{userId}` | `{ reservationId, status, tableId, at }` |
+| `table.status_changed` | `restaurant:{restaurantId}` | `{ tableId, previousStatus, status, source }`. Se emite por cada fila nueva que entra a la bitácora, con los mismos valores: también en los cambios manuales, al desactivar y al reactivar. `status` y `previousStatus` pueden traer `inactive`, igual que en la bitácora |
+| `availability.changed` | `diners` | sin cambios |
+
+### 12.9 `errorCode` nuevos
+
+| `errorCode` | HTTP | Dónde | Texto del cliente |
+|---|---|---|---|
+| `NO_TABLE_AVAILABLE` | 409 | `POST /reservations` | «Alguien acaba de tomar la última mesa. Prueba con otro restaurante.» |
+| `ACTIVE_RESERVATION_EXISTS` | 409 | `POST /reservations` | «Ya tienes una reserva activa» + botón *Ver mi reserva* |
+| `RESTAURANT_CLOSED` | 409 | `POST /reservations` | «Este restaurante acaba de cerrar.» |
+| `RESERVATION_NOT_FOUND` | 404 | `GET /reservations/:id`, `POST /reservations/:id/cancel` | La app vuelve a la búsqueda |
+| `RESERVATION_NOT_ACTIVE` | 409 | `POST /reservations/:id/cancel` | La app consulta `GET /reservations/:id` y muestra el estado real |
+| `RESERVATION_CODE_NOT_FOUND` | 404 | `POST /restaurants/me/check-ins` | «No encontramos una reserva con ese código en tu restaurante.» |
+| `RESERVATION_EXPIRED` | 409 | `POST /restaurants/me/check-ins` | `message` del backend |
+| `RESERVATION_ALREADY_USED` | 409 | `POST /restaurants/me/check-ins` | `message` del backend |
+| `RESERVATION_CANCELLED` | 409 | `POST /restaurants/me/check-ins` | «El comensal canceló esta reserva.» |
+| `TABLE_HAS_ACTIVE_RESERVATION` | 409 | mesas (12.2) | ver 12.2 |
+| `TABLE_NOT_AVAILABLE_TO_DEACTIVATE` | 409 | `POST /tables/:id/deactivate` | ver 12.2 |
+
+Los 404 y 409 existentes de mesas siguen sin `errorCode`; no se cambian en este sprint.
+
+### 12.10 Fuera de alcance del Sprint 3
+- Que el restaurante cancele una reserva.
+- Notificaciones push.
+- Estado de cuenta y comisiones (Sprint 4).
+- Límite de peticiones y de conexiones WebSocket (Sprint 4, seguridad).
+- Adaptador de Redis para Socket.IO (Sprint 4, Azure).
+- Extender el tiempo de una reserva.
+
+### 12.11 Cuándo está listo cada cosa (backend en `develop`, desplegado en Render)
+
+| Día | Qué queda listo |
+|---|---|
+| 1 | Este contrato. Mientras tanto, el front trabaja con datos de ejemplo que tengan exactamente estas formas |
+| 2 | `POST /reservations`, `GET /reservations/active`, `GET /reservations/:id` y las reglas de mesas con reserva activa (12.2) |
+| 3 | Cancelación, expiración automática, `GET /restaurants/me/reservations` y check-in (se puede probar en Swagger) |
+| 4 | WebSocket con salas y eventos de reserva. Hasta entonces, consultar cada 30 s |
+| 5 | Todo integrado en Render + Neon |
