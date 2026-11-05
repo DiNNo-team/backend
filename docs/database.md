@@ -127,6 +127,8 @@ Microreservas (CLAUDE.md §12.1 y §12.4). Código en `src/modules/reservations-
 - Índices de apoyo: `IDX_reservations_restaurant_status_expires_at` sobre `(restaurant_id, status, expires_at)` (lista del restaurante y proceso de vencimiento) e `IDX_reservations_diner_id_created_at` sobre `(diner_id, created_at)`.
 - Las tres FK son `ON DELETE NO ACTION`. Los valores de los checks son `RESERVATION_STATUSES` y `RESERVATION_CODE_ALPHABET` (`reservations/reservation.constants.ts`); como todo check, cambiarlos exige una migración escrita a mano.
 
+**Flujo de creación (`POST /v1/reservations`):** en una sola transacción se bloquea la mesa elegida (`FOR UPDATE SKIP LOCKED`), se inserta la reserva (`status = 'active'`, `expires_at` = ahora + `RESERVATION_TTL_MINUTES`), la mesa pasa de `available` a `reserved` y se escribe una fila de `table_logs` (`source = 'reservation'`, `user_id` = el comensal). Una violación de `UQ_reservations_active_diner`, `UQ_reservations_active_table` o `UQ_reservations_active_code` aborta la transacción y la API la traduce a `ACTIVE_RESERVATION_EXISTS`, `NO_TABLE_AVAILABLE` o un reintento con otro código. Detalle en `CLAUDE.md` §11, "Reservas".
+
 ### `check_ins` · entidad `CheckIn` (Sprint 3)
 
 El evento facturable (§12.6): un registro por check-in válido.

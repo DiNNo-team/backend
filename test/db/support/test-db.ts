@@ -35,17 +35,29 @@ export function resolveTestDatabaseUrl(
   return url;
 }
 
-export async function connectTestDatabase(): Promise<Client> {
-  const url = resolveTestDatabaseUrl(readEnvFile(TEST_ENV_FILE), [
+// URL de la base de pruebas, con las protecciones de arriba. La usan tanto el
+// cliente pg directo como las pruebas que arman un DataSource de TypeORM.
+export function loadTestDatabaseUrl(): string {
+  return resolveTestDatabaseUrl(readEnvFile(TEST_ENV_FILE), [
     readEnvFile(DEV_ENV_FILE).DATABASE_URL,
     process.env.DATABASE_URL,
   ]);
+}
+
+// Igual que data-source.ts: Neon exige TLS.
+export function testDatabaseSsl(
+  url: string,
+): false | { rejectUnauthorized: boolean } {
+  return url.includes('sslmode=require')
+    ? { rejectUnauthorized: false }
+    : false;
+}
+
+export async function connectTestDatabase(): Promise<Client> {
+  const url = loadTestDatabaseUrl();
   const client = new Client({
     connectionString: url,
-    // Igual que data-source.ts: Neon exige TLS.
-    ssl: url.includes('sslmode=require')
-      ? { rejectUnauthorized: false }
-      : false,
+    ssl: testDatabaseSsl(url),
     connectionTimeoutMillis: 10_000,
   });
   await client.connect();

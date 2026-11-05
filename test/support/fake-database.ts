@@ -56,7 +56,12 @@ export type FakeRepository = ReturnType<typeof fakeRepository>;
 // stand-in that answers by entity name. Import FakeDatabaseModule.with({...}).
 @Module({})
 export class FakeDatabaseModule {
-  static with(repositories: Record<string, FakeRepository>): DynamicModule {
+  // extras: more members of the DataSource (for example transaction), for the
+  // tests that exercise a service that writes.
+  static with(
+    repositories: Record<string, FakeRepository>,
+    extras: Record<string, unknown> = {},
+  ): DynamicModule {
     return {
       module: FakeDatabaseModule,
       global: true,
@@ -64,6 +69,7 @@ export class FakeDatabaseModule {
         {
           provide: DataSource,
           useValue: {
+            ...extras,
             getRepository: (name: string) => {
               const repository = repositories[name];
               if (!repository) {

@@ -25,6 +25,7 @@ import { SearchController } from './search/search.controller.js';
     AvailabilityGateway,
     AvailabilityChangedListener,
   ],
-  exports: [AvailabilityService],
+  // Clock: reservations-checkin uses the same source of time (and the tests fix it once).
+  exports: [AvailabilityService, Clock],
 })
 export class SearchAvailabilityModule {}

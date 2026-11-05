@@ -9,6 +9,12 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
 
+- **Nuevo (2026-11-05): `POST /v1/reservations` listo en la rama `feat/sprint3-backend`** (Sprint 3, creación de la microreserva; contrato en `CLAUDE.md` §12.8; pendiente de PR y de `develop`).
+  - **API:** el comensal reserva con `{ restaurantId, partySize }` y recibe `Reservation` (§12.8). Errores nuevos con `errorCode`: `NO_TABLE_AVAILABLE`, `ACTIVE_RESERVATION_EXISTS` y `RESTAURANT_CLOSED` (409); un restaurante inexistente o sin ubicación da `RESTAURANT_NOT_FOUND` (404), igual que el detalle público. Swagger actualizado.
+  - **Efecto para la web y la app:** al reservar, la mesa pasa a Reservada y `availability.changed` sale como siempre. Todavía NO hay `reservation.created` ni eventos por WebSocket (Día 4).
+  - **Variable nueva para Render y Azure: `RESERVATION_TTL_MINUTES`** (minutos enteros entre 2 y 15; **15 por defecto**; usar **3 solo durante la demo de expiración**). Si se define con un valor inválido o vacío, la app no arranca. Está en `.env.example`.
+  - **Base de datos:** requiere las migraciones del Sprint 3 ya avisadas (`reservations`, `check_ins` y `table_logs.source`).
+  - **Para probar:** `npm run test:db` ahora incluye la prueba de concurrencia (solo contra la base de pruebas; ver `CLAUDE.md` §11).
 - **Nuevo (2026-11-03): Contratos del Sprint 3 publicados en CLAUDE.md §12. Leer antes de empezar cualquier tarea del sprint.**
 - **Nuevo (2026-10-27): `CLAUDE.md` apunta al manual de identidad v2.0** (secciones 2 y 8, iguales en los tres repos), y la sección 8 suma la decisión del plano de mesas. El v1.1 queda como histórico.
 - **Nuevo (2026-10-27): plano de mesas** (rama `feat/sprint2-plano-mesas`, aprobado por Sebastián como decisión D4 de la renovación v2.0; falta la revisión de Elizabeth).

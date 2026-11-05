@@ -1,0 +1,29 @@
+import { ConflictException } from '@nestjs/common';
+
+// errorCode de los 409 de POST /v1/reservations y su texto (CLAUDE.md §12.9).
+// Cada cliente decide qué mostrar según el errorCode; el message es el texto
+// del contrato.
+export const NO_TABLE_AVAILABLE_CODE = 'NO_TABLE_AVAILABLE';
+export const NO_TABLE_AVAILABLE_MESSAGE =
+  'Alguien acaba de tomar la última mesa. Prueba con otro restaurante.';
+
+export const ACTIVE_RESERVATION_EXISTS_CODE = 'ACTIVE_RESERVATION_EXISTS';
+export const ACTIVE_RESERVATION_EXISTS_MESSAGE = 'Ya tienes una reserva activa';
+
+export const RESTAURANT_CLOSED_CODE = 'RESTAURANT_CLOSED';
+export const RESTAURANT_CLOSED_MESSAGE = 'Este restaurante acaba de cerrar.';
+
+export const noTableAvailable = (): ConflictException =>
+  new ConflictException(NO_TABLE_AVAILABLE_MESSAGE, {
+    errorCode: NO_TABLE_AVAILABLE_CODE,
+  });
+
+export const activeReservationExists = (): ConflictException =>
+  new ConflictException(ACTIVE_RESERVATION_EXISTS_MESSAGE, {
+    errorCode: ACTIVE_RESERVATION_EXISTS_CODE,
+  });
+
+export const restaurantClosed = (): ConflictException =>
+  new ConflictException(RESTAURANT_CLOSED_MESSAGE, {
+    errorCode: RESTAURANT_CLOSED_CODE,
+  });

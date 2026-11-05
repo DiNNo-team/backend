@@ -45,5 +45,7 @@ import { TablesService } from './tables/tables.service.js';
     // Geocoding (Sprint 2): the tests replace the port with a fake.
     { provide: Geocoder, useClass: GoogleGeocoder },
   ],
+  // Sprint 3: reservations-checkin writes the log through the port.
+  exports: [TableStatusLog],
 })
 export class RestaurantOperationsModule {}

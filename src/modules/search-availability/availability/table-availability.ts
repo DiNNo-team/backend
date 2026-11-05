@@ -2,7 +2,7 @@ import type { AvailabilityLevel, TableSnapshot } from './availability.types.js';
 
 // Free = active and Disponible. An inactive table counts for nothing, not
 // even as one of the restaurant's tables.
-function isFree(table: TableSnapshot): boolean {
+export function isFree(table: TableSnapshot): boolean {
   return table.isActive && table.status === 'available';
 }
 
@@ -18,13 +18,19 @@ export function availabilityLevel(tables: TableSnapshot[]): AvailabilityLevel {
   return free * 10 > active * 3 ? 'available' : 'few';
 }
 
-// There is a free table for the whole party (search filter and, in Sprint 3,
-// the table assignment of the micro-reservation).
+// One table can seat the whole party: free and big enough. The rule shared by
+// the search filter and the table assignment of the micro-reservation
+// (reservations-checkin), so both always agree.
+export function canSeatParty(table: TableSnapshot, partySize: number): boolean {
+  return isFree(table) && table.capacity >= partySize;
+}
+
+// There is a free table for the whole party (search filter).
 export function hasTableFor(
   tables: TableSnapshot[],
   partySize: number,
 ): boolean {
-  return tables.some((table) => isFree(table) && table.capacity >= partySize);
+  return tables.some((table) => canSeatParty(table, partySize));
 }
 
 // At least one active table: a condition to appear in the search.
