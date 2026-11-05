@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, type EntityManager } from 'typeorm';
 import { isUniqueViolation } from '../../../common/database/unique-violation.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
 import {
@@ -14,6 +14,7 @@ import {
   RESTAURANT_AVAILABILITY_AFFECTED,
 } from '../shared/availability-affected.event.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
+import { TableReservationsAccess } from '../shared/table-reservations.js';
 import type { CreateTableDto } from './dto/create-table.dto.js';
 import type { PlanTableDto } from './dto/save-table-plan.dto.js';
 import type { UpdateTableDto } from './dto/update-table.dto.js';
@@ -22,6 +23,10 @@ import {
   normalizeTableIdentifier,
 } from './table-identifier.js';
 import { Table, type TableStatus } from './table.entity.js';
+import {
+  tableHasActiveReservation,
+  tableNotAvailableToDeactivate,
+} from './table-reservation-errors.js';
 import { findPlanProblem, type PlanProblem } from './table-plan.js';
 import { TableStatusLog } from './table-status-log.js';
 
@@ -54,6 +59,7 @@ export class TablesService {
     @InjectRepository(Table) private readonly tables: Repository<Table>,
     private readonly statusLog: TableStatusLog,
     private readonly events: EventEmitter2,
+    private readonly reservations: TableReservationsAccess,
   ) {}
 
   async create(
@@ -99,6 +105,8 @@ export class TablesService {
     status: TableStatus,
   ): Promise<Table> {
     const ownerId = requireRestaurant(user.restaurantId);
+    // Vence una reserva debida ANTES de la transacción (ver TableReservations).
+    await this.reservations.expireDueForTable(tableId);
 
     const { table, changed } = await this.tables.manager.transaction(
       async (manager) => {
@@ -114,6 +122,11 @@ export class TablesService {
         if (!table.isActive) {
           throw new ConflictException(TABLE_INACTIVE_MESSAGE);
         }
+        // Una mesa con reserva DiNNo activa no cambia de estado (§12.2): el
+        // camino es el check-in. Va antes del atajo de "mismo estado": también
+        // ese "Deshacer" sin cambio responde 409. Los estados reserved u
+        // occupied puestos a mano no cuentan: sin reserva DiNNo se cambian como siempre.
+        await this.assertNoActiveReservation(manager, table.id);
         // Same status is a valid no-op (the web's "Deshacer" relies on it):
         // nothing changed, so nothing is written, logged or emitted.
         if (table.status === status) {
@@ -156,6 +169,10 @@ export class TablesService {
       // A list, like the other validation 400s.
       throw new BadRequestException([NO_TABLE_CHANGES_MESSAGE]);
     }
+    // Solo cambiar la capacidad puede chocar con una reserva (§12.2).
+    if (dto.capacity !== undefined) {
+      await this.reservations.expireDueForTable(tableId);
+    }
 
     return this.tables.manager.transaction(async (manager) => {
       // Same row lock as updateStatus: a concurrent status change waits.
@@ -165,6 +182,18 @@ export class TablesService {
       });
       if (!table) {
         throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+      }
+      // Con reserva DiNNo activa la capacidad no puede quedar por debajo de las
+      // personas de la reserva (igual sí se puede bajar, o subir). Cambiar solo
+      // el identificador no se revisa: siempre se permite.
+      if (dto.capacity !== undefined) {
+        const reservation = await this.reservations.findActiveForTable(
+          table.id,
+          manager,
+        );
+        if (reservation && dto.capacity < reservation.partySize) {
+          throw tableHasActiveReservation();
+        }
       }
 
       // Only the edited columns: save() would also write back any stale
@@ -252,8 +281,9 @@ export class TablesService {
     });
   }
 
-  // Deactivate (PBI 7): keeps its status, stops being operational, and logs
-  // <status> → inactive in the same transaction.
+  // Deactivate (PBI 7, §12.2): solo una mesa Disponible y sin reserva DiNNo
+  // activa; deja de ser operativa y registra available → inactive en la misma
+  // transacción.
   async deactivate(user: CurrentUserData, tableId: string): Promise<Table> {
     return this.changeActive(user, tableId, false);
   }
@@ -269,6 +299,11 @@ export class TablesService {
     active: boolean,
   ): Promise<Table> {
     const ownerId = requireRestaurant(user.restaurantId);
+    // Vence una reserva debida ANTES de la transacción (ver TableReservations).
+    // Reactivar no depende de reservas.
+    if (!active) {
+      await this.reservations.expireDueForTable(tableId);
+    }
 
     const updated = await this.tables.manager.transaction(async (manager) => {
       // Same row lock as updateStatus: the log always gets the real previous state.
@@ -285,6 +320,14 @@ export class TablesService {
             ? TABLE_ALREADY_ACTIVE_MESSAGE
             : TABLE_ALREADY_INACTIVE_MESSAGE,
         );
+      }
+      if (!active) {
+        // Orden de §12.2: la reserva activa tiene prioridad sobre "no está
+        // Disponible" (una mesa con reserva DiNNo está en reserved).
+        await this.assertNoActiveReservation(manager, table.id);
+        if (table.status !== 'available') {
+          throw tableNotAvailableToDeactivate();
+        }
       }
 
       const previousStatus = active ? 'inactive' : table.status;
@@ -308,6 +351,22 @@ export class TablesService {
     });
     this.emitAvailabilityAffected(ownerId);
     return updated;
+  }
+
+  // Debe llamarse dentro de la transacción y DESPUÉS de bloquear la fila de la
+  // mesa: la creación de reservas bloquea la misma fila, así que o la reserva
+  // ya está confirmada y se ve aquí, o la creación salta a otra mesa.
+  private async assertNoActiveReservation(
+    manager: EntityManager,
+    tableId: string,
+  ): Promise<void> {
+    const reservation = await this.reservations.findActiveForTable(
+      tableId,
+      manager,
+    );
+    if (reservation) {
+      throw tableHasActiveReservation();
+    }
   }
 
   // Call only after the write is committed: the listeners read the database.

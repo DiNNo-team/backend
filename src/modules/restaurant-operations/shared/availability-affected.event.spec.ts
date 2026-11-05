@@ -1,3 +1,4 @@
+import { fakeTableReservations } from '../../../../test/support/table-reservations.js';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { FindOperator, Repository } from 'typeorm';
 import { UserRole, type CurrentUserData } from '../../identity-access/index.js';
@@ -76,6 +77,7 @@ describe('availability event of restaurant-operations', () => {
         tables as unknown as Repository<Table>,
         statusLog,
         t.emitter,
+        fakeTableReservations(),
       );
       return { ...t, service };
     }

@@ -98,7 +98,7 @@ Bitácora de cambios de estado de las mesas: una fila por cambio. Solo se insert
 | `changed_at` | `timestamptz` | NOT NULL. Fecha y hora del cambio |
 
 - Índice `IDX_table_logs_table_id_changed_at` sobre `(table_id, changed_at)`: consulta por mesa, de lo más reciente a lo más antiguo.
-- Los valores de los checks son `TABLE_LOG_STATUSES` (`tables/table-status-log.ts`): los tres de `tables.status` más `'inactive'`, que solo existe aquí. Desactivar registra `<estado>` → `inactive`; reactivar, `inactive` → `available`.
+- Los valores de los checks son `TABLE_LOG_STATUSES` (`tables/table-status-log.ts`): los tres de `tables.status` más `'inactive'`, que solo existe aquí. Desactivar registra `available` → `inactive` (desde el Sprint 3 solo se desactiva una mesa `available`); reactivar, `inactive` → `available`.
 - **Sin `restaurant_id` (decisión confirmada con Elizabeth):** el restaurante sale de la mesa (`table_logs.table_id` → `tables.restaurant_id`), así que las consultas de la bitácora filtran con un join a `tables`.
 - Las dos FK (`table_id` → `tables.id` y `user_id` → `users.id`) son `ON DELETE NO ACTION ON UPDATE NO ACTION`, la misma regla que todas las FK del esquema. Las mesas no se borran, se desactivan; y si alguna vez se intentara borrar una mesa o un usuario con registros, la base lo rechaza en vez de borrar la bitácora.
 - `changed_at` no tiene `DEFAULT`: lo pone el servicio que cambia la mesa (`changedAt` del contrato `TableStatusChange`). `created_at` y `updated_at` sí los pone la base, como en las demás tablas.

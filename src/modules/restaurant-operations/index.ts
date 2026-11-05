@@ -11,6 +11,14 @@ export {
   type TableLogSource,
   type TableLogStatus,
 } from './tables/table-status-log.js';
+// Port of the reservations, seen from the tables: reservations-checkin
+// implements it; AppModule requires it (RequireTableReservationsPort).
+export {
+  RequireTableReservationsPort,
+  TableReservations,
+  TableReservationsAccess,
+  type ActiveTableReservation,
+} from './shared/table-reservations.js';
 // Internal event emitted after a change that affects availability is saved.
 export {
   RESTAURANT_AVAILABILITY_AFFECTED,

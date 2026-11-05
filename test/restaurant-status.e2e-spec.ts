@@ -7,6 +7,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { Not, type FindOperator } from 'typeorm';
 import { configureApp } from './../src/app.setup.js';
+import { TableReservationsAccess } from './../src/modules/restaurant-operations/index.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
@@ -44,6 +45,20 @@ const users = [
 const IS_OPEN_MESSAGE = 'Elige si el restaurante está Abierto o Cerrado.';
 
 // Prueba el contrato HTTP de GET y PATCH /v1/restaurants/me/status sin PostgreSQL.
+// El puerto de las reservas: por defecto ninguna (activeReservationsCount 0);
+// cada prueba que necesita reservas cambia lo que responde.
+const reservations = {
+  countActive: vi.fn(),
+  expireDueForTable: vi.fn(),
+  findActiveForTable: vi.fn(),
+};
+
+beforeEach(() => {
+  for (const stub of Object.values(reservations)) {
+    stub.mockReset();
+  }
+});
+
 describe('Restaurant status (e2e)', () => {
   let app: INestApplication<App>;
   let stored: Map<string, Restaurant>;
@@ -83,6 +98,8 @@ describe('Restaurant status (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue({})
+      .overrideProvider(TableReservationsAccess)
+      .useValue(reservations)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -156,6 +173,21 @@ describe('Restaurant status (e2e)', () => {
       .get('/v1/restaurants/me/status')
       .expect(200);
     expect(get.body).toEqual({ isOpen: false });
+  });
+
+  it('closing the restaurant does not touch its reservations (§12.2)', async () => {
+    reservations.countActive.mockReset().mockResolvedValue(3);
+
+    await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: false })
+      .expect(200);
+
+    // Cerrar no vence, cancela ni consulta reservas: las existentes siguen
+    // hasta el check-in, la cancelación o el vencimiento.
+    expect(reservations.expireDueForTable).not.toHaveBeenCalled();
+    expect(reservations.findActiveForTable).not.toHaveBeenCalled();
+    expect(reservations.countActive).not.toHaveBeenCalled();
   });
 
   it('opens it again', async () => {

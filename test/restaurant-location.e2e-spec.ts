@@ -184,6 +184,7 @@ describe('Restaurant location (e2e)', () => {
         category: 'colombian',
         address: 'Av. Calle 72 con Cra. 9, Chapinero, Bogotá',
         ...CASA_72,
+        activeReservationsCount: 0,
         schedules: [SATURDAY_24H],
       });
       expect(manager.save).toHaveBeenCalledWith(

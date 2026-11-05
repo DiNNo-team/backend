@@ -14,6 +14,7 @@ import { Reservation } from './reservation.entity.js';
 interface ExpirationScope {
   reservationId?: string;
   dinerId?: string;
+  tableId?: string;
 }
 
 // Fila que devuelve el UPDATE ... RETURNING: columnas de la base.
@@ -54,6 +55,13 @@ export class ReservationExpirationService {
   // Vence la reserva activa del comensal si ya pasó su expires_at.
   expireDueForDiner(dinerId: string): Promise<number> {
     return this.expireDue({ dinerId });
+  }
+
+  // Vence la reserva activa de la mesa si ya pasó su expires_at. Lo usan las
+  // acciones del restaurante sobre una mesa (§12.2) antes de comprobar si tiene
+  // una reserva en curso.
+  expireDueForTable(tableId: string): Promise<number> {
+    return this.expireDue({ tableId });
   }
 
   // Núcleo: una transacción por llamada.
@@ -106,6 +114,9 @@ export class ReservationExpirationService {
     }
     if (scope.dinerId !== undefined) {
       query.andWhere(`"diner_id" = :dinerId`, { dinerId: scope.dinerId });
+    }
+    if (scope.tableId !== undefined) {
+      query.andWhere(`"table_id" = :tableId`, { tableId: scope.tableId });
     }
     // RETURNING como texto, no como arreglo: en un arreglo TypeORM interpreta
     // cada elemento como NOMBRE DE PROPIEDAD de la entidad (tableId) y descarta

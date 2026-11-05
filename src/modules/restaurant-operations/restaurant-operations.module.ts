@@ -4,6 +4,7 @@ import { IdentityAccessModule } from '../identity-access/index.js';
 import { GeocodeController } from './geocoding/geocode.controller.js';
 import { Geocoder } from './geocoding/geocoder.js';
 import { GoogleGeocoder } from './geocoding/google-geocoder.js';
+import { TableReservationsAccess } from './shared/table-reservations.js';
 import { RestaurantEditController } from './restaurants/restaurant-edit.controller.js';
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
 import { RestaurantRegistrationController } from './restaurants/restaurant-registration.controller.js';
@@ -36,6 +37,8 @@ import { TablesService } from './tables/tables.service.js';
   ],
   providers: [
     TablesService,
+    // Puerto de las reservas, visto desde las mesas (lo implementa reservations-checkin).
+    TableReservationsAccess,
     RestaurantEditService,
     RestaurantRegistrationService,
     RestaurantStatusService,
@@ -46,6 +49,6 @@ import { TablesService } from './tables/tables.service.js';
     { provide: Geocoder, useClass: GoogleGeocoder },
   ],
   // Sprint 3: reservations-checkin writes the log through the port.
-  exports: [TableStatusLog],
+  exports: [TableStatusLog, TableReservationsAccess],
 })
 export class RestaurantOperationsModule {}

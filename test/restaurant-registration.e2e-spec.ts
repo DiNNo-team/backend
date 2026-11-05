@@ -6,6 +6,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { configureApp } from './../src/app.setup.js';
+import { TableReservationsAccess } from './../src/modules/restaurant-operations/index.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
 import {
@@ -53,6 +54,18 @@ const REGISTRATION = {
 };
 
 // Prueba el contrato HTTP de POST /v1/restaurants y GET /v1/restaurants/me sin PostgreSQL.
+// El puerto de las reservas: por defecto ninguna (activeReservationsCount 0);
+// cada prueba que necesita reservas cambia lo que responde.
+const reservations = {
+  countActive: vi.fn(),
+  expireDueForTable: vi.fn(),
+  findActiveForTable: vi.fn(),
+};
+
+beforeEach(() => {
+  reservations.countActive.mockReset().mockResolvedValue(0);
+});
+
 describe('Restaurant registration (e2e)', () => {
   let app: INestApplication<App>;
   let restaurants: {
@@ -97,6 +110,8 @@ describe('Restaurant registration (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue({})
+      .overrideProvider(TableReservationsAccess)
+      .useValue(reservations)
       .overrideProvider(UsersService)
       .useValue(usersService)
       .compile();
@@ -152,6 +167,32 @@ describe('Restaurant registration (e2e)', () => {
     await app.close();
   });
 
+  describe('activeReservationsCount', () => {
+    it('GET /v1/restaurants/me answers the active reservations of the session restaurant', async () => {
+      reservations.countActive.mockResolvedValueOnce(2);
+
+      const res = await request(app.getHttpServer())
+        .get('/v1/restaurants/me')
+        .expect(200);
+
+      expect(res.body.activeReservationsCount).toBe(2);
+      expect(reservations.countActive).toHaveBeenCalledWith(RESTAURANT_ID);
+    });
+
+    it('POST /v1/restaurants answers 0 without asking: a new restaurant has no reservations', async () => {
+      reservations.countActive.mockResolvedValue(99);
+
+      const res = await request(app.getHttpServer())
+        .post('/v1/restaurants')
+        .set('x-dev-user-id', NEWCOMER_ID)
+        .send(REGISTRATION)
+        .expect(201);
+
+      expect(res.body.activeReservationsCount).toBe(0);
+      expect(reservations.countActive).not.toHaveBeenCalled();
+    });
+  });
+
   describe('POST /v1/restaurants', () => {
     it('returns 201 with the restaurant and its schedules from Monday to Sunday', async () => {
       const res = await request(app.getHttpServer())
@@ -167,6 +208,7 @@ describe('Restaurant registration (e2e)', () => {
         address: 'Calle 72 # 10-34, Bogotá',
         latitude: null,
         longitude: null,
+        activeReservationsCount: 0,
         schedules: [
           {
             dayOfWeek: 1,
@@ -296,6 +338,7 @@ describe('Restaurant registration (e2e)', () => {
         name: 'Casa 72',
         category: 'grill',
         address: 'Carrera 7 # 72-10',
+        activeReservationsCount: 0,
         schedules: [
           {
             dayOfWeek: 2,

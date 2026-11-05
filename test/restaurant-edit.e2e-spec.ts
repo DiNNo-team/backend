@@ -6,6 +6,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { configureApp } from './../src/app.setup.js';
+import { TableReservationsAccess } from './../src/modules/restaurant-operations/index.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
@@ -49,6 +50,18 @@ function scheduleRow(restaurantId: string, dayOfWeek: number): ScheduleRow {
 
 // Prueba el contrato HTTP de PATCH /v1/restaurants/me sin PostgreSQL: un
 // EntityManager simulado guarda horarios de dos restaurantes en memoria.
+// El puerto de las reservas: por defecto ninguna (activeReservationsCount 0);
+// cada prueba que necesita reservas cambia lo que responde.
+const reservations = {
+  countActive: vi.fn(),
+  expireDueForTable: vi.fn(),
+  findActiveForTable: vi.fn(),
+};
+
+beforeEach(() => {
+  reservations.countActive.mockReset().mockResolvedValue(0);
+});
+
 describe('Restaurant edit (e2e)', () => {
   let app: INestApplication<App>;
   let scheduleRows: ScheduleRow[];
@@ -155,6 +168,8 @@ describe('Restaurant edit (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue({})
+      .overrideProvider(TableReservationsAccess)
+      .useValue(reservations)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -173,6 +188,18 @@ describe('Restaurant edit (e2e)', () => {
     closesAt: '22:00',
   };
 
+  it('answers activeReservationsCount with the active reservations of the session restaurant', async () => {
+    reservations.countActive.mockResolvedValueOnce(3);
+
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me')
+      .send({ name: 'La Esquina de Ana' })
+      .expect(200);
+
+    expect(res.body.activeReservationsCount).toBe(3);
+    expect(reservations.countActive).toHaveBeenCalledWith(RESTAURANT_ID);
+  });
+
   it('returns 200 with the restaurant and its trimmed name', async () => {
     const res = await request(app.getHttpServer())
       .patch('/v1/restaurants/me')
@@ -182,6 +209,7 @@ describe('Restaurant edit (e2e)', () => {
     expect(res.body).toEqual({
       id: RESTAURANT_ID,
       name: 'La Esquina de Ana',
+      activeReservationsCount: 0,
       schedules: [savedMonday],
     });
     expect(manager.findOne).toHaveBeenCalledWith(Restaurant, {
@@ -201,6 +229,7 @@ describe('Restaurant edit (e2e)', () => {
       name: 'Nombre anterior',
       category: 'italian',
       address: 'Calle 72 # 10-34, Bogotá',
+      activeReservationsCount: 0,
       schedules: [savedMonday],
     });
     expect(manager.save).toHaveBeenCalledWith(
@@ -232,6 +261,7 @@ describe('Restaurant edit (e2e)', () => {
       name: 'La Esquina de Ana',
       category: 'grill',
       address: 'Carrera 7 # 72-10',
+      activeReservationsCount: 0,
       schedules: [savedMonday],
     });
     expect(manager.save).toHaveBeenCalledWith(
@@ -261,6 +291,7 @@ describe('Restaurant edit (e2e)', () => {
     expect(res.body).toEqual({
       id: RESTAURANT_ID,
       name: 'Nombre anterior',
+      activeReservationsCount: 0,
       schedules: [
         { dayOfWeek: 5, isOpen24h: false, opensAt: '18:00', closesAt: '02:00' },
         { dayOfWeek: 7, isOpen24h: true, opensAt: null, closesAt: null },

@@ -1,3 +1,4 @@
+import { fakeTableReservations } from '../../../../test/support/table-reservations.js';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ConflictException,
@@ -101,9 +102,12 @@ function createStore() {
 function createService(record = vi.fn(() => Promise.resolve())) {
   const store = createStore();
   const statusLog = { record } as unknown as TableStatusLog;
-  const service = new TablesService(store.repository, statusLog, {
-    emit: vi.fn(),
-  } as unknown as EventEmitter2);
+  const service = new TablesService(
+    store.repository,
+    statusLog,
+    { emit: vi.fn() } as unknown as EventEmitter2,
+    fakeTableReservations(),
+  );
   return { service, store, record };
 }
 

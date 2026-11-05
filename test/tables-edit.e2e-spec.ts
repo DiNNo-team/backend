@@ -269,7 +269,9 @@ describe('Tables · edit and deactivate (e2e)', () => {
   });
 
   describe('POST /v1/tables/:id/deactivate', () => {
-    it('returns 200 with isActive false and the kept status, and logs it', async () => {
+    it('returns 200 with isActive false for an available table, and logs available → inactive', async () => {
+      current = storedTable({ status: 'available' });
+
       const res = await request(app.getHttpServer())
         .post(`/v1/tables/${TABLE_ID}/deactivate`)
         .expect(200);
@@ -277,14 +279,15 @@ describe('Tables · edit and deactivate (e2e)', () => {
       expect(res.body).toMatchObject({
         id: TABLE_ID,
         isActive: false,
-        status: 'occupied',
+        status: 'available',
       });
       expect(statusLog.record).toHaveBeenCalledWith(
         expect.objectContaining({
           tableId: TABLE_ID,
-          previousStatus: 'occupied',
+          previousStatus: 'available',
           newStatus: 'inactive',
           userId: OWNER_ID,
+          source: 'manual',
         }),
         expect.anything(),
       );
@@ -315,6 +318,7 @@ describe('Tables · edit and deactivate (e2e)', () => {
     });
 
     it('answers the Spanish 500 when the log fails', async () => {
+      current = storedTable({ status: 'available' });
       const silenced = vi
         .spyOn(Logger.prototype, 'error')
         .mockImplementation(() => undefined);

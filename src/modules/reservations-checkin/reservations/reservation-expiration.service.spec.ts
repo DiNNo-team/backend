@@ -351,6 +351,16 @@ describe('ReservationExpirationService', () => {
       expect(params[4]).toBe(DINER_ID);
     });
 
+    it('expireDueForTable filtra por la mesa (acciones del restaurante, §12.2)', async () => {
+      const t = setup();
+
+      await t.service.expireDueForTable('t-4');
+
+      const [{ sql, params }] = t.executed;
+      expect(sql).toContain('AND "table_id" = $5');
+      expect(params[4]).toBe('t-4');
+    });
+
     it('sin scope vence todas las debidas (lo que usará expireAllDue en la tarea 6)', async () => {
       const t = setup({
         expiredRows: [

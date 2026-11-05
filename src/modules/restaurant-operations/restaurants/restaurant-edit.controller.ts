@@ -22,6 +22,7 @@ import {
   RESTAURANT_REQUIRED_CODE,
   RESTAURANT_REQUIRED_MESSAGE,
 } from '../shared/restaurant-required.js';
+import { TableReservationsAccess } from '../shared/table-reservations.js';
 import { RestaurantProfileResponseDto } from './dto/restaurant-profile-response.dto.js';
 import { UpdateRestaurantDto } from './dto/update-restaurant.dto.js';
 import {
@@ -35,7 +36,10 @@ import {
 @UseGuards(CurrentUserGuard)
 @Controller('restaurants')
 export class RestaurantEditController {
-  constructor(private readonly restaurantEditService: RestaurantEditService) {}
+  constructor(
+    private readonly restaurantEditService: RestaurantEditService,
+    private readonly reservations: TableReservationsAccess,
+  ) {}
 
   @Patch('me')
   @ApiOperation({
@@ -100,6 +104,10 @@ export class RestaurantEditController {
       user.restaurantId,
       dto,
     );
-    return RestaurantProfileResponseDto.fromEntities(restaurant, schedules);
+    return RestaurantProfileResponseDto.fromEntities(
+      restaurant,
+      schedules,
+      await this.reservations.countActive(restaurant.id),
+    );
   }
 }

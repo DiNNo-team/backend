@@ -55,15 +55,26 @@ export class RestaurantProfileResponseDto extends RestaurantResponseDto {
   })
   schedules: RestaurantScheduleResponseDto[];
 
+  @ApiProperty({
+    description:
+      'Reservas de DiNNo activas del restaurante (status active y todavía no vencidas). 0 en el registro. La web lo usa para avisar al cerrar el restaurante: «Tienes N reservas en curso; se mantendrán hasta que lleguen o se venzan.»',
+    type: 'integer',
+    minimum: 0,
+    example: 2,
+  })
+  activeReservationsCount: number;
+
   static fromEntities(
     restaurant: Restaurant,
     schedules: RestaurantSchedule[],
+    activeReservationsCount: number,
   ): RestaurantProfileResponseDto {
     return {
       ...RestaurantResponseDto.fromEntity(restaurant),
       schedules: [...schedules]
         .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
         .map((schedule) => RestaurantScheduleResponseDto.fromEntity(schedule)),
+      activeReservationsCount,
     };
   }
 }
