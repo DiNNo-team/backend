@@ -24,7 +24,7 @@ const BUILDER_METHODS = [
   'limit',
 ] as const;
 
-type QueryRow = Omit<TableLogRow, 'userEmail'> & { userId: string };
+type QueryRow = Omit<TableLogRow, 'userEmail'> & { userId: string | null };
 
 // Chainable stand-in for SelectQueryBuilder that records every call, so the
 // tests pin the query (join, restaurant filter, order and limit). The emails
@@ -97,6 +97,7 @@ describe('TableLogsService', () => {
       ['log.newStatus', 'newStatus'],
       ['log.changedAt', 'changedAt'],
       ['log.userId', 'userId'],
+      ['log.source', 'source'],
     ]);
   });
 
@@ -144,6 +145,7 @@ describe('TableLogsService', () => {
       previousStatus: 'available',
       newStatus: 'occupied',
       changedAt: new Date('2026-10-08T19:30:00Z'),
+      source: 'manual',
     } as const;
     const rows: QueryRow[] = [
       { ...base, id: 'log-3', userId: OWNER },
@@ -165,18 +167,49 @@ describe('TableLogsService', () => {
     expect(users.findEmailsByIds).toHaveBeenCalledWith([OWNER, WAITER, OWNER]);
   });
 
-  it('drops a row whose author is not found, like the former inner join', async () => {
-    const row: QueryRow = {
-      id: 'log-1',
-      tableId: TABLE_ID,
-      tableIdentifier: '04',
-      previousStatus: 'available',
-      newStatus: 'occupied',
-      changedAt: new Date('2026-10-08T19:30:00Z'),
-      userId: 'missing-user',
-    };
-    const { service } = createService([row]);
+  const automaticRow: QueryRow = {
+    id: 'log-1',
+    tableId: TABLE_ID,
+    tableIdentifier: '04',
+    previousStatus: 'reserved',
+    newStatus: 'available',
+    changedAt: new Date('2026-10-08T19:30:00Z'),
+    userId: null,
+    source: 'system',
+  };
 
-    await expect(service.findForRestaurant(RESTAURANT_ID)).resolves.toEqual([]);
+  it('devuelve el registro automático (sin usuario) con userEmail null y su source', async () => {
+    const { service } = createService([automaticRow]);
+
+    await expect(service.findForRestaurant(RESTAURANT_ID)).resolves.toEqual([
+      {
+        id: 'log-1',
+        tableId: TABLE_ID,
+        tableIdentifier: '04',
+        previousStatus: 'reserved',
+        newStatus: 'available',
+        changedAt: automaticRow.changedAt,
+        source: 'system',
+        userEmail: null,
+      },
+    ]);
+  });
+
+  it('no pide a identity-access el correo de un usuario null', async () => {
+    const { service, users } = createService([automaticRow]);
+
+    await service.findForRestaurant(RESTAURANT_ID);
+
+    expect(users.findEmailsByIds).toHaveBeenCalledWith([]);
+  });
+
+  it('no descarta una fila cuyo autor no se encuentra: sale con userEmail null', async () => {
+    const { service } = createService([
+      { ...automaticRow, userId: 'missing-user', source: 'manual' },
+    ]);
+
+    await expect(service.findForRestaurant(RESTAURANT_ID)).resolves.toEqual([
+      expect.objectContaining({ id: 'log-1', userEmail: null }),
+    ]);
   });
 });

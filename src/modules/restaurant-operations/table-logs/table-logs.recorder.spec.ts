@@ -13,6 +13,7 @@ function change(overrides: Partial<TableStatusChange> = {}): TableStatusChange {
     previousStatus: 'available',
     newStatus: 'occupied',
     userId: USER_ID,
+    source: 'manual',
     changedAt: CHANGED_AT,
     ...overrides,
   };
@@ -28,7 +29,7 @@ function transactionManager(insert = vi.fn<Insert>(() => Promise.resolve({}))) {
 }
 
 describe('DbTableStatusLog.record', () => {
-  it('inserts one row with the five fields through the received manager', async () => {
+  it('inserts one row with the six fields through the received manager', async () => {
     const { manager, getRepository, insert } = transactionManager();
 
     await new DbTableStatusLog().record(change(), manager);
@@ -40,8 +41,22 @@ describe('DbTableStatusLog.record', () => {
       previousStatus: 'available',
       newStatus: 'occupied',
       userId: USER_ID,
+      source: 'manual',
       changedAt: CHANGED_AT,
     });
+  });
+
+  it('guarda el origen y deja el usuario en null en un cambio automático', async () => {
+    const { manager, insert } = transactionManager();
+
+    await new DbTableStatusLog().record(
+      change({ userId: null, source: 'system' }),
+      manager,
+    );
+
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: null, source: 'system' }),
+    );
   });
 
   it.each([
@@ -73,6 +88,7 @@ describe('DbTableStatusLog.record', () => {
       'changedAt',
       'newStatus',
       'previousStatus',
+      'source',
       'tableId',
       'userId',
     ]);

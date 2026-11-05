@@ -3,7 +3,9 @@
 Esquema vigente de PostgreSQL (Neon). **Se actualiza en el mismo PR que cambia el esquema.**
 Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md](../CLAUDE.md), subsección "Migraciones".
 
-Última migración aplicada: `1792087341885-AddDinerRoleAndRestaurantLocation` (2026-10-15).
+Última migración aplicada en Neon: `1792087341885-AddDinerRoleAndRestaurantLocation` (2026-10-15).
+
+> **Sprint 3, pendientes de aplicar** (Elizabeth las corre; primero en la base de pruebas): `1793840000001-CreateReservations`, `1793840000002-CreateCheckIns` y `1793840000003-AddTableLogSource`. Las tablas `reservations` y `check_ins` y los cambios de `table_logs` descritos abajo existen en el código, no todavía en Neon.
 
 > Las seis migraciones están aplicadas en Neon: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15). Todo lo que se documenta abajo existe en Neon.
 
@@ -91,7 +93,8 @@ Bitácora de cambios de estado de las mesas: una fila por cambio. Solo se insert
 | `table_id` | `uuid` | NOT NULL, FK → `tables.id` |
 | `previous_status` | `varchar(20)` | NOT NULL; solo `'available'`, `'reserved'`, `'occupied'` o `'inactive'` (`CHK_table_logs_previous_status`) |
 | `new_status` | `varchar(20)` | NOT NULL; mismos valores (`CHK_table_logs_new_status`) |
-| `user_id` | `uuid` | NOT NULL, FK → `users.id`. El usuario de la sesión que hizo el cambio |
+| `user_id` | `uuid` | NULL, FK → `users.id`. El usuario que hizo el cambio. Solo puede ser NULL cuando `source = 'system'` (`CHK_table_logs_user_required_unless_system`). Sprint 3 |
+| `source` | `varchar(20)` | NOT NULL, por defecto `'manual'`; solo `'manual'`, `'reservation'` o `'system'` (`CHK_table_logs_source`). Sprint 3 |
 | `changed_at` | `timestamptz` | NOT NULL. Fecha y hora del cambio |
 
 - Índice `IDX_table_logs_table_id_changed_at` sobre `(table_id, changed_at)`: consulta por mesa, de lo más reciente a lo más antiguo.
@@ -99,7 +102,40 @@ Bitácora de cambios de estado de las mesas: una fila por cambio. Solo se insert
 - **Sin `restaurant_id` (decisión confirmada con Elizabeth):** el restaurante sale de la mesa (`table_logs.table_id` → `tables.restaurant_id`), así que las consultas de la bitácora filtran con un join a `tables`.
 - Las dos FK (`table_id` → `tables.id` y `user_id` → `users.id`) son `ON DELETE NO ACTION ON UPDATE NO ACTION`, la misma regla que todas las FK del esquema. Las mesas no se borran, se desactivan; y si alguna vez se intentara borrar una mesa o un usuario con registros, la base lo rechaza en vez de borrar la bitácora.
 - `changed_at` no tiene `DEFAULT`: lo pone el servicio que cambia la mesa (`changedAt` del contrato `TableStatusChange`). `created_at` y `updated_at` sí los pone la base, como en las demás tablas.
+- **`source` (Sprint 3, CLAUDE.md §12.3):** `manual` = el restaurante a mano; `reservation` = una microreserva (crear, cancelar o check-in), con el comensal o el `restaurant_admin` como usuario; `system` = automático (vencimiento de una reserva), sin usuario. Los valores son `TABLE_LOG_SOURCES` (`tables/table-status-log.ts`). Los registros anteriores al Sprint 3 quedan con `source = 'manual'` por el valor por defecto.
+- **`user_id` nullable:** la FK a `users` se conserva (`NO ACTION`). La regla «solo `system` va sin usuario» la impone la base con `CHK_table_logs_user_required_unless_system`, no solo el código. `GET /v1/table-logs` devuelve `userEmail: null` y `source` en cada fila.
+- El `down` de `AddTableLogSource` borra los registros con `user_id` NULL antes de volver a exigirlo (antes de esa migración no existían).
 - La escribe solo `DbTableStatusLog` (`table-logs/table-logs.recorder.ts`), dentro de la transacción que cambia la mesa.
+
+### `reservations` · entidad `Reservation` (Sprint 3)
+
+Microreservas (CLAUDE.md §12.1 y §12.4). Código en `src/modules/reservations-checkin/`.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `code` | `varchar(6)` | NOT NULL. 6 caracteres del alfabeto `23456789ABCDEFGHJKMNPQRSTUVWXYZ` (`CHK_reservations_code`) |
+| `status` | `varchar(20)` | NOT NULL; solo `'active'`, `'cancelled'`, `'expired'` o `'completed'` (`CHK_reservations_status`) |
+| `party_size` | `smallint` | NOT NULL, entre 1 y 20 (`CHK_reservations_party_size`) |
+| `diner_id` | `uuid` | NOT NULL, FK → `users.id` |
+| `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` |
+| `table_id` | `uuid` | NOT NULL, FK → `tables.id` |
+| `expires_at` | `timestamptz` | NOT NULL. Fuente de verdad del vencimiento (§12.5) |
+| `cancelled_at`, `expired_at`, `checked_in_at` | `timestamptz` | NULL; se llenan según el estado final |
+| `no_show` | `boolean` | NOT NULL, por defecto `false`. `true` si venció sin que el comensal llegara |
+
+- **Índices únicos parciales (`WHERE "status" = 'active'`), la defensa final contra la concurrencia:** `UQ_reservations_active_table` (una activa por mesa), `UQ_reservations_active_diner` (una por comensal) y `UQ_reservations_active_code` (código único entre las activas). Una reserva cancelada, vencida o cumplida no bloquea nada; el código puede repetirse después.
+- Índices de apoyo: `IDX_reservations_restaurant_status_expires_at` sobre `(restaurant_id, status, expires_at)` (lista del restaurante y proceso de vencimiento) e `IDX_reservations_diner_id_created_at` sobre `(diner_id, created_at)`.
+- Las tres FK son `ON DELETE NO ACTION`. Los valores de los checks son `RESERVATION_STATUSES` y `RESERVATION_CODE_ALPHABET` (`reservations/reservation.constants.ts`); como todo check, cambiarlos exige una migración escrita a mano.
+
+### `check_ins` · entidad `CheckIn` (Sprint 3)
+
+El evento facturable (§12.6): un registro por check-in válido.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `reservation_id` | `uuid` | NOT NULL, FK → `reservations.id`, **único** (`UQ_check_ins_reservation_id`): nunca se cobra dos veces |
+| `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` |
+| `checked_in_at` | `timestamptz` | NOT NULL. Fecha y hora del check-in |
 
 Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaurante que tenga mesas o usuarios, ni una mesa o un usuario que tenga registros en la bitácora.
 
@@ -111,7 +147,8 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 | `restaurant_schedules` | Santiago | Tabla nueva para los horarios del restaurante |
 | `users` | Elizabeth (esquema base) | Jacobo: `firebase_uid` (ya aplicada) y lo que más necesite para enlazar con Firebase |
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
-| `table_logs` | Sergio | Tabla nueva para la bitácora de cambios de mesas (`CreateTableLogs`) |
+| `table_logs` | Sergio | Tabla nueva para la bitácora de cambios de mesas (`CreateTableLogs`). Elizabeth, Sprint 3: `source` y `user_id` nullable (`AddTableLogSource`) |
+| `reservations`, `check_ins` | Elizabeth | Sprint 3 (`CreateReservations`, `CreateCheckIns`) |
 
 Nadie recrea una tabla ni toca columnas de otra persona.
 

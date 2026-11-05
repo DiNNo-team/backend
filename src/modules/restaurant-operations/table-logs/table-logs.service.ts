@@ -4,7 +4,10 @@ import { Repository } from 'typeorm';
 import { UsersService } from '../../identity-access/index.js';
 import { requireRestaurant } from '../shared/restaurant-required.js';
 import { Table } from '../tables/table.entity.js';
-import type { TableLogStatus } from '../tables/table-status-log.js';
+import type {
+  TableLogSource,
+  TableLogStatus,
+} from '../tables/table-status-log.js';
 import { TableLog } from './table-log.entity.js';
 
 // Rows of the table log screen. No pagination in Sprint 1.
@@ -17,10 +20,14 @@ export interface TableLogRow {
   previousStatus: TableLogStatus;
   newStatus: TableLogStatus;
   changedAt: Date;
-  userEmail: string;
+  // null en los registros automáticos (source = 'system'), que no tienen usuario.
+  userEmail: string | null;
+  source: TableLogSource;
 }
 
-type TableLogQueryRow = Omit<TableLogRow, 'userEmail'> & { userId: string };
+type TableLogQueryRow = Omit<TableLogRow, 'userEmail'> & {
+  userId: string | null;
+};
 
 // Read side of the table log (PBI 9). Writing stays in DbTableStatusLog.
 @Injectable()
@@ -50,6 +57,7 @@ export class TableLogsService {
       .addSelect('log.newStatus', 'newStatus')
       .addSelect('log.changedAt', 'changedAt')
       .addSelect('log.userId', 'userId')
+      .addSelect('log.source', 'source')
       .where('loggedTable.restaurantId = :restaurantId', {
         restaurantId: ownerId,
       });
@@ -64,13 +72,14 @@ export class TableLogsService {
       .getRawMany<TableLogQueryRow>();
 
     const emails = await this.users.findEmailsByIds(
-      rows.map((row) => row.userId),
+      rows.flatMap((row) => (row.userId === null ? [] : [row.userId])),
     );
-    // table_logs.user_id has a foreign key to users, so every author exists;
-    // a row without one is dropped, as the former inner join did.
-    return rows.flatMap(({ userId, ...row }) => {
-      const userEmail = emails.get(userId);
-      return userEmail === undefined ? [] : [{ ...row, userEmail }];
-    });
+    // Los registros automáticos no tienen usuario y salen con userEmail null.
+    // Un autor que no se encuentre no puede ocurrir (FK a users), pero la fila
+    // tampoco se descarta: sale con userEmail null.
+    return rows.map(({ userId, ...row }) => ({
+      ...row,
+      userEmail: userId === null ? null : (emails.get(userId) ?? null),
+    }));
   }
 }

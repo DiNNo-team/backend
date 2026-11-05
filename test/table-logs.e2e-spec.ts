@@ -13,7 +13,10 @@ import { RestaurantSchedule } from './../src/modules/restaurant-operations/resta
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
-import type { TableLogStatus } from './../src/modules/restaurant-operations/tables/table-status-log.js';
+import type {
+  TableLogSource,
+  TableLogStatus,
+} from './../src/modules/restaurant-operations/tables/table-status-log.js';
 import { UserRole } from './../src/modules/identity-access/index.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
@@ -68,15 +71,17 @@ interface StoredLog {
   tableId: string;
   previousStatus: TableLogStatus;
   newStatus: TableLogStatus;
-  userId: string;
+  userId: string | null;
+  source: TableLogSource;
   changedAt: Date;
 }
 
 function log(
   n: number,
   tableId: string,
-  userId: string,
+  userId: string | null,
   changedAt: string,
+  source: TableLogSource = 'manual',
 ): StoredLog {
   return {
     id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
@@ -84,6 +89,7 @@ function log(
     previousStatus: 'available',
     newStatus: 'occupied',
     userId,
+    source,
     changedAt: new Date(changedAt),
   };
 }
@@ -165,6 +171,7 @@ function createLogsRepository(stored: () => StoredLog[]) {
             newStatus: entry.newStatus,
             changedAt: entry.changedAt,
             userId: entry.userId,
+            source: entry.source,
           }));
         return Promise.resolve(rows);
       },
@@ -266,6 +273,28 @@ describe('Table logs (e2e)', () => {
       newStatus: 'occupied',
       changedAt: '2026-10-08T17:00:00.000Z',
       userEmail: 'admin@casa72.co',
+      source: 'manual',
+    });
+  });
+
+  it('returns the automatic entries (no user) with userEmail null and their source', async () => {
+    stored.push(
+      log(5, TABLE_02, null, '2026-10-08T19:00:00Z', 'system'),
+      log(6, OTHER_TABLE, null, '2026-10-08T20:00:00Z', 'system'),
+    );
+
+    const res = await get().expect(200);
+
+    expect(ids(res.body)).toEqual([
+      stored[4].id,
+      stored[2].id,
+      stored[3].id,
+      stored[0].id,
+    ]);
+    expect(res.body[0]).toMatchObject({
+      id: stored[4].id,
+      userEmail: null,
+      source: 'system',
     });
   });
 
@@ -434,6 +463,7 @@ describe('Table logs (e2e)', () => {
       'newStatus',
       'changedAt',
       'userEmail',
+      'source',
     ]);
   });
 });

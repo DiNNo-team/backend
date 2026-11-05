@@ -117,7 +117,7 @@ describe('TablesService.updateStatus', () => {
     expect(store.stored(TABLE_ID)?.status).toBe('occupied');
   });
 
-  it('records the five fields of the change, inside the same transaction', async () => {
+  it('records the six fields of the change, inside the same transaction', async () => {
     const { service, store, record } = createService();
     const before = Date.now();
 
@@ -133,6 +133,7 @@ describe('TablesService.updateStatus', () => {
       previousStatus: 'available',
       newStatus: 'reserved',
       userId: USER_ID,
+      source: 'manual',
       changedAt: expect.any(Date),
     });
     expect(change.changedAt.getTime()).toBeGreaterThanOrEqual(before);

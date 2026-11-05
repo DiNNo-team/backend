@@ -251,6 +251,7 @@ npm run typecheck    # tsc --noEmit con el tsconfig.json raíz: revisa tipos tam
 npm run format       # prettier (comillas simples, trailing commas)
 npm run test         # pruebas unitarias (Vitest)
 npm run test:e2e     # pruebas e2e de la capa HTTP (no requieren base de datos)
+npm run test:db      # pruebas contra un Postgres REAL (solo la base de pruebas; ver "Pruebas"). No está en CI
 npm run test:cov     # cobertura
 ```
 **Antes de dar una tarea por terminada:** `npm run lint`, `npm run typecheck`, `npm run test` y `npm run build` sin errores.
@@ -342,6 +343,7 @@ Los módulos `reservations-checkin` y `notifications` existen pero todavía no t
 - **Implementación real:** `DbTableStatusLog` (`table-logs/table-logs.recorder.ts`), registrada en `restaurant-operations.module.ts` como `{ provide: TableStatusLog, useClass: DbTableStatusLog }`. Inserta una fila en `table_logs` (entidad `TableLog`, `table-logs/table-log.entity.ts`).
 - **Cómo usarla desde otro servicio de mesas:** inyecta `TableStatusLog` (nunca `DbTableStatusLog` ni el repositorio de `TableLog`) y llama a `record(...)` **dentro de la misma transacción** que cambia la mesa, pasándole el `manager` de esa transacción. No atrapes su error: si el insert falla, la transacción se revierte y la mesa queda como estaba. Ejemplo completo: `updateStatus` y `changeActive` en `tables.service.ts`.
 - **Qué se registra:** cambiar el estado (`<anterior>` → `<nuevo>`), desactivar (`<estado real>` → `inactive`) y reactivar (`inactive` → `available`). **Qué no:** crear una mesa, editar identificador o capacidad, y pedir el estado que la mesa ya tiene (responde 200 sin escribir nada).
+- **Origen (`source`, Sprint 3):** `TableStatusChange` lleva `source` (`manual`, `reservation` o `system`, `TABLE_LOG_SOURCES`) y `userId` puede ser `null` solo con `system` (check en la base). Hoy `TablesService` pasa siempre `'manual'`; las reservas pasarán `reservation` y `system` (§12.3). `GET /v1/table-logs` devuelve `source` y `userEmail` en `null` para los registros automáticos.
 - **Cambia con §12.2:** hoy desactivar conserva el estado real de la mesa (`reserved` u `occupied` incluidos). Desde el Día 2 del Sprint 3 solo se desactiva una mesa `available`.
 - **`inactive` solo existe en la bitácora**, nunca en `tables.status`. Si cambia `TABLE_LOG_STATUSES`, hace falta una migración escrita a mano que borre y vuelva a crear `CHK_table_logs_previous_status` y `CHK_table_logs_new_status` (TypeORM compara los checks solo por nombre).
 - **Requisitos de toda consulta sobre `table_logs`** (acordado con Elizabeth): (a) filtra siempre por el restaurante del usuario de la sesión, con un join a `tables` (`tables.restaurant_id`), nunca por un dato que mande el cliente (`table_logs` no tiene `restaurant_id`); (b) tiene una prueba e2e que confirma que el usuario de un restaurante no ve los registros de las mesas de otro.
@@ -440,6 +442,12 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - **Una sola instancia:** la sala `diners` vive en la memoria del proceso. Con más de una instancia (o al pasar a Azure con escalado) haría falta un adaptador compartido de Socket.IO (por ejemplo Redis) y sesiones pegajosas; hoy Render corre una.
 
 ### Pruebas
+- **`npm run test:db` (pruebas contra Postgres real):** archivos `test/db/*.db-spec.ts`, config `vitest.config.db.ts`, cliente `pg` directo. Son las únicas que ejecutan SQL de verdad (índices parciales, checks, restricciones únicas). **No forman parte de `npm test`, `npm run test:e2e` ni del CI.**
+  - **Requiere `.env.test`** (ignorado por git) con `TEST_DATABASE_URL`, la URL de la base de **pruebas**. Para correr las migraciones sobre esa base con el CLI de TypeORM, el mismo archivo define `DATABASE_URL` con el mismo valor y se pasa con `--env-file=.env.test` (los scripts `migration:*` cargan `.env`, no `.env.test`).
+  - **Se niegan a correr** si `TEST_DATABASE_URL` falta o es igual a la `DATABASE_URL` de desarrollo (`.env` o el entorno): nunca tocan la base de desarrollo.
+  - **No aplican migraciones:** asumen que `migration:run` ya se corrió sobre la base de pruebas; si falta una tabla o columna, fallan diciendo qué migración falta.
+  - Cada prueba crea sus datos dentro de una transacción que termina en `ROLLBACK`: no dejan nada.
+  - `test/db/support/pg.d.ts` declara los tipos mínimos de `pg` porque `@types/pg` no está instalado.
 - Vitest. Pruebas unitarias junto al código (`*.spec.ts`) y e2e en `test/`.
 - **Toda e2e que monte `RestaurantOperationsModule` importa `EventEmitterModule.forRoot()`** (sus servicios inyectan `EventEmitter2`). Las e2e de WebSocket (`test/realtime.e2e-spec.ts`) levantan el servidor con `app.listen(0, '127.0.0.1')`, conectan `socket.io-client` sin reconexión y cierran sockets y app en `afterEach`.
 - Cada servicio nuevo con pruebas de casos felices y de error (por ejemplo: mesa de otro restaurante, datos inválidos, mesa inactiva).

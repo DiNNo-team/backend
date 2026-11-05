@@ -364,6 +364,7 @@ describe('TablesService.deactivate', () => {
       previousStatus: 'occupied',
       newStatus: 'inactive',
       userId: USER_ID,
+      source: 'manual',
       changedAt: expect.any(Date),
     });
     expect(manager).toBe(store.managers[0]);
@@ -442,6 +443,7 @@ describe('TablesService.reactivate', () => {
       previousStatus: 'inactive',
       newStatus: 'available',
       userId: USER_ID,
+      source: 'manual',
       changedAt: expect.any(Date),
     });
     expect(manager).toBe(store.managers[0]);
