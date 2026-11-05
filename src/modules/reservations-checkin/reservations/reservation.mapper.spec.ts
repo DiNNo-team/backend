@@ -72,4 +72,44 @@ describe('toReservationResponse', () => {
 
     expect(response.cancelledAt).toBe('2026-11-05T17:05:00.000Z');
   });
+
+  it('una reserva vencida lleva expiredAt, sin código ni otras fechas de cierre', () => {
+    const response = toReservationResponse(
+      reservation({
+        status: 'expired',
+        expiredAt: new Date('2026-11-05T17:15:03Z'),
+      }),
+      RESTAURANT,
+      TABLE,
+      SERVER_TIME,
+    );
+
+    expect(response).toMatchObject({
+      status: 'expired',
+      code: null,
+      expiredAt: '2026-11-05T17:15:03.000Z',
+      cancelledAt: null,
+      checkedInAt: null,
+    });
+  });
+
+  it('una reserva cumplida lleva checkedInAt, sin código', () => {
+    const response = toReservationResponse(
+      reservation({
+        status: 'completed',
+        checkedInAt: new Date('2026-11-05T17:08:00Z'),
+      }),
+      RESTAURANT,
+      TABLE,
+      SERVER_TIME,
+    );
+
+    expect(response).toMatchObject({
+      status: 'completed',
+      code: null,
+      checkedInAt: '2026-11-05T17:08:00.000Z',
+      expiredAt: null,
+      cancelledAt: null,
+    });
+  });
 });

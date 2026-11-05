@@ -19,6 +19,7 @@ import {
   UQ_ACTIVE_TABLE,
 } from './create-reservation.service.js';
 import type { CodeGenerator } from './reservation-code.js';
+import type { ReservationExpirationService } from './reservation-expiration.service.js';
 import { Reservation } from './reservation.entity.js';
 
 const DINER_ID = '7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a';
@@ -60,6 +61,9 @@ interface Options {
   restaurant?: Record<string, unknown> | null;
   isOpenNow?: boolean;
   hasActiveReservation?: boolean;
+  // Una reserva activa YA vencida que el proceso periódico no barrió: existe
+  // hasta que se llama al servicio de vencimiento, que la vence.
+  staleActiveReservation?: boolean;
   // Lo que devuelve la lectura de candidatas, sin bloquear.
   candidates?: TableRow[];
   // Lo que devuelve el bloqueo de cada mesa por id; null = bloqueada por otra
@@ -77,6 +81,7 @@ function setup(options: Options = {}) {
   const candidates = options.candidates ?? [row('t-4', '04', 4)];
   const log: string[] = [];
   let attempt = 0;
+  let staleExpired = false;
   const codes = [...(options.codes ?? ['K7M4QX'])];
 
   const tablesRepo = {
@@ -93,7 +98,12 @@ function setup(options: Options = {}) {
     update: vi.fn(() => Promise.resolve({})),
   };
   const reservationsRepo = {
-    exists: vi.fn(() => Promise.resolve(options.hasActiveReservation ?? false)),
+    exists: vi.fn(() =>
+      Promise.resolve(
+        (options.hasActiveReservation ?? false) ||
+          (options.staleActiveReservation === true && !staleExpired),
+      ),
+    ),
     save: vi.fn((data: Record<string, unknown>) =>
       Promise.resolve({
         ...data,
@@ -166,6 +176,13 @@ function setup(options: Options = {}) {
       return true;
     }),
   };
+  const expiration = {
+    expireDueForDiner: vi.fn(() => {
+      log.push('expire');
+      staleExpired = true;
+      return Promise.resolve(options.staleActiveReservation ? 1 : 0);
+    }),
+  };
   const generator = { generate: vi.fn(() => codes.shift() ?? 'ZZZZZZ') };
   const service = new CreateReservationService(
     dataSource as unknown as DataSource,
@@ -175,6 +192,7 @@ function setup(options: Options = {}) {
     { now: () => NOW } as Clock,
     generator as unknown as CodeGenerator,
     { ttlMinutes: options.ttlMinutes ?? 15 },
+    expiration as unknown as ReservationExpirationService,
   );
   return {
     service,
@@ -187,6 +205,7 @@ function setup(options: Options = {}) {
     statusLog,
     events,
     generator,
+    expiration,
   };
 }
 
@@ -254,7 +273,7 @@ describe('CreateReservationService', () => {
 
       await create(t.service);
 
-      expect(t.log).toEqual(['lock:t-4', 'log', 'commit', 'emit']);
+      expect(t.log).toEqual(['expire', 'lock:t-4', 'log', 'commit', 'emit']);
       expect(t.events.emit).toHaveBeenCalledWith(
         RESTAURANT_AVAILABILITY_AFFECTED,
         { restaurantId: RESTAURANT_ID },
@@ -337,6 +356,42 @@ describe('CreateReservationService', () => {
       });
       expect(t.tablesRepo.find).not.toHaveBeenCalled();
       expect(t.events.emit).not.toHaveBeenCalled();
+    });
+
+    it('vence la reserva del comensal antes de comprobar la reserva activa, y antes de la transacción', async () => {
+      const t = setup();
+
+      await create(t.service);
+
+      expect(t.expiration.expireDueForDiner).toHaveBeenCalledWith(DINER_ID);
+      expect(t.log.indexOf('expire')).toBe(0);
+      expect(t.dataSource.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('con una reserva vencida que el proceso aún no barrió, ahora crea una nueva (sin ACTIVE_RESERVATION_EXISTS)', async () => {
+      const t = setup({ staleActiveReservation: true });
+
+      const response = await create(t.service);
+
+      expect(response.status).toBe('active');
+      expect(t.reservationsRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('una reserva activa vigente sigue dando ACTIVE_RESERVATION_EXISTS: el vencimiento no la toca', async () => {
+      const t = setup({ hasActiveReservation: true });
+
+      await expect(create(t.service)).rejects.toMatchObject({
+        response: { errorCode: 'ACTIVE_RESERVATION_EXISTS' },
+      });
+      expect(t.expiration.expireDueForDiner).toHaveBeenCalledTimes(1);
+    });
+
+    it('si el restaurante está cerrado no se intenta vencer nada', async () => {
+      const t = setup({ isOpenNow: false });
+
+      await create(t.service).catch(() => undefined);
+
+      expect(t.expiration.expireDueForDiner).not.toHaveBeenCalled();
     });
 
     it('la reserva activa se revisa antes que las mesas (orden c antes que d)', async () => {

@@ -1,4 +1,13 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -6,7 +15,9 @@ import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -25,19 +36,36 @@ import {
   RESTAURANT_NOT_FOUND_MESSAGE,
 } from '../../search-availability/index.js';
 import { CreateReservationService } from './create-reservation.service.js';
+import { ActiveReservationResponseDto } from './dto/active-reservation-response.dto.js';
 import {
   CreateReservationDto,
   PARTY_SIZE_RANGE,
 } from './dto/create-reservation.dto.js';
 import { ReservationResponseDto } from './dto/reservation-response.dto.js';
+import { ReservationQueryService } from './reservation-query.service.js';
 import {
   ACTIVE_RESERVATION_EXISTS_CODE,
   ACTIVE_RESERVATION_EXISTS_MESSAGE,
   NO_TABLE_AVAILABLE_CODE,
   NO_TABLE_AVAILABLE_MESSAGE,
+  RESERVATION_NOT_FOUND_CODE,
+  RESERVATION_NOT_FOUND_MESSAGE,
   RESTAURANT_CLOSED_CODE,
   RESTAURANT_CLOSED_MESSAGE,
 } from './reservation-errors.js';
+
+export const RESERVATION_ID_INVALID =
+  'El id de la reserva no es un UUID válido.';
+
+// Un id mal formado es 400 (como en las rutas de mesas); el 404 es para un id
+// válido que no existe o es de otro comensal.
+const ReservationIdParam = () =>
+  Param(
+    'id',
+    new ParseUUIDPipe({
+      exceptionFactory: () => new BadRequestException([RESERVATION_ID_INVALID]),
+    }),
+  );
 
 const conflict = (message: string, errorCode: string) => ({
   value: { statusCode: 409, message, error: 'Conflict', errorCode },
@@ -57,7 +85,10 @@ const conflict = (message: string, errorCode: string) => ({
 @UseGuards(CurrentUserGuard)
 @Controller('reservations')
 export class ReservationsController {
-  constructor(private readonly creation: CreateReservationService) {}
+  constructor(
+    private readonly creation: CreateReservationService,
+    private readonly queries: ReservationQueryService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -117,5 +148,65 @@ export class ReservationsController {
     @Body() dto: CreateReservationDto,
   ): Promise<ReservationResponseDto> {
     return this.creation.create(user, dto);
+  }
+
+  // Antes que /:id: si no, "active" se leería como un id.
+  @Get('active')
+  @ApiOperation({
+    summary: 'Consultar mi reserva activa',
+    description:
+      'Devuelve la reserva activa del comensal, o reservation null si no tiene (siempre 200, nunca 404). Si la reserva activa ya pasó su hora de vencimiento, se vence en ese momento y la respuesta trae reservation null. serverTime es la hora del servidor, la misma dentro y fuera de reservation.',
+  })
+  @ApiOkResponse({
+    description: 'La reserva activa o null.',
+    type: ActiveReservationResponseDto,
+  })
+  findActive(
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<ActiveReservationResponseDto> {
+    return this.queries.findActive(user);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Consultar una reserva mía',
+    description:
+      'Devuelve la reserva en cualquier estado (active, cancelled, expired o completed), para mostrar el estado final. Solo la del comensal de la sesión. El código solo viene cuando la reserva está activa. Si está activa y ya pasó su hora de vencimiento, se vence al leer y se devuelve como expired.',
+  })
+  @ApiParam({
+    name: 'id',
+    format: 'uuid',
+    description: 'Id de la reserva.',
+    example: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+  })
+  @ApiOkResponse({
+    description: 'La reserva, en su estado actual.',
+    type: ReservationResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID válido. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [RESERVATION_ID_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse({
+    description:
+      'La reserva no existe o es de otro comensal (el mismo mensaje en ambos casos). La app vuelve a la búsqueda.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: RESERVATION_NOT_FOUND_MESSAGE,
+      error: 'Not Found',
+      errorCode: RESERVATION_NOT_FOUND_CODE,
+    },
+  })
+  findOne(
+    @CurrentUser() user: CurrentUserData,
+    @ReservationIdParam() id: string,
+  ): Promise<ReservationResponseDto> {
+    return this.queries.findOne(user, id);
   }
 }

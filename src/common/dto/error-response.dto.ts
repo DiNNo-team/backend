@@ -21,7 +21,7 @@ export class ErrorResponseDto {
   // front has to branch on the reason; see CLAUDE.md, "API".
   @ApiPropertyOptional({
     description:
-      'Motivo del error, solo cuando el front tiene que actuar distinto según el motivo. Los demás errores no lo traen. Valores: EMAIL_NOT_VERIFIED (401: verifica tu correo para continuar), ACCOUNT_NOT_ENABLED (403: la cuenta no está habilitada como restaurante), PROFILE_REQUIRED (403: la cuenta todavía no tiene perfil; la app llama a POST /v1/diners/me y reintenta), DINER_ACCOUNT (403: cuenta de comensal en un endpoint de restaurante), RESTAURANT_ACCOUNT (403: cuenta de restaurante en un endpoint de comensal), RESTAURANT_REQUIRED (403: el usuario todavía no registra su restaurante; llévalo al registro), RESTAURANT_NOT_FOUND (404: el restaurante del detalle público no existe, el id no es válido o no tiene ubicación), ADDRESS_NOT_FOUND (404: GET /v1/geocode no encontró la dirección en Bogotá; mueve el pin), GEOCODING_UNAVAILABLE (503: el servicio de mapas no está disponible; mueve el pin), NO_TABLE_AVAILABLE (409: POST /v1/reservations, no queda una mesa libre; prueba con otro restaurante), ACTIVE_RESERVATION_EXISTS (409: el comensal ya tiene una reserva activa; ofrece ver mi reserva), RESTAURANT_CLOSED (409: el restaurante acaba de cerrar).',
+      'Motivo del error, solo cuando el front tiene que actuar distinto según el motivo. Los demás errores no lo traen. Valores: EMAIL_NOT_VERIFIED (401: verifica tu correo para continuar), ACCOUNT_NOT_ENABLED (403: la cuenta no está habilitada como restaurante), PROFILE_REQUIRED (403: la cuenta todavía no tiene perfil; la app llama a POST /v1/diners/me y reintenta), DINER_ACCOUNT (403: cuenta de comensal en un endpoint de restaurante), RESTAURANT_ACCOUNT (403: cuenta de restaurante en un endpoint de comensal), RESTAURANT_REQUIRED (403: el usuario todavía no registra su restaurante; llévalo al registro), RESTAURANT_NOT_FOUND (404: el restaurante del detalle público no existe, el id no es válido o no tiene ubicación), ADDRESS_NOT_FOUND (404: GET /v1/geocode no encontró la dirección en Bogotá; mueve el pin), GEOCODING_UNAVAILABLE (503: el servicio de mapas no está disponible; mueve el pin), NO_TABLE_AVAILABLE (409: POST /v1/reservations, no queda una mesa libre; prueba con otro restaurante), ACTIVE_RESERVATION_EXISTS (409: el comensal ya tiene una reserva activa; ofrece ver mi reserva), RESTAURANT_CLOSED (409: el restaurante acaba de cerrar), RESERVATION_NOT_FOUND (404: la reserva no existe o es de otro comensal; la app vuelve a la búsqueda).',
     enum: [
       'EMAIL_NOT_VERIFIED',
       'ACCOUNT_NOT_ENABLED',
@@ -35,6 +35,7 @@ export class ErrorResponseDto {
       'NO_TABLE_AVAILABLE',
       'ACTIVE_RESERVATION_EXISTS',
       'RESTAURANT_CLOSED',
+      'RESERVATION_NOT_FOUND',
     ],
   })
   errorCode?: string;

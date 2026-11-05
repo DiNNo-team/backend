@@ -10,7 +10,10 @@ import {
   RandomCodeGenerator,
 } from './reservations/reservation-code.js';
 import { reservationConfigProvider } from './reservations/reservation.config.js';
+import { ReservationExpirationService } from './reservations/reservation-expiration.service.js';
+import { ReservationQueryService } from './reservations/reservation-query.service.js';
 import { Reservation } from './reservations/reservation.entity.js';
+import { ReservationViewReader } from './reservations/reservation-view.reader.js';
 import { ReservationsController } from './reservations/reservations.controller.js';
 
 // Microreservas y check-in (Sprint 3). Depende de search-availability
@@ -26,6 +29,9 @@ import { ReservationsController } from './reservations/reservations.controller.j
   controllers: [ReservationsController],
   providers: [
     CreateReservationService,
+    ReservationExpirationService,
+    ReservationQueryService,
+    ReservationViewReader,
     { provide: CodeGenerator, useClass: RandomCodeGenerator },
     // Valida RESERVATION_TTL_MINUTES al crear el módulo: si es inválida, la app no arranca.
     reservationConfigProvider,

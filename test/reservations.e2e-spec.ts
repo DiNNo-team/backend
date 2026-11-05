@@ -11,6 +11,7 @@ import { ACCOUNT_ERROR_MESSAGES } from './../src/modules/identity-access/index.j
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import { CheckIn } from './../src/modules/reservations-checkin/check-ins/check-in.entity.js';
 import { ReservationsCheckinModule } from './../src/modules/reservations-checkin/index.js';
+import { ReservationExpirationService } from './../src/modules/reservations-checkin/reservations/reservation-expiration.service.js';
 import { Reservation } from './../src/modules/reservations-checkin/reservations/reservation.entity.js';
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
@@ -207,6 +208,8 @@ describe('POST /v1/reservations (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(CheckIn))
       .useValue({})
+      .overrideProvider(ReservationExpirationService)
+      .useValue({ expireDueForDiner: vi.fn().mockResolvedValue(0) })
       .overrideProvider(TableStatusLog)
       .useValue(statusLog)
       .overrideProvider(Clock)

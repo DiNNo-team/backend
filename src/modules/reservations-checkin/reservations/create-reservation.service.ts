@@ -19,6 +19,7 @@ import type { CreateReservationDto } from './dto/create-reservation.dto.js';
 import type { ReservationResponseDto } from './dto/reservation-response.dto.js';
 import { CodeGenerator } from './reservation-code.js';
 import { ReservationConfig } from './reservation.config.js';
+import { ReservationExpirationService } from './reservation-expiration.service.js';
 import { Reservation } from './reservation.entity.js';
 import {
   activeReservationExists,
@@ -79,6 +80,7 @@ export class CreateReservationService {
     private readonly clock: Clock,
     private readonly codes: CodeGenerator,
     private readonly config: ReservationConfig,
+    private readonly expiration: ReservationExpirationService,
   ) {}
 
   async create(
@@ -87,6 +89,13 @@ export class CreateReservationService {
   ): Promise<ReservationResponseDto> {
     const restaurant = await this.findVisibleRestaurant(dto.restaurantId);
     await this.assertOpenNow(restaurant.id);
+    // Vencimiento al crear (§12.5): un comensal cuya reserva ya venció pero el
+    // proceso periódico aún no barrió no debe recibir ACTIVE_RESERVATION_EXISTS.
+    // Va ANTES de la transacción de creación y en la suya propia: así reutiliza
+    // el servicio de vencimiento tal cual (con su evento después de su commit) y
+    // la creación no cambia. Si la creación falla después, el vencimiento ya
+    // hecho sigue siendo correcto: esa reserva estaba vencida de todos modos.
+    await this.expiration.expireDueForDiner(user.userId);
 
     const { reservation, table } = await this.saveWithCodeRetry(
       user.userId,

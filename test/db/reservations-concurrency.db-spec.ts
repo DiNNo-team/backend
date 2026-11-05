@@ -1,20 +1,13 @@
-import { randomUUID } from 'node:crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource } from 'typeorm';
 import { UserRole } from '../../src/modules/identity-access/index.js';
-import { User } from '../../src/modules/identity-access/users/user.entity.js';
-import { CheckIn } from '../../src/modules/reservations-checkin/check-ins/check-in.entity.js';
 import { CreateReservationService } from '../../src/modules/reservations-checkin/reservations/create-reservation.service.js';
 import {
   RandomCodeGenerator,
   type CodeGenerator,
 } from '../../src/modules/reservations-checkin/reservations/reservation-code.js';
-import { Reservation } from '../../src/modules/reservations-checkin/reservations/reservation.entity.js';
-import { Restaurant } from '../../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
-import { RestaurantSchedule } from '../../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
-import { TableLog } from '../../src/modules/restaurant-operations/table-logs/table-log.entity.js';
+import { ReservationExpirationService } from '../../src/modules/reservations-checkin/reservations/reservation-expiration.service.js';
 import { DbTableStatusLog } from '../../src/modules/restaurant-operations/table-logs/table-logs.recorder.js';
-import { Table } from '../../src/modules/restaurant-operations/tables/table.entity.js';
 import {
   TableStatusLog,
   type TableStatusChange,
@@ -24,11 +17,12 @@ import {
   type Clock,
 } from '../../src/modules/search-availability/index.js';
 import {
-  assertMigrationsApplied,
-  connectTestDatabase,
-  loadTestDatabaseUrl,
-  testDatabaseSsl,
-} from './support/test-db.js';
+  closeTestDataSource,
+  openTestDataSource,
+  withScenario as withSharedScenario,
+  type Scenario,
+  type TableSeed,
+} from './support/scenario.js';
 
 // Concurrencia de POST /v1/reservations contra Postgres REAL (Sprint 3,
 // tarea 2; CLAUDE.md §12.4). Llama al servicio REAL con peticiones en
@@ -50,164 +44,38 @@ const CLOCK = { now: () => NOW } as Clock;
 let dataSource: DataSource;
 
 beforeAll(async () => {
-  const url = loadTestDatabaseUrl();
-  const check = await connectTestDatabase();
-  try {
-    await assertMigrationsApplied(check);
-  } finally {
-    await check.end();
-  }
-  dataSource = new DataSource({
-    type: 'postgres',
-    url,
-    entities: [
-      Reservation,
-      CheckIn,
-      Restaurant,
-      RestaurantSchedule,
-      Table,
-      TableLog,
-      User,
-    ],
-    synchronize: false,
-    uuidExtension: 'pgcrypto',
-    installExtensions: false,
-    ssl: testDatabaseSsl(url),
-    connectTimeoutMS: 10_000,
-    // Conexiones de sobra para las peticiones en paralelo.
-    extra: { max: 20 },
-  });
-  await dataSource.initialize();
+  dataSource = await openTestDataSource();
 });
 
 afterAll(async () => {
-  if (dataSource?.isInitialized) {
-    await dataSource.destroy();
-  }
+  // Espera a las pruebas en curso, borra lo que haya quedado y cierra el pool.
+  await closeTestDataSource(dataSource);
 });
 
-// ---------------------------------------------------------------- datos ----
-
-interface TableSeed {
-  identifier: string;
-  capacity: number;
-  status?: 'available' | 'reserved' | 'occupied';
-  isActive?: boolean;
-}
-
-interface Scenario {
-  restaurantId: string;
-  dinerIds: string[];
-  // identificador → id de la mesa
-  tableIds: Map<string, string>;
-}
-
-async function createScenario(
-  tables: TableSeed[],
-  dinerCount: number,
-): Promise<Scenario> {
-  const [{ id: restaurantId }] = await dataSource.query<{ id: string }[]>(
-    `INSERT INTO restaurants (name, is_open, latitude, longitude) VALUES ($1, true, 4.655671, -74.057006) RETURNING id`,
-    [`db-test-${randomUUID()}`],
-  );
-  const scenario: Scenario = {
-    restaurantId,
-    dinerIds: [],
-    tableIds: new Map(),
-  };
-  // Se devuelve ya registrado: si algo falla a mitad, el finally limpia lo creado.
-  try {
-    for (let day = 1; day <= 7; day++) {
-      await dataSource.query(
-        `INSERT INTO restaurant_schedules (restaurant_id, day_of_week, is_open_24h) VALUES ($1, $2, true)`,
-        [restaurantId, day],
-      );
-    }
-    for (const seed of tables) {
-      const [{ id }] = await dataSource.query<{ id: string }[]>(
-        `INSERT INTO tables (restaurant_id, identifier, capacity, status, is_active) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [
-          restaurantId,
-          seed.identifier,
-          seed.capacity,
-          seed.status ?? 'available',
-          seed.isActive ?? true,
-        ],
-      );
-      scenario.tableIds.set(seed.identifier, id);
-    }
-    for (let i = 0; i < dinerCount; i++) {
-      const [{ id }] = await dataSource.query<{ id: string }[]>(
-        `INSERT INTO users (email, role, display_name) VALUES ($1, 'diner', $2) RETURNING id`,
-        [`db-test-${randomUUID()}@example.com`, `Comensal ${i + 1}`],
-      );
-      scenario.dinerIds.push(id);
-    }
-  } catch (error) {
-    await deleteScenario(scenario);
-    throw error;
-  }
-  return scenario;
-}
-
-// Borra solo lo que creó el escenario, en orden de FK. Cada paso se intenta
-// aunque otro falle; el primer error se relanza al final.
-async function deleteScenario(scenario: Scenario): Promise<void> {
-  const { restaurantId, dinerIds } = scenario;
-  const steps: [string, unknown[]][] = [
-    [`DELETE FROM check_ins WHERE restaurant_id = $1`, [restaurantId]],
-    [`DELETE FROM reservations WHERE restaurant_id = $1`, [restaurantId]],
-    [
-      `DELETE FROM table_logs WHERE table_id IN (SELECT id FROM tables WHERE restaurant_id = $1)`,
-      [restaurantId],
-    ],
-    [`DELETE FROM tables WHERE restaurant_id = $1`, [restaurantId]],
-    [
-      `DELETE FROM restaurant_schedules WHERE restaurant_id = $1`,
-      [restaurantId],
-    ],
-    [`DELETE FROM users WHERE id = ANY($1::uuid[])`, [dinerIds]],
-    [`DELETE FROM restaurants WHERE id = $1`, [restaurantId]],
-  ];
-  let firstError: unknown;
-  for (const [sql, params] of steps) {
-    try {
-      await dataSource.query(sql, params);
-    } catch (error) {
-      firstError ??= error;
-    }
-  }
-  if (firstError) {
-    throw firstError;
-  }
-}
-
-async function withScenario(
+// El montaje de los escenarios vive en support/scenario.ts (lo comparte la
+// suite de vencimiento); aquí solo se fija el DataSource de esta suite.
+const withScenario = (
   tables: TableSeed[],
   dinerCount: number,
   work: (scenario: Scenario) => Promise<void>,
-): Promise<void> {
-  const scenario = await createScenario(tables, dinerCount);
-  try {
-    await work(scenario);
-  } finally {
-    await deleteScenario(scenario);
-  }
-}
+) => withSharedScenario(dataSource, tables, dinerCount, work);
 
 // ------------------------------------------------------------- servicio ----
 
 function buildService(
   overrides: { statusLog?: TableStatusLog; codes?: CodeGenerator } = {},
 ): CreateReservationService {
+  const statusLog = overrides.statusLog ?? new DbTableStatusLog();
+  const events = new EventEmitter2();
   return new CreateReservationService(
     dataSource,
     new AvailabilityService(dataSource, CLOCK),
-    overrides.statusLog ?? new DbTableStatusLog(),
-    new EventEmitter2(),
+    statusLog,
+    events,
     CLOCK,
     overrides.codes ?? new RandomCodeGenerator(),
     { ttlMinutes: 15 },
+    new ReservationExpirationService(dataSource, statusLog, events, CLOCK),
   );
 }
 

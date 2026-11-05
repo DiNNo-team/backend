@@ -12,7 +12,11 @@ export default defineConfig({
     include: ['test/db/**/*.db-spec.ts'],
     // Una sola base compartida: los archivos corren uno tras otro.
     fileParallelism: false,
-    testTimeout: 20_000,
-    hookTimeout: 30_000,
+    // Solo para estas pruebas (la config es exclusiva de test:db): hablan con
+    // una base remota (Neon) y los casos con varias rondas hacen decenas de
+    // consultas en serie; 20 s se quedaba corto (18,4 s medidos en una corrida
+    // buena). afterAll espera hasta 30 s a las pruebas en curso (support/scenario.ts).
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });

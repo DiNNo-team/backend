@@ -9,6 +9,10 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
 
+- **Nuevo (2026-11-05): `GET /v1/reservations/active` y `GET /v1/reservations/:id` listos en la rama `feat/sprint3-backend`** (Sprint 3; contrato en `CLAUDE.md` §12.8; pendiente de PR y de `develop`). **La reserva vencida se devuelve como `expired`.**
+  - **API:** `/active` responde `200 { reservation, serverTime }` con `reservation: null` si no hay una activa (nunca 404). `/:id` responde la reserva en cualquier estado, solo la del comensal; si no existe o es de otro, `404` con `errorCode: "RESERVATION_NOT_FOUND"` («No encontramos esa reserva.»); un id que no es UUID da `400`. `code` solo viene mientras la reserva está `active`. Swagger actualizado.
+  - **Vencimiento:** una reserva activa cuyo `expires_at` ya pasó se vence al leerla: `/active` responde `null` y `/:id` responde `status: "expired"`; la mesa vuelve a Disponible (si seguía Reservada por esa reserva) y la bitácora lo registra como «Automático» (`source: "system"`, usuario `null`). Al crear una reserva también se vence primero la vencida del propio comensal, así que ya no recibe `ACTIVE_RESERVATION_EXISTS` por una reserva que se venció. El proceso que vence todas cada 15 s llega con la tarea 6.
+  - **Sin cambios de base de datos ni variables de entorno.** Todavía no hay eventos por WebSocket (`reservation.expired` llega en el Día 4).
 - **Nuevo (2026-11-05): `POST /v1/reservations` listo en la rama `feat/sprint3-backend`** (Sprint 3, creación de la microreserva; contrato en `CLAUDE.md` §12.8; pendiente de PR y de `develop`).
   - **API:** el comensal reserva con `{ restaurantId, partySize }` y recibe `Reservation` (§12.8). Errores nuevos con `errorCode`: `NO_TABLE_AVAILABLE`, `ACTIVE_RESERVATION_EXISTS` y `RESTAURANT_CLOSED` (409); un restaurante inexistente o sin ubicación da `RESTAURANT_NOT_FOUND` (404), igual que el detalle público. Swagger actualizado.
   - **Efecto para la web y la app:** al reservar, la mesa pasa a Reservada y `availability.changed` sale como siempre. Todavía NO hay `reservation.created` ni eventos por WebSocket (Día 4).

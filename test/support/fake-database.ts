@@ -70,7 +70,9 @@ export class FakeDatabaseModule {
           provide: DataSource,
           useValue: {
             ...extras,
-            getRepository: (name: string) => {
+            // By entity name, or by entity class (its name is the key).
+            getRepository: (target: string | { name: string }) => {
+              const name = typeof target === 'string' ? target : target.name;
               const repository = repositories[name];
               if (!repository) {
                 throw new Error(`Repository not simulated: ${name}`);

@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 
 // errorCode de los 409 de POST /v1/reservations y su texto (CLAUDE.md §12.9).
 // Cada cliente decide qué mostrar según el errorCode; el message es el texto
@@ -26,4 +26,14 @@ export const activeReservationExists = (): ConflictException =>
 export const restaurantClosed = (): ConflictException =>
   new ConflictException(RESTAURANT_CLOSED_MESSAGE, {
     errorCode: RESTAURANT_CLOSED_CODE,
+  });
+
+// 404 de las rutas de lectura y cancelación (§12.9). El mismo mensaje cuando la
+// reserva no existe y cuando es de otro comensal: no se revela que existe.
+export const RESERVATION_NOT_FOUND_CODE = 'RESERVATION_NOT_FOUND';
+export const RESERVATION_NOT_FOUND_MESSAGE = 'No encontramos esa reserva.';
+
+export const reservationNotFound = (): NotFoundException =>
+  new NotFoundException(RESERVATION_NOT_FOUND_MESSAGE, {
+    errorCode: RESERVATION_NOT_FOUND_CODE,
   });
