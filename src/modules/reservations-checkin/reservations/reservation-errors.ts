@@ -37,3 +37,13 @@ export const reservationNotFound = (): NotFoundException =>
   new NotFoundException(RESERVATION_NOT_FOUND_MESSAGE, {
     errorCode: RESERVATION_NOT_FOUND_CODE,
   });
+
+// 409 de la cancelación (§12.9): la reserva ya no está activa (cancelada, vencida
+// o cumplida). La app consulta GET /reservations/:id y muestra el estado real.
+export const RESERVATION_NOT_ACTIVE_CODE = 'RESERVATION_NOT_ACTIVE';
+export const RESERVATION_NOT_ACTIVE_MESSAGE = 'Esta reserva ya no está activa.';
+
+export const reservationNotActive = (): ConflictException =>
+  new ConflictException(RESERVATION_NOT_ACTIVE_MESSAGE, {
+    errorCode: RESERVATION_NOT_ACTIVE_CODE,
+  });

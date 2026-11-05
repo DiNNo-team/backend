@@ -9,6 +9,11 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
 
+- **Nuevo (2026-11-05): `POST /v1/reservations/:id/cancel` listo en la rama `feat/sprint3-backend`** (Sprint 3; contrato en `CLAUDE.md` §12.8 y §12.9; pendiente de PR y de `develop`).
+  - **API:** el comensal cancela su reserva activa y recibe `200 Reservation` con `status: "cancelled"`, `cancelledAt` (ISO UTC) y `code: null`; la mesa vuelve a Disponible (si el restaurante no la cambió a mano) y el cambio queda en la bitácora como del comensal. Sin cuerpo.
+  - **Para Sebastián (app):** errores nuevos, ambos con `errorCode`: `404 RESERVATION_NOT_FOUND` (no existe o es de otro comensal: volver a la búsqueda) y `409 RESERVATION_NOT_ACTIVE` («Esta reserva ya no está activa.»: estaba cancelada, vencida o cumplida; también si acaba de vencer). **Ante el 409 la app debe consultar `GET /v1/reservations/:id` y mostrar el estado real** (por ejemplo `expired`). Un id que no es UUID da `400`.
+  - **Para la web:** al cancelar el comensal, `availability.changed` sale como siempre; todavía NO hay `reservation.cancelled` por WebSocket (Día 4).
+  - **Sin cambios de base de datos ni variables de entorno.**
 - **Nuevo (2026-11-05): mesas con reserva activa protegidas y `activeReservationsCount` listos en la rama `feat/sprint3-backend`** (Sprint 3; contrato en `CLAUDE.md` §12.2 y §12.8; pendiente de PR y de `develop`).
   - **⚠ Para Sebastián (web), antes de subir esto a `develop`:** Render despliega `develop` solo. La web actual trata **cualquier 409 al desactivar una mesa como éxito**. Con esto, `POST /v1/tables/:id/deactivate` puede responder `409` con `errorCode: "TABLE_HAS_ACTIVE_RESERVATION"` o `"TABLE_NOT_AVAILABLE_TO_DEACTIVATE"` (la mesa NO se desactivó), así que **su PR con el manejo por `errorCode` debe fusionarse antes o el mismo día**. El 409 de "ya inactiva" sigue sin `errorCode` y sigue significando que ya estaba inactiva.
   - **Cambio de comportamiento:** desde ahora solo se desactiva una mesa **Disponible**. Una mesa Reservada u Ocupada a mano responde `409 TABLE_NOT_AVAILABLE_TO_DEACTIVATE` («Para desactivar esta mesa, primero márcala como Disponible.»). Reactivar no cambia.

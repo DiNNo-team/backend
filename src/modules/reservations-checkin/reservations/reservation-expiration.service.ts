@@ -7,6 +7,7 @@ import {
   type RestaurantAvailabilityAffectedEvent,
 } from '../../restaurant-operations/index.js';
 import { Clock } from '../../search-availability/index.js';
+import { releaseReservedTable } from './release-reserved-table.js';
 import { Reservation } from './reservation.entity.js';
 
 // Qué reservas vencer. Vacío = todas las debidas (lo usará el proceso de cada
@@ -22,12 +23,6 @@ interface ExpiredRow {
   id: string;
   table_id: string;
   restaurant_id: string;
-}
-
-// La mesa se lee y escribe por nombre de entidad (es de restaurant-operations).
-interface TableRow {
-  id: string;
-  status: string;
 }
 
 // Vencimiento de las microreservas (§12.5, §12.3). La fuente de verdad es
@@ -129,33 +124,19 @@ export class ReservationExpirationService {
     return result.raw as ExpiredRow[];
   }
 
-  // reserved → available solo si sigue reserved. true si la mesa cambió.
-  private async releaseTable(
+  // reserved → available solo si sigue reserved (regla compartida con la
+  // cancelación). Automático: sin usuario, source 'system' (§12.3). true si la
+  // mesa cambió.
+  private releaseTable(
     manager: EntityManager,
     row: ExpiredRow,
     now: Date,
   ): Promise<boolean> {
-    const released = await manager
-      .getRepository<TableRow>('Table')
-      .update(
-        { id: row.table_id, status: 'reserved' },
-        { status: 'available' },
-      );
-    if (released.affected !== 1) {
-      return false;
-    }
-    // Automático: sin usuario (§12.3).
-    await this.statusLog.record(
-      {
-        tableId: row.table_id,
-        previousStatus: 'reserved',
-        newStatus: 'available',
-        userId: null,
-        source: 'system',
-        changedAt: now,
-      },
-      manager,
-    );
-    return true;
+    return releaseReservedTable(manager, this.statusLog, {
+      tableId: row.table_id,
+      userId: null,
+      source: 'system',
+      changedAt: now,
+    });
   }
 }

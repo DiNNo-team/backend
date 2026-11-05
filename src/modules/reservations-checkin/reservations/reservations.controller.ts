@@ -3,6 +3,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -42,12 +44,15 @@ import {
   PARTY_SIZE_RANGE,
 } from './dto/create-reservation.dto.js';
 import { ReservationResponseDto } from './dto/reservation-response.dto.js';
+import { ReservationCancellationService } from './reservation-cancellation.service.js';
 import { ReservationQueryService } from './reservation-query.service.js';
 import {
   ACTIVE_RESERVATION_EXISTS_CODE,
   ACTIVE_RESERVATION_EXISTS_MESSAGE,
   NO_TABLE_AVAILABLE_CODE,
   NO_TABLE_AVAILABLE_MESSAGE,
+  RESERVATION_NOT_ACTIVE_CODE,
+  RESERVATION_NOT_ACTIVE_MESSAGE,
   RESERVATION_NOT_FOUND_CODE,
   RESERVATION_NOT_FOUND_MESSAGE,
   RESTAURANT_CLOSED_CODE,
@@ -88,6 +93,7 @@ export class ReservationsController {
   constructor(
     private readonly creation: CreateReservationService,
     private readonly queries: ReservationQueryService,
+    private readonly cancellation: ReservationCancellationService,
   ) {}
 
   @Post()
@@ -208,5 +214,60 @@ export class ReservationsController {
     @ReservationIdParam() id: string,
   ): Promise<ReservationResponseDto> {
     return this.queries.findOne(user, id);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cancelar mi reserva',
+    description:
+      'Cancela la reserva activa del comensal: la reserva queda cancelled (cancelledAt, sin código) y la mesa vuelve a Disponible, en la misma transacción. Si el restaurante cambió la mesa a mano mientras tanto, la mesa no se toca. Solo la reserva activa y vigente: una que ya venció se vence en ese momento y responde 409. Sin cuerpo.',
+  })
+  @ApiParam({
+    name: 'id',
+    format: 'uuid',
+    description: 'Id de la reserva.',
+    example: '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+  })
+  @ApiOkResponse({
+    description: 'La reserva cancelada.',
+    type: ReservationResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID válido. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [RESERVATION_ID_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse({
+    description:
+      'La reserva no existe o es de otro comensal (el mismo mensaje en ambos casos). La app vuelve a la búsqueda.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: RESERVATION_NOT_FOUND_MESSAGE,
+      error: 'Not Found',
+      errorCode: RESERVATION_NOT_FOUND_CODE,
+    },
+  })
+  @ApiConflictResponse({
+    description:
+      'La reserva ya no está activa: estaba cancelada, vencida o cumplida (también si acaba de vencer). La app consulta GET /v1/reservations/:id y muestra el estado real.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 409,
+      message: RESERVATION_NOT_ACTIVE_MESSAGE,
+      error: 'Conflict',
+      errorCode: RESERVATION_NOT_ACTIVE_CODE,
+    },
+  })
+  cancel(
+    @CurrentUser() user: CurrentUserData,
+    @ReservationIdParam() id: string,
+  ): Promise<ReservationResponseDto> {
+    return this.cancellation.cancel(user, id);
   }
 }

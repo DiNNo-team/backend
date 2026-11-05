@@ -13,6 +13,7 @@ import {
   RandomCodeGenerator,
 } from './reservations/reservation-code.js';
 import { reservationConfigProvider } from './reservations/reservation.config.js';
+import { ReservationCancellationService } from './reservations/reservation-cancellation.service.js';
 import { ReservationExpirationService } from './reservations/reservation-expiration.service.js';
 import { ReservationQueryService } from './reservations/reservation-query.service.js';
 import { Reservation } from './reservations/reservation.entity.js';
@@ -34,6 +35,7 @@ import { ReservationsForTables } from './reservations/reservations-for-tables.js
   providers: [
     CreateReservationService,
     ReservationExpirationService,
+    ReservationCancellationService,
     ReservationQueryService,
     ReservationViewReader,
     // Puerto que restaurant-operations declara para proteger las mesas con
