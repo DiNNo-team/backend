@@ -7,6 +7,10 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-06): Exportación anónima y `demo:reset` listos en la rama** (`feat/sprint3-backend`; tarea 9; pendiente de PR y de `develop`). Detalle en `CLAUDE.md` §11, «Scripts de datos».
+  - **Para Santiago y Sergio (IA):** `docs/export-datos.md` tiene el diccionario de columnas y la anonimización. **Pídanle el CSV a Elizabeth:** ella corre `export:data` contra la base de desarrollo y les pasa la carpeta. Hoy hay pocos datos reales: usen datos sintéticos y el CSV para validar el formato. **Los datos del piloto de la demo se exportan después de la demo.** El seudónimo del comensal cambia en cada exportación: no se pueden unir dos CSV por ese campo.
+  - **Para todos (demo):** `demo:reset` deja a Casa 72 con las 8 mesas Disponibles (Mesa 8 inactiva) y cancela sus reservas activas. Solo lo corre Elizabeth. **No emite eventos de WebSocket:** con clientes conectados, que refresquen (la web consulta cada 30 s; la app al volver al primer plano). Su estado inicial difiere del seed a propósito (el seed deja 4 mesas bloqueadas sin reserva real).
+  - **Sin cambios de API, base de datos, variables de entorno ni dependencias.** Solo dos scripts nuevos en `package.json` (`export:data`, `demo:reset`) y `/exports` en `.gitignore`.
 
 
 - **Nuevo (2026-11-06): WebSocket con salas y eventos de reserva listos en la rama (tareas 5.1.1 a 5.1.3 y 5.1.6)** (`feat/sprint3-backend`; contrato en `CLAUDE.md` §12.7 y §12.8; pendiente de PR y de `develop`).
