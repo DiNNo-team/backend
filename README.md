@@ -54,6 +54,8 @@ Todas están documentadas con placeholders en [`.env.example`](.env.example):
 | `REDIS_URL` | **Sí** | Cadena de conexión de Redis. | Panel de **Upstash** → tu base de datos → "Connect" (usar la URL `rediss://...` con TLS). | `redis://default:password@host:puerto` |
 | `FIREBASE_PROJECT_ID` | **Sí**, si el usuario de desarrollo está apagado (siempre en Render) | ID del proyecto de Firebase con el que se verifican los ID tokens. No es un secreto. | Consola de **Firebase** → configuración del proyecto. | `mi-proyecto-firebase` |
 | `GOOGLE_GEOCODING_API_KEY` | No | Llave de Google Geocoding API para `GET /v1/geocode`. **Secreto.** Sin ella la app arranca y esa ruta responde `503 GEOCODING_UNAVAILABLE`. | Consola de **Google Cloud** → APIs y servicios → Credenciales (restringida a Geocoding API). La entrega el equipo de Google Cloud por canal privado. | *(sin valor en `.env.example`)* |
+| `RESERVATION_TTL_MINUTES` | No (por defecto `15`) | Vigencia de la microreserva, en minutos enteros de 2 a 15. Un valor inválido (texto, vacío, fuera de rango) impide que la app arranque. | La defines tú en tu `.env` y en el panel de Render. `3` solo durante la demo de expiración. | `15` |
+| `RESERVATION_EXPIRY_ENABLED` | No (por defecto `true`) | Activa el proceso que vence las reservas cada 15 s y al arrancar. `true` o `false`; cualquier otro valor (también vacío) impide que la app arranque. Con `false` las reservas vencidas se siguen venciendo al leerlas u operarlas. | La defines tú; en Render va en `true`. | `true` |
 | `DEV_USER_ENABLED` | No (por defecto apagado) | Activa el usuario de desarrollo. **Solo local:** se apaga solo en Render aunque esté en `true`. | La defines tú en tu `.env`. **No la definas en Render.** | `true` |
 | `DEV_USER_ID` | Si `DEV_USER_ENABLED=true` | UUID (tabla `users`) del usuario de desarrollo por defecto. | Lo imprime `npm run seed`. | `3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f` |
 
@@ -128,6 +130,9 @@ src/
 | `npm run test:watch` | Pruebas unitarias en modo watch. |
 | `npm run test:cov` | Pruebas unitarias con reporte de cobertura. |
 | `npm run test:e2e` | Pruebas e2e de la capa HTTP (prefijo, CORS, Swagger) — no requieren PostgreSQL ni Redis. |
+| `npm run test:db` | Pruebas contra un Postgres real (solo la base de pruebas, con `.env.test`); no están en CI. Ver [CLAUDE.md §11](CLAUDE.md#pruebas). |
+| `npm run export:data` | Exportación anónima de reservas, check-ins y bitácora a CSV (solo lectura). **Solo Elizabeth.** Ver [CLAUDE.md §11](CLAUDE.md#scripts-de-datos-srcscripts-elizabeth). |
+| `npm run demo:reset` | Deja la demo limpia: Casa 72 sin reservas activas y con sus mesas en el estado inicial. Dry-run por defecto; `--apply` pide confirmar la base. **Solo Elizabeth.** Ver [CLAUDE.md §11](CLAUDE.md#scripts-de-datos-srcscripts-elizabeth). |
 | `npm run seed` | Crea los datos de prueba (ver [sección 9](#9-base-de-datos-migraciones-y-datos-de-prueba)). |
 | `npm run migration:create -- src/migrations/<Nombre>` | Crea una migración vacía para escribir el SQL a mano. |
 | `npm run migration:generate -- src/migrations/<Nombre>` | Genera una migración comparando las entidades con la base. **Solo Elizabeth.** |

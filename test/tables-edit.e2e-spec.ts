@@ -419,7 +419,7 @@ describe('Tables · edit and deactivate (e2e)', () => {
     for (const action of ['deactivate', 'reactivate']) {
       expect(
         Object.keys(paths[`/v1/tables/{id}/${action}`].post.responses).sort(),
-      ).toEqual(['200', '401', '403', '404', '409']);
+      ).toEqual(['200', '400', '401', '403', '404', '409']);
     }
     expect(
       Object.keys(res.body.components.schemas.UpdateTableDto.properties),

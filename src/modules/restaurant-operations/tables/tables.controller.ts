@@ -329,6 +329,15 @@ export class TablesController {
     description: 'Mesa desactivada (isActive: false).',
     type: TableResponseDto,
   })
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [TABLE_ID_INVALID],
+      error: 'Bad Request',
+    },
+  })
   @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
   @ApiConflictResponse({
     description:
@@ -382,6 +391,15 @@ export class TablesController {
   @ApiOkResponse({
     description: 'Mesa reactivada (isActive: true, status: available).',
     type: TableResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [TABLE_ID_INVALID],
+      error: 'Bad Request',
+    },
   })
   @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
   @ApiConflictResponse({
