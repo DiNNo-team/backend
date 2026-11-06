@@ -338,7 +338,8 @@ describe('TablesService · desactivar (§12.2)', () => {
       }),
       t.manager,
     );
-    expect(t.events.emit).toHaveBeenCalledTimes(1);
+    // table.status_changed de la fila de bitácora y el de disponibilidad.
+    expect(t.events.emit).toHaveBeenCalledTimes(2);
   });
 
   it('vence primero una reserva debida, y comprueba la reserva después de bloquear la mesa', async () => {

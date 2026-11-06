@@ -1,5 +1,9 @@
 import type { EntityManager } from 'typeorm';
-import type { TableStatusLog } from '../../restaurant-operations/index.js';
+import type { AfterCommitEvents } from '../../../common/events/after-commit-events.js';
+import {
+  recordTableChange,
+  type TableStatusLog,
+} from '../../restaurant-operations/index.js';
 
 // La mesa se lee y escribe por nombre de entidad (es de restaurant-operations).
 interface TableRow {
@@ -10,6 +14,7 @@ interface TableRow {
 // Quién libera la mesa y por qué (§12.3): el vencimiento es automático (sin
 // usuario, source 'system'); la cancelación es del comensal (source 'reservation').
 export interface TableRelease {
+  restaurantId: string;
   tableId: string;
   userId: string | null;
   source: 'reservation' | 'system';
@@ -27,11 +32,13 @@ export interface ReservedTableMove extends TableRelease {
 // el restaurante cambió después. La bitácora se escribe solo si la mesa realmente
 // cambió. Devuelve true si cambió.
 //
-// No abre transacciones ni emite eventos: actúa con el manager recibido, y quien
-// lo llama emite el evento después de su commit. No se repite en otro lugar.
+// No abre transacciones ni publica eventos: actúa con el manager recibido y deja
+// table.status_changed en el colector, y quien la llama lo publica después de su
+// commit. No se repite en otro lugar.
 export async function moveReservedTable(
   manager: EntityManager,
   statusLog: TableStatusLog,
+  afterCommit: AfterCommitEvents,
   move: ReservedTableMove,
 ): Promise<boolean> {
   const moved = await manager
@@ -40,7 +47,9 @@ export async function moveReservedTable(
   if (moved.affected !== 1) {
     return false;
   }
-  await statusLog.record(
+  await recordTableChange(
+    statusLog,
+    move.restaurantId,
     {
       tableId: move.tableId,
       previousStatus: 'reserved',
@@ -50,6 +59,7 @@ export async function moveReservedTable(
       changedAt: move.changedAt,
     },
     manager,
+    afterCommit,
   );
   return true;
 }
@@ -58,7 +68,11 @@ export async function moveReservedTable(
 export function releaseReservedTable(
   manager: EntityManager,
   statusLog: TableStatusLog,
+  afterCommit: AfterCommitEvents,
   release: TableRelease,
 ): Promise<boolean> {
-  return moveReservedTable(manager, statusLog, { ...release, to: 'available' });
+  return moveReservedTable(manager, statusLog, afterCommit, {
+    ...release,
+    to: 'available',
+  });
 }

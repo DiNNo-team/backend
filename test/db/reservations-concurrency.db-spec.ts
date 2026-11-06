@@ -19,6 +19,7 @@ import {
 import {
   closeTestDataSource,
   openTestDataSource,
+  reservationLabels,
   withScenario as withSharedScenario,
   type Scenario,
   type TableSeed,
@@ -76,6 +77,7 @@ function buildService(
     overrides.codes ?? new RandomCodeGenerator(),
     { ttlMinutes: 15 },
     new ReservationExpirationService(dataSource, statusLog, events, CLOCK),
+    reservationLabels(dataSource),
   );
 }
 

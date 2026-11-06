@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource, type EntityManager } from 'typeorm';
+import { AfterCommitEvents } from '../../../common/events/after-commit-events.js';
 import {
   RESTAURANT_AVAILABILITY_AFFECTED,
   TableStatusLog,
   type RestaurantAvailabilityAffectedEvent,
 } from '../../restaurant-operations/index.js';
-import { Clock } from '../../search-availability/index.js';
+import {
+  Clock,
+  RESERVATION_EXPIRED,
+  type ReservationEndedEvent,
+} from '../../search-availability/index.js';
 import { releaseReservedTable } from './release-reserved-table.js';
 import { Reservation } from './reservation.entity.js';
 
@@ -27,6 +32,7 @@ interface ExpiredRow {
   id: string;
   table_id: string;
   restaurant_id: string;
+  diner_id: string;
 }
 
 // Vencimiento de las microreservas (§12.5, §12.3). La fuente de verdad es
@@ -34,7 +40,7 @@ interface ExpiredRow {
 //
 // Se usa "al leer" (GET /reservations/...), "al crear" y "al operar", con un
 // alcance, y en el barrido periódico (expireAllDue), por lotes: siempre la misma
-// lógica. No conoce el WebSocket: solo emite el evento interno de disponibilidad.
+// lógica. No conoce el WebSocket: solo emite eventos internos, después del commit.
 @Injectable()
 export class ReservationExpirationService {
   constructor(
@@ -91,18 +97,29 @@ export class ReservationExpirationService {
   //   2. Por cada reserva vencida, la mesa vuelve a available SOLO si sigue en
   //      reserved: nunca se pisa un estado que el restaurante cambió después. Y
   //      la bitácora solo se escribe si la mesa realmente cambió.
-  // El evento sale después del commit, una vez por restaurante cuya mesa cambió.
+  // Los eventos salen después del commit de esta transacción (en el barrido, de
+  // su lote): reservation.expired por reserva, table.status_changed por mesa que
+  // cambió y el de disponibilidad, una vez por restaurante cuya mesa cambió.
   private async expireDue(
     scope: ExpirationScope,
     batchSize?: number,
   ): Promise<number> {
     const now = this.clock.now();
+    const afterCommit = new AfterCommitEvents();
     const { expired, restaurantsToNotify } = await this.dataSource.transaction(
       async (manager) => {
         const rows = await this.markExpired(manager, scope, now, batchSize);
         const restaurants = new Set<string>();
         for (const row of rows) {
-          if (await this.releaseTable(manager, row, now)) {
+          afterCommit.add(RESERVATION_EXPIRED, {
+            restaurantId: row.restaurant_id,
+            dinerId: row.diner_id,
+            reservationId: row.id,
+            status: 'expired',
+            tableId: row.table_id,
+            at: now.toISOString(),
+          } satisfies ReservationEndedEvent);
+          if (await this.releaseTable(manager, afterCommit, row, now)) {
             restaurants.add(row.restaurant_id);
           }
         }
@@ -111,6 +128,7 @@ export class ReservationExpirationService {
     );
 
     // Solo después del commit: quien escucha lee la base (CLAUDE.md §11).
+    afterCommit.publish(this.events);
     for (const restaurantId of restaurantsToNotify) {
       const event: RestaurantAvailabilityAffectedEvent = { restaurantId };
       this.events.emit(RESTAURANT_AVAILABILITY_AFFECTED, event);
@@ -159,7 +177,7 @@ export class ReservationExpirationService {
     // texto pasa tal cual al SQL y raw trae las columnas con los nombres de la
     // base, justo la forma de ExpiredRow; un error de escritura falla en el SQL.
     const result = await query
-      .returning('"id", "table_id", "restaurant_id"')
+      .returning('"id", "table_id", "restaurant_id", "diner_id"')
       .execute();
     return result.raw as ExpiredRow[];
   }
@@ -169,10 +187,12 @@ export class ReservationExpirationService {
   // mesa cambió.
   private releaseTable(
     manager: EntityManager,
+    afterCommit: AfterCommitEvents,
     row: ExpiredRow,
     now: Date,
   ): Promise<boolean> {
-    return releaseReservedTable(manager, this.statusLog, {
+    return releaseReservedTable(manager, this.statusLog, afterCommit, {
+      restaurantId: row.restaurant_id,
       tableId: row.table_id,
       userId: null,
       source: 'system',

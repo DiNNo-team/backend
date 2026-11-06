@@ -1,11 +1,17 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource, type EntityManager } from 'typeorm';
+import { AfterCommitEvents } from '../../../common/events/after-commit-events.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
 import {
   TableStatusLog,
   requireRestaurant,
 } from '../../restaurant-operations/index.js';
-import { Clock } from '../../search-availability/index.js';
+import {
+  Clock,
+  RESERVATION_CHECKED_IN,
+  type ReservationEndedEvent,
+} from '../../search-availability/index.js';
 import { moveReservedTable } from '../reservations/release-reserved-table.js';
 import { ReservationExpirationService } from '../reservations/reservation-expiration.service.js';
 import { Reservation } from '../reservations/reservation.entity.js';
@@ -48,7 +54,8 @@ function rejectionFor(reservation: Reservation): Error {
 //
 // No emite RESTAURANT_AVAILABILITY_AFFECTED: reserved → occupied no cambia las
 // mesas libres ni las activas, así que availability.changed llevaría el mismo
-// valor. El restaurante se entera por table.status_changed (tarea 8).
+// valor. El restaurante se entera por reservation.checked_in y table.status_changed,
+// que salen después del commit (§12.8).
 @Injectable()
 export class CheckInService {
   constructor(
@@ -57,6 +64,7 @@ export class CheckInService {
     private readonly statusLog: TableStatusLog,
     private readonly labels: ReservationLabelsReader,
     private readonly clock: Clock,
+    private readonly events: EventEmitter2,
   ) {}
 
   async checkIn(
@@ -114,17 +122,27 @@ export class CheckInService {
 
   // Todo o nada. null si el UPDATE no encontró la reserva activa y vigente (otra
   // operación se adelantó, o venció entre medias).
-  private checkInTransaction(
+  private async checkInTransaction(
     reservation: Reservation,
     adminId: string,
   ): Promise<Date | null> {
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const afterCommit = new AfterCommitEvents();
+    const checkedInAt = await this.dataSource.transaction(async (manager) => {
       const [row] = await this.markCompleted(manager, reservation, now);
       if (!row) {
         return null;
       }
-      await moveReservedTable(manager, this.statusLog, {
+      afterCommit.add(RESERVATION_CHECKED_IN, {
+        restaurantId: reservation.restaurantId,
+        dinerId: reservation.dinerId,
+        reservationId: reservation.id,
+        status: 'completed',
+        tableId: row.table_id,
+        at: now.toISOString(),
+      } satisfies ReservationEndedEvent);
+      await moveReservedTable(manager, this.statusLog, afterCommit, {
+        restaurantId: reservation.restaurantId,
         tableId: row.table_id,
         to: 'occupied',
         userId: adminId,
@@ -138,6 +156,8 @@ export class CheckInService {
       });
       return now;
     });
+    afterCommit.publish(this.events);
+    return checkedInAt;
   }
 
   // La condición va en el UPDATE: dos check-ins, o un check-in contra una

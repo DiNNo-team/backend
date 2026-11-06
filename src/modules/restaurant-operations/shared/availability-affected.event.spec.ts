@@ -10,6 +10,7 @@ import type { TableStatusLog } from '../tables/table-status-log.js';
 import type { Table } from '../tables/table.entity.js';
 import { TablesService } from '../tables/tables.service.js';
 import { RESTAURANT_AVAILABILITY_AFFECTED } from './availability-affected.event.js';
+import { TABLE_STATUS_CHANGED } from './table-status-changed.event.js';
 
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const TABLE_ID = '3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f';
@@ -47,6 +48,9 @@ function timeline() {
 }
 
 const EMITTED = `emit ${RESTAURANT_AVAILABILITY_AFFECTED} ${JSON.stringify({ restaurantId: RESTAURANT_ID })}`;
+// Una fila nueva de bitácora: su table.status_changed sale antes del de disponibilidad.
+const tableEvent = (previousStatus: string, status: string) =>
+  `emit ${TABLE_STATUS_CHANGED} ${JSON.stringify({ restaurantId: RESTAURANT_ID, tableId: TABLE_ID, previousStatus, status, source: 'manual' })}`;
 
 describe('availability event of restaurant-operations', () => {
   describe('TablesService', () => {
@@ -104,7 +108,12 @@ describe('availability event of restaurant-operations', () => {
 
       await service.updateStatus(owner, TABLE_ID, 'occupied');
 
-      expect(steps).toEqual(['save', 'commit', EMITTED]);
+      expect(steps).toEqual([
+        'save',
+        'commit',
+        tableEvent('available', 'occupied'),
+        EMITTED,
+      ]);
     });
 
     it('asking for the status the table already has emits nothing', async () => {
@@ -126,15 +135,29 @@ describe('availability event of restaurant-operations', () => {
     });
 
     it.each([
-      ['deactivating', activeAvailable, 'deactivate'],
-      ['reactivating', { ...activeAvailable, isActive: false }, 'reactivate'],
-    ] as const)('%s emits after the commit', async (_case, stored, action) => {
-      const { service, steps } = tablesFixture(stored);
+      ['deactivating', activeAvailable, 'deactivate', 'available', 'inactive'],
+      [
+        'reactivating',
+        { ...activeAvailable, isActive: false },
+        'reactivate',
+        'inactive',
+        'available',
+      ],
+    ] as const)(
+      '%s emits after the commit',
+      async (_case, stored, action, previous, status) => {
+        const { service, steps } = tablesFixture(stored);
 
-      await service[action](owner, TABLE_ID);
+        await service[action](owner, TABLE_ID);
 
-      expect(steps).toEqual(['save', 'commit', EMITTED]);
-    });
+        expect(steps).toEqual([
+          'save',
+          'commit',
+          tableEvent(previous, status),
+          EMITTED,
+        ]);
+      },
+    );
 
     it('deactivating an inactive table (409) emits nothing', async () => {
       const { service, events } = tablesFixture({

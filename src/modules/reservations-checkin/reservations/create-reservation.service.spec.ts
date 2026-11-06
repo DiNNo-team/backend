@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { DataSource } from 'typeorm';
 import type { CurrentUserData } from '../../identity-access/index.js';
@@ -18,6 +18,7 @@ import {
   UQ_ACTIVE_DINER,
   UQ_ACTIVE_TABLE,
 } from './create-reservation.service.js';
+import type { ReservationLabelsReader } from '../check-ins/reservation-labels.reader.js';
 import type { CodeGenerator } from './reservation-code.js';
 import type { ReservationExpirationService } from './reservation-expiration.service.js';
 import { Reservation } from './reservation.entity.js';
@@ -75,6 +76,7 @@ interface Options {
   // (undefined = el intento termina bien).
   transactionErrors?: unknown[];
   logFails?: boolean;
+  labelsFail?: boolean;
 }
 
 function setup(options: Options = {}) {
@@ -171,9 +173,20 @@ function setup(options: Options = {}) {
     }),
   };
   const events = {
-    emit: vi.fn(() => {
-      log.push('emit');
+    emit: vi.fn((name: string) => {
+      log.push(`emit:${name}`);
       return true;
+    }),
+  };
+  const labels = {
+    read: vi.fn(() => {
+      log.push('labels');
+      return options.labelsFail
+        ? Promise.reject(new Error('lectura rota'))
+        : Promise.resolve(() => ({
+            tableIdentifier: '04',
+            dinerName: 'Ana',
+          }));
     }),
   };
   const expiration = {
@@ -197,6 +210,7 @@ function setup(options: Options = {}) {
     generator as unknown as CodeGenerator,
     { ttlMinutes: options.ttlMinutes ?? 15 },
     expiration as unknown as ReservationExpirationService,
+    labels as unknown as ReservationLabelsReader,
   );
   return {
     service,
@@ -283,12 +297,63 @@ describe('CreateReservationService', () => {
         'lock:t-4',
         'log',
         'commit',
-        'emit',
+        'labels',
+        'emit:reservation.created',
+        'emit:table.status-changed',
+        `emit:${RESTAURANT_AVAILABILITY_AFFECTED}`,
       ]);
       expect(t.events.emit).toHaveBeenCalledWith(
         RESTAURANT_AVAILABILITY_AFFECTED,
         { restaurantId: RESTAURANT_ID },
       );
+    });
+
+    it('publica reservation.created (sin código) y table.status_changed, exactamente una vez cada uno', async () => {
+      const t = setup();
+
+      await create(t.service);
+
+      expect(t.events.emit).toHaveBeenCalledTimes(3);
+      expect(t.events.emit).toHaveBeenCalledWith('reservation.created', {
+        restaurantId: RESTAURANT_ID,
+        reservation: {
+          id: 'res-1',
+          status: 'active',
+          partySize: 2,
+          dinerName: 'Ana',
+          tableId: 't-4',
+          tableIdentifier: '04',
+          createdAt: NOW.toISOString(),
+          expiresAt: new Date(NOW.getTime() + 15 * 60_000).toISOString(),
+          serverTime: NOW.toISOString(),
+        },
+      });
+      expect(t.events.emit).toHaveBeenCalledWith('table.status-changed', {
+        restaurantId: RESTAURANT_ID,
+        tableId: 't-4',
+        previousStatus: 'available',
+        status: 'reserved',
+        source: 'reservation',
+      });
+    });
+
+    it('si fallan las etiquetas después del commit, el comensal recibe su reserva y solo se pierde reservation.created', async () => {
+      const t = setup({ labelsFail: true });
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+
+      const response = await create(t.service);
+
+      expect(response.status).toBe('active');
+      expect(warn).toHaveBeenCalledWith(
+        'No se pudo publicar reservation.created de la reserva res-1: Error',
+      );
+      expect(t.log.filter((entry) => entry.startsWith('emit:'))).toEqual([
+        'emit:table.status-changed',
+        `emit:${RESTAURANT_AVAILABILITY_AFFECTED}`,
+      ]);
+      warn.mockRestore();
     });
 
     it.each([3, 15])('vence en %i minutos con el reloj fijo', async (ttl) => {
@@ -656,7 +721,7 @@ describe('CreateReservationService', () => {
   });
 
   describe('código repetido', () => {
-    it('reintenta la transacción completa con otro código y emite una sola vez', async () => {
+    it('reintenta la transacción completa con otro código y publica solo lo del intento que confirmó', async () => {
       const t = setup({
         codes: ['AAAAAA', 'BBBBBB'],
         transactionErrors: [uniqueViolation(UQ_ACTIVE_CODE)],
@@ -667,7 +732,10 @@ describe('CreateReservationService', () => {
       expect(t.dataSource.transaction).toHaveBeenCalledTimes(2);
       expect(t.generator.generate).toHaveBeenCalledTimes(2);
       expect(response.code).toBe('BBBBBB');
-      expect(t.events.emit).toHaveBeenCalledTimes(1);
+      // El primer intento también escribió la bitácora, pero se revirtió: un solo
+      // table.status_changed, reservation.created y disponibilidad.
+      expect(t.statusLog.record).toHaveBeenCalledTimes(2);
+      expect(t.events.emit).toHaveBeenCalledTimes(3);
       expect(t.log.filter((entry) => entry === 'rollback')).toHaveLength(1);
     });
 

@@ -1,3 +1,4 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { UpdateQueryBuilder, type DataSource } from 'typeorm';
 import { createMetadataOnlyDataSource } from '../../../../test/support/typeorm-metadata.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
@@ -201,15 +202,23 @@ function setup(options: Options = {}) {
       }));
     }),
   };
+  const events = {
+    emit: vi.fn((name: string) => {
+      log.push(`emit:${name}`);
+      return true;
+    }),
+  };
   const service = new CheckInService(
     dataSource as unknown as DataSource,
     expiration as unknown as ReservationExpirationService,
     statusLog as unknown as TableStatusLog,
     labels as unknown as ReservationLabelsReader,
     { now: () => NOW } as Clock,
+    events as unknown as EventEmitter2,
   );
   return {
     service,
+    events,
     stored,
     log,
     executed,
@@ -240,6 +249,8 @@ describe('CheckInService · check-in válido', () => {
       'log',
       'insert-check-in',
       'commit',
+      'emit:reservation.checked_in',
+      'emit:table.status-changed',
     ]);
     expect(response).toEqual({
       reservationId: RESERVATION_ID,
@@ -322,14 +333,58 @@ describe('CheckInService · check-in válido', () => {
     ]);
   });
 
-  it('no emite RESTAURANT_AVAILABILITY_AFFECTED: el servicio ni siquiera recibe el emisor (reserved → occupied no cambia las mesas libres)', () => {
-    // Si alguien agrega el evento tendrá que inyectar EventEmitter2: esto falla y
-    // obliga a revisar la excepción anotada en CLAUDE.md §11.
-    const dependencies = Reflect.getMetadata(
-      'design:paramtypes',
-      CheckInService,
-    ) as { name: string }[];
-    expect(dependencies.map((d) => d.name)).not.toContain('EventEmitter2');
+  it('publica reservation.checked_in y table.status_changed, y NO RESTAURANT_AVAILABILITY_AFFECTED (reserved → occupied no cambia las mesas libres; excepción de CLAUDE.md §11)', async () => {
+    const t = setup();
+
+    await t.service.checkIn(admin, CODE);
+
+    expect(t.events.emit.mock.calls).toEqual([
+      [
+        'reservation.checked_in',
+        {
+          restaurantId: RESTAURANT_ID,
+          dinerId: DINER_ID,
+          reservationId: RESERVATION_ID,
+          status: 'completed',
+          tableId: TABLE_ID,
+          at: NOW.toISOString(),
+        },
+      ],
+      [
+        'table.status-changed',
+        {
+          restaurantId: RESTAURANT_ID,
+          tableId: TABLE_ID,
+          previousStatus: 'reserved',
+          status: 'occupied',
+          source: 'reservation',
+        },
+      ],
+    ]);
+  });
+
+  it.each([
+    ['la bitácora', { logFails: true }],
+    ['el insert de check_ins', { checkInInsertFails: true }],
+  ])('si falla %s no publica ningún evento', async (_label, options) => {
+    const t = setup(options);
+
+    await errorOf(t.service.checkIn(admin, CODE));
+
+    expect(t.log).toContain('rollback');
+    expect(t.events.emit).not.toHaveBeenCalled();
+  });
+
+  it('si otra operación se adelantó (el UPDATE no devuelve fila) no publica nada', async () => {
+    const t = setup({
+      updateHits: false,
+      afterLostUpdate: (row) =>
+        Object.assign(row, { status: 'cancelled', code: CODE }),
+    });
+
+    await errorOf(t.service.checkIn(admin, CODE));
+
+    expect(t.events.emit).not.toHaveBeenCalled();
   });
 
   it('una mesa cambiada a mano no se pisa: la reserva se cumple y hay check_ins, sin bitácora', async () => {
@@ -339,6 +394,9 @@ describe('CheckInService · check-in válido', () => {
 
     expect(response.reservationId).toBe(RESERVATION_ID);
     expect(t.statusLog.record).not.toHaveBeenCalled();
+    expect(t.events.emit.mock.calls.map(([name]) => name)).toEqual([
+      'reservation.checked_in',
+    ]);
     expect(t.checkInsRepo.insert).toHaveBeenCalledTimes(1);
   });
 

@@ -73,7 +73,14 @@ function buildServices(clock: Clock = CLOCK, source: DataSource = dataSource) {
     new UsersService(dataSource.getRepository(User)),
   );
   return {
-    checkIns: new CheckInService(source, expiration, statusLog, labels, clock),
+    checkIns: new CheckInService(
+      source,
+      expiration,
+      statusLog,
+      labels,
+      clock,
+      events,
+    ),
     list: new RestaurantReservationsService(
       dataSource,
       expiration,

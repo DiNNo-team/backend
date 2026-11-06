@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { User } from '../../../src/modules/identity-access/users/user.entity.js';
+import { UsersService } from '../../../src/modules/identity-access/users/users.service.js';
 import { CheckIn } from '../../../src/modules/reservations-checkin/check-ins/check-in.entity.js';
+import { ReservationLabelsReader } from '../../../src/modules/reservations-checkin/check-ins/reservation-labels.reader.js';
 import { Reservation } from '../../../src/modules/reservations-checkin/reservations/reservation.entity.js';
 import { Restaurant } from '../../../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from '../../../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
@@ -68,6 +70,16 @@ export async function openTestDataSource(): Promise<DataSource> {
   });
   await dataSource.initialize();
   return dataSource;
+}
+
+// Las etiquetas reales de una reserva (mesa y nombre público del comensal).
+export function reservationLabels(
+  dataSource: DataSource,
+): ReservationLabelsReader {
+  return new ReservationLabelsReader(
+    dataSource,
+    new UsersService(dataSource.getRepository(User)),
+  );
 }
 
 export interface TableSeed {

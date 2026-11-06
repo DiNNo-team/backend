@@ -17,7 +17,7 @@ import { RolesGuard } from './roles/roles.guard.js';
 import { DinersController } from './diners/diners.controller.js';
 import { DinersService } from './diners/diners.service.js';
 import { MeController } from './users/me.controller.js';
-import { DinerSocketAuthenticator } from './realtime/diner-socket-authenticator.js';
+import { SocketAuthenticator } from './realtime/socket-authenticator.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
@@ -39,14 +39,14 @@ import { DinerSocketAuthenticator } from './realtime/diner-socket-authenticator.
     RolesGuard,
     UsersService,
     DinersService,
-    DinerSocketAuthenticator,
+    SocketAuthenticator,
   ],
   exports: [
     CurrentUserResolver,
     CurrentUserGuard,
     RolesGuard,
     UsersService,
-    DinerSocketAuthenticator,
+    SocketAuthenticator,
   ],
 })
 export class IdentityAccessModule implements OnModuleInit {

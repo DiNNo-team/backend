@@ -8,6 +8,7 @@ import { ReservationExpirationService } from '../../src/modules/reservations-che
 import { ReservationExpiryScheduler } from '../../src/modules/reservations-checkin/reservations/reservation-expiry.scheduler.js';
 import { ReservationQueryService } from '../../src/modules/reservations-checkin/reservations/reservation-query.service.js';
 import { ReservationViewReader } from '../../src/modules/reservations-checkin/reservations/reservation-view.reader.js';
+import { RESTAURANT_AVAILABILITY_AFFECTED } from '../../src/modules/restaurant-operations/index.js';
 import { DbTableStatusLog } from '../../src/modules/restaurant-operations/table-logs/table-logs.recorder.js';
 import {
   AvailabilityService,
@@ -16,6 +17,7 @@ import {
 import {
   closeTestDataSource,
   openTestDataSource,
+  reservationLabels,
   withScenario as withSharedScenario,
   type Scenario,
   type TableSeed,
@@ -83,6 +85,7 @@ function buildServices(clock: Clock = CLOCK) {
       new RandomCodeGenerator(),
       { ttlMinutes: 15 },
       expiration,
+      reservationLabels(dataSource),
     ),
   };
 }
@@ -285,9 +288,12 @@ describe('barrido de reservas vencidas: Postgres real', () => {
               expect(await readLogs(second, '02')).toEqual([]);
 
               // Un evento por restaurante, no por mesa.
-              const notified = emit.mock.calls.map(
-                ([, event]) => (event as { restaurantId: string }).restaurantId,
-              );
+              const notified = emit.mock.calls
+                .filter(([name]) => name === RESTAURANT_AVAILABILITY_AFFECTED)
+                .map(
+                  ([, event]) =>
+                    (event as { restaurantId: string }).restaurantId,
+                );
               expect(notified.sort()).toEqual(
                 [first.restaurantId, second.restaurantId].sort(),
               );
@@ -520,7 +526,11 @@ describe('barrido de reservas vencidas: Postgres real', () => {
           expect(row.no_show).toBe(true);
           expect(await readTableStatus(s, '01')).toBe('occupied');
           expect(await readLogs(s, '01')).toEqual([]);
-          expect(emit).not.toHaveBeenCalled();
+          // La reserva venció y se avisa; la mesa no cambió, así que ni
+          // table.status_changed ni disponibilidad.
+          expect(emit.mock.calls.map(([name]) => name)).toEqual([
+            'reservation.expired',
+          ]);
         },
       ));
   });

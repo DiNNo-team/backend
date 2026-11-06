@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type EntityManager } from 'typeorm';
 import { isUniqueViolation } from '../../../common/database/unique-violation.js';
+import { AfterCommitEvents } from '../../../common/events/after-commit-events.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
 import {
   availabilityAffected,
@@ -28,7 +29,7 @@ import {
   tableNotAvailableToDeactivate,
 } from './table-reservation-errors.js';
 import { findPlanProblem, type PlanProblem } from './table-plan.js';
-import { TableStatusLog } from './table-status-log.js';
+import { recordTableChange, TableStatusLog } from './table-status-log.js';
 
 const UNIQUE_IDENTIFIER_INDEX = 'UQ_tables_restaurant_id_identifier';
 
@@ -108,6 +109,7 @@ export class TablesService {
     // Vence una reserva debida ANTES de la transacción (ver TableReservations).
     await this.reservations.expireDueForTable(tableId);
 
+    const afterCommit = new AfterCommitEvents();
     const { table, changed } = await this.tables.manager.transaction(
       async (manager) => {
         // Row lock: concurrent changes to the same table queue up, so each log
@@ -136,7 +138,9 @@ export class TablesService {
         const previousStatus = table.status;
         table.status = status;
         const saved = await manager.save(table);
-        await this.statusLog.record(
+        await recordTableChange(
+          this.statusLog,
+          ownerId,
           {
             tableId: saved.id,
             previousStatus,
@@ -146,10 +150,12 @@ export class TablesService {
             changedAt: new Date(),
           },
           manager,
+          afterCommit,
         );
         return { table: saved, changed: true };
       },
     );
+    afterCommit.publish(this.events);
     if (changed) {
       this.emitAvailabilityAffected(ownerId);
     }
@@ -305,6 +311,7 @@ export class TablesService {
       await this.reservations.expireDueForTable(tableId);
     }
 
+    const afterCommit = new AfterCommitEvents();
     const updated = await this.tables.manager.transaction(async (manager) => {
       // Same row lock as updateStatus: the log always gets the real previous state.
       const table = await manager.findOne(Table, {
@@ -336,7 +343,9 @@ export class TablesService {
         table.status = 'available';
       }
       const saved = await manager.save(table);
-      await this.statusLog.record(
+      await recordTableChange(
+        this.statusLog,
+        ownerId,
         {
           tableId: saved.id,
           previousStatus,
@@ -346,9 +355,11 @@ export class TablesService {
           changedAt: new Date(),
         },
         manager,
+        afterCommit,
       );
       return saved;
     });
+    afterCommit.publish(this.events);
     this.emitAvailabilityAffected(ownerId);
     return updated;
   }

@@ -8,7 +8,8 @@ import {
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 import {
-  DinerSocketAuthenticator,
+  type CurrentUserData,
+  SocketAuthenticator,
   SocketRejection,
 } from '../../identity-access/index.js';
 import {
@@ -16,6 +17,7 @@ import {
   type AvailabilityChangedPayload,
   DINERS_ROOM,
 } from './availability-changed.js';
+import { roomsFor } from './realtime-rooms.js';
 
 // Code for a handshake that failed for a reason other than the session (the
 // database is down). Part of the contract (CLAUDE.md, section 10, "Tiempo
@@ -25,8 +27,8 @@ import {
 export const SOCKET_SERVER_ERROR = 'SERVER_ERROR';
 
 // Socket.IO on the same host and port as the API (path /socket.io; CORS from
-// CORS_ORIGINS, set by the adapter in app.setup.ts). It only authenticates and
-// sends: the listener does the recalculation.
+// CORS_ORIGINS, set by the adapter in app.setup.ts). It only authenticates,
+// assigns the rooms and sends: the listeners decide what goes where.
 @WebSocketGateway()
 export class AvailabilityGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -36,30 +38,39 @@ export class AvailabilityGateway
   @WebSocketServer()
   private readonly server: Server;
 
-  constructor(private readonly authenticator: DinerSocketAuthenticator) {}
+  constructor(private readonly authenticator: SocketAuthenticator) {}
 
   // Handshake middleware: a rejected client gets connect_error with the code
   // in error.message and is never connected.
   afterInit(server: Server): void {
     server.use((socket, next) => {
       this.authenticator.authenticate(socket.handshake.auth).then(
-        () => next(),
+        (user) => {
+          (socket.data as { user?: CurrentUserData }).user = user;
+          next();
+        },
         (error: unknown) => next(this.rejection(error)),
       );
     });
   }
 
+  // Las salas salen del usuario del handshake: el cliente no elige ninguna.
   async handleConnection(socket: Socket): Promise<void> {
-    await socket.join(DINERS_ROOM);
-    this.logger.log(`Diner connected (${this.connectedCount()} connected)`);
+    const { user } = socket.data as { user: CurrentUserData };
+    await socket.join(roomsFor(user));
+    this.logger.log(`Client connected (${this.connectedCount()} connected)`);
   }
 
   handleDisconnect(): void {
-    this.logger.log(`Diner disconnected (${this.connectedCount()} connected)`);
+    this.logger.log(`Client disconnected (${this.connectedCount()} connected)`);
   }
 
   broadcast(payload: AvailabilityChangedPayload): void {
     this.server.to(DINERS_ROOM).emit(AVAILABILITY_CHANGED_EVENT, payload);
+  }
+
+  emitToRooms(rooms: string[], event: string, payload: object): void {
+    this.server.to(rooms).emit(event, payload);
   }
 
   private connectedCount(): number {

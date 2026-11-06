@@ -338,7 +338,6 @@ describe('Real time: availability.changed (e2e)', () => {
   });
 
   it.each([
-    ['a restaurant account', { token: 'owner' }, 'RESTAURANT_ACCOUNT'],
     ['an account without profile', { token: 'noProfile' }, 'PROFILE_REQUIRED'],
     ['no token', {}, 'UNAUTHORIZED'],
     ['an invalid token', { token: 'not-a-token' }, 'UNAUTHORIZED'],

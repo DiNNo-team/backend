@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource, type EntityManager } from 'typeorm';
+import { AfterCommitEvents } from '../../../common/events/after-commit-events.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
 import {
   RESTAURANT_AVAILABILITY_AFFECTED,
   TableStatusLog,
   type RestaurantAvailabilityAffectedEvent,
 } from '../../restaurant-operations/index.js';
-import { Clock } from '../../search-availability/index.js';
+import {
+  Clock,
+  RESERVATION_CANCELLED,
+  type ReservationEndedEvent,
+} from '../../search-availability/index.js';
 import type { ReservationResponseDto } from './dto/reservation-response.dto.js';
 import { releaseReservedTable } from './release-reserved-table.js';
 import { ReservationExpirationService } from './reservation-expiration.service.js';
@@ -26,8 +31,7 @@ interface CancelledRow {
 }
 
 // Cancelar la microreserva (§12.1, §12.3). Solo el dueño y solo si está activa.
-// No conoce el WebSocket: solo emite el evento interno de disponibilidad,
-// después del commit.
+// No conoce el WebSocket: solo emite eventos internos, después del commit.
 @Injectable()
 export class ReservationCancellationService {
   constructor(
@@ -75,24 +79,41 @@ export class ReservationCancellationService {
 
   // Reserva y mesa cambian juntas, o ninguna. null si el UPDATE no encontró una
   // reserva suya, activa y todavía vigente (otra operación se adelantó).
-  private cancelInTransaction(
+  private async cancelInTransaction(
     dinerId: string,
     id: string,
   ): Promise<{ restaurantId: string; tableChanged: boolean } | null> {
     const now = this.clock.now();
-    return this.dataSource.transaction(async (manager) => {
+    const afterCommit = new AfterCommitEvents();
+    const outcome = await this.dataSource.transaction(async (manager) => {
       const [row] = await this.markCancelled(manager, dinerId, id, now);
       if (!row) {
         return null;
       }
-      const tableChanged = await releaseReservedTable(manager, this.statusLog, {
+      afterCommit.add(RESERVATION_CANCELLED, {
+        restaurantId: row.restaurant_id,
+        dinerId,
+        reservationId: row.id,
+        status: 'cancelled',
         tableId: row.table_id,
-        userId: dinerId,
-        source: 'reservation',
-        changedAt: now,
-      });
+        at: now.toISOString(),
+      } satisfies ReservationEndedEvent);
+      const tableChanged = await releaseReservedTable(
+        manager,
+        this.statusLog,
+        afterCommit,
+        {
+          restaurantId: row.restaurant_id,
+          tableId: row.table_id,
+          userId: dinerId,
+          source: 'reservation',
+          changedAt: now,
+        },
+      );
       return { restaurantId: row.restaurant_id, tableChanged };
     });
+    afterCommit.publish(this.events);
+    return outcome;
   }
 
   // La condición va en el UPDATE: dos cancelaciones, o una cancelación y un

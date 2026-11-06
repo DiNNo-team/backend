@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DataSource, type EntityManager } from 'typeorm';
 import { isUniqueViolation } from '../../../common/database/unique-violation.js';
+import { AfterCommitEvents } from '../../../common/events/after-commit-events.js';
 import type { CurrentUserData } from '../../identity-access/index.js';
 import {
+  recordTableChange,
   RESTAURANT_AVAILABILITY_AFFECTED,
   TableStatusLog,
   type RestaurantAvailabilityAffectedEvent,
@@ -12,9 +14,13 @@ import {
   AvailabilityService,
   canSeatParty,
   Clock,
+  RESERVATION_CREATED,
   restaurantNotFound,
+  type ReservationCreatedEvent,
   type TableSnapshot,
 } from '../../search-availability/index.js';
+import { ReservationLabelsReader } from '../check-ins/reservation-labels.reader.js';
+import { toRestaurantReservation } from '../check-ins/restaurant-reservation.mapper.js';
 import type { CreateReservationDto } from './dto/create-reservation.dto.js';
 import type { ReservationResponseDto } from './dto/reservation-response.dto.js';
 import { CodeGenerator } from './reservation-code.js';
@@ -68,10 +74,12 @@ interface VisibleRestaurant {
 
 // Crear la microreserva (§12.1, §12.3 y §12.4): elegir y bloquear la mesa,
 // guardar la reserva, pasar la mesa a Reservada y escribir la bitácora, todo en
-// una transacción. No conoce el WebSocket: solo emite el evento interno de
-// disponibilidad, después del commit.
+// una transacción. No conoce el WebSocket: solo emite eventos internos, después
+// del commit.
 @Injectable()
 export class CreateReservationService {
+  private readonly logger = new Logger(CreateReservationService.name);
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly availability: AvailabilityService,
@@ -81,6 +89,7 @@ export class CreateReservationService {
     private readonly codes: CodeGenerator,
     private readonly config: ReservationConfig,
     private readonly expiration: ReservationExpirationService,
+    private readonly labels: ReservationLabelsReader,
   ) {}
 
   async create(
@@ -100,13 +109,15 @@ export class CreateReservationService {
     // otros comensales, este comensal debe recibir mesa, no NO_TABLE_AVAILABLE.
     await this.expiration.expireDueForRestaurant(restaurant.id);
 
-    const { reservation, table } = await this.saveWithCodeRetry(
+    const { reservation, table, afterCommit } = await this.saveWithCodeRetry(
       user.userId,
       restaurant.id,
       dto.partySize,
     );
 
     // Solo después del commit: quien escucha lee la base (CLAUDE.md §11).
+    await this.publishCreated(reservation);
+    afterCommit.publish(this.events);
     const event: RestaurantAvailabilityAffectedEvent = {
       restaurantId: restaurant.id,
     };
@@ -118,6 +129,29 @@ export class CreateReservationService {
       table,
       this.clock.now(),
     );
+  }
+
+  // reservation.created para el restaurante: con el mismo mapper y las mismas
+  // etiquetas de su lista, así que nunca lleva el código. La reserva ya se
+  // confirmó: si esta lectura falla se pierde solo el aviso (la web consulta cada
+  // 30 s, §12.7) y el comensal recibe su 201 igual.
+  private async publishCreated(reservation: Reservation): Promise<void> {
+    try {
+      const labelOf = await this.labels.read([reservation]);
+      const event: ReservationCreatedEvent = {
+        restaurantId: reservation.restaurantId,
+        reservation: toRestaurantReservation(
+          reservation,
+          labelOf(reservation),
+          this.clock.now(),
+        ),
+      };
+      this.events.emit(RESERVATION_CREATED, event);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo publicar reservation.created de la reserva ${reservation.id}: ${error instanceof Error ? error.name : 'error desconocido'}`,
+      );
+    }
   }
 
   // Visible = existe y tiene coordenadas: el mismo criterio del detalle público
@@ -164,16 +198,29 @@ export class CreateReservationService {
 
   // Una transacción por intento. En Postgres un error la aborta, así que si el
   // código ya estaba en uso se repite la transacción completa con otro código.
+  // Un colector por intento: lo de un intento revertido se pierde con él.
   private async saveWithCodeRetry(
     dinerId: string,
     restaurantId: string,
     partySize: number,
-  ): Promise<{ reservation: Reservation; table: TableRow }> {
+  ): Promise<{
+    reservation: Reservation;
+    table: TableRow;
+    afterCommit: AfterCommitEvents;
+  }> {
     for (let attempt = 1; attempt <= CODE_ATTEMPTS; attempt++) {
+      const afterCommit = new AfterCommitEvents();
       try {
-        return await this.dataSource.transaction((manager) =>
-          this.saveInTransaction(manager, dinerId, restaurantId, partySize),
+        const saved = await this.dataSource.transaction((manager) =>
+          this.saveInTransaction(
+            manager,
+            afterCommit,
+            dinerId,
+            restaurantId,
+            partySize,
+          ),
         );
+        return { ...saved, afterCommit };
       } catch (error) {
         if (isUniqueViolation(error, UQ_ACTIVE_CODE)) {
           continue;
@@ -189,6 +236,7 @@ export class CreateReservationService {
 
   private async saveInTransaction(
     manager: EntityManager,
+    afterCommit: AfterCommitEvents,
     dinerId: string,
     restaurantId: string,
     partySize: number,
@@ -220,7 +268,9 @@ export class CreateReservationService {
     await manager
       .getRepository<TableRow>('Table')
       .update({ id: table.id }, { status: 'reserved' });
-    await this.statusLog.record(
+    await recordTableChange(
+      this.statusLog,
+      restaurantId,
       {
         tableId: table.id,
         previousStatus: 'available',
@@ -230,6 +280,7 @@ export class CreateReservationService {
         changedAt: now,
       },
       manager,
+      afterCommit,
     );
     return { reservation, table };
   }

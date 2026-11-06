@@ -16,6 +16,15 @@ export {
 } from './public-restaurant/restaurant-not-found.js';
 // Rule of "free table" shared with the reservation's table assignment.
 export { canSeatParty, isFree } from './availability/table-availability.js';
+// Internal events of the reservations that the WebSocket translates (§12.8).
+export {
+  RESERVATION_CANCELLED,
+  RESERVATION_CHECKED_IN,
+  RESERVATION_CREATED,
+  RESERVATION_EXPIRED,
+  type ReservationCreatedEvent,
+  type ReservationEndedEvent,
+} from './realtime/reservation-events.js';
 export type {
   Availability,
   AvailabilityLevel,

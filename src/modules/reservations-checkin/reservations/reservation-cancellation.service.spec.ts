@@ -169,8 +169,8 @@ function setup(options: Options = {}) {
     }),
   };
   const events = {
-    emit: vi.fn(() => {
-      log.push('emit');
+    emit: vi.fn((name: string) => {
+      log.push(`emit:${name}`);
       return true;
     }),
   };
@@ -224,7 +224,9 @@ describe('ReservationCancellationService · éxito', () => {
       'update-table',
       'log',
       'commit',
-      'emit',
+      'emit:reservation.cancelled',
+      'emit:table.status-changed',
+      `emit:${RESTAURANT_AVAILABILITY_AFFECTED}`,
       'read',
     ]);
     expect(response).toMatchObject({
@@ -238,6 +240,28 @@ describe('ReservationCancellationService · éxito', () => {
       RESTAURANT_AVAILABILITY_AFFECTED,
       { restaurantId: RESTAURANT_ID },
     );
+  });
+
+  it('publica reservation.cancelled y table.status_changed con el contrato', async () => {
+    const t = setup({ updateHits: true });
+
+    await t.service.cancel(user, RESERVATION_ID);
+
+    expect(t.events.emit).toHaveBeenCalledWith('reservation.cancelled', {
+      restaurantId: RESTAURANT_ID,
+      dinerId: DINER_ID,
+      reservationId: RESERVATION_ID,
+      status: 'cancelled',
+      tableId: TABLE_ID,
+      at: NOW.toISOString(),
+    });
+    expect(t.events.emit).toHaveBeenCalledWith('table.status-changed', {
+      restaurantId: RESTAURANT_ID,
+      tableId: TABLE_ID,
+      previousStatus: 'reserved',
+      status: 'available',
+      source: 'reservation',
+    });
   });
 
   it('la mesa vuelve a available solo si sigue en reserved (la condición va en el UPDATE)', async () => {
@@ -309,7 +333,7 @@ describe('ReservationCancellationService · éxito', () => {
 });
 
 describe('ReservationCancellationService · mesa cambiada a mano', () => {
-  it('la reserva queda cancelled pero la mesa NO se pisa: sin bitácora ni evento', async () => {
+  it('la reserva queda cancelled pero la mesa NO se pisa: sin bitácora; solo sale reservation.cancelled', async () => {
     const t = setup({ updateHits: true, tableStillReserved: false });
 
     const response = await t.service.cancel(user, RESERVATION_ID);
@@ -317,7 +341,9 @@ describe('ReservationCancellationService · mesa cambiada a mano', () => {
     expect(response).toMatchObject({ status: 'cancelled' });
     expect(t.tablesRepo.update).toHaveBeenCalledTimes(1);
     expect(t.statusLog.record).not.toHaveBeenCalled();
-    expect(t.events.emit).not.toHaveBeenCalled();
+    expect(t.events.emit.mock.calls.map(([name]) => name)).toEqual([
+      'reservation.cancelled',
+    ]);
     expect(t.log).toContain('commit');
   });
 

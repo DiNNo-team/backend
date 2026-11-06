@@ -382,13 +382,16 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
       });
     });
 
-    it('no emite ningún evento interno: reserved → occupied no cambia las mesas libres', async () => {
+    it('no emite RESTAURANT_AVAILABILITY_AFFECTED: reserved → occupied no cambia las mesas libres', async () => {
       const emitted: unknown[] = [];
       app.get(EventEmitter2).onAny((event) => emitted.push(event));
 
       await checkIn({ code: 'K7M4QX' }).expect(200);
 
-      expect(emitted).toEqual([]);
+      expect(emitted).toEqual([
+        'reservation.checked_in',
+        'table.status-changed',
+      ]);
     });
 
     it('repetir el check-in responde 409 RESERVATION_ALREADY_USED', async () => {

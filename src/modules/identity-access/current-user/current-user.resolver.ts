@@ -2,7 +2,7 @@ import type { RequestIdentity } from './current-user-data.js';
 
 // The only part of a request the resolvers read: the headers (Authorization
 // and, locally, x-dev-user-id). An Express request fits as is; the WebSocket
-// handshake builds one from its auth payload (DinerSocketAuthenticator).
+// handshake builds one from its auth payload (SocketAuthenticator).
 export interface IdentityRequest {
   headers: Record<string, string | string[] | undefined>;
 }

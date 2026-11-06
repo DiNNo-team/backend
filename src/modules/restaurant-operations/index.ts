@@ -8,6 +8,7 @@ export {
 // transaction (the micro-reservations) writes the log entry through it.
 export {
   TableStatusLog,
+  recordTableChange,
   type TableLogSource,
   type TableLogStatus,
 } from './tables/table-status-log.js';
@@ -31,3 +32,8 @@ export {
   RESTAURANT_AVAILABILITY_AFFECTED,
   type RestaurantAvailabilityAffectedEvent,
 } from './shared/availability-affected.event.js';
+// Internal event emitted after each new row of the table log is committed.
+export {
+  TABLE_STATUS_CHANGED,
+  type TableStatusChangedEvent,
+} from './shared/table-status-changed.event.js';

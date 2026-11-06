@@ -20,7 +20,7 @@ const OTHER_RESTAURANT_ID = '9f4a6b5d-1e0a-4f8b-823d-4e5f60718293';
 const NOW = new Date('2026-11-05T17:00:00Z');
 
 // Columnas que el servicio lee de cada fila del RETURNING (ExpiredRow).
-const COLUMNS_READ = ['id', 'table_id', 'restaurant_id'];
+const COLUMNS_READ = ['id', 'table_id', 'restaurant_id', 'diner_id'];
 
 // Fila completa de la tabla reservations, con los nombres de columna de la
 // base. Lleva columnas de más a propósito: el RETURNING solo devuelve las que
@@ -141,8 +141,8 @@ function setup(options: Options = {}) {
     }),
   };
   const events = {
-    emit: vi.fn(() => {
-      log.push('emit');
+    emit: vi.fn((name: string) => {
+      log.push(`emit:${name}`);
       return true;
     }),
   };
@@ -184,12 +184,36 @@ describe('ReservationExpirationService', () => {
         'update-table:t-4',
         'log',
         'commit',
-        'emit',
+        'emit:reservation.expired',
+        'emit:table.status-changed',
+        `emit:${RESTAURANT_AVAILABILITY_AFFECTED}`,
       ]);
       expect(t.events.emit).toHaveBeenCalledWith(
         RESTAURANT_AVAILABILITY_AFFECTED,
         { restaurantId: RESTAURANT_ID },
       );
+    });
+
+    it('publica reservation.expired y table.status_changed con el contrato, source system', async () => {
+      const t = setup({ expiredRows: [record('t-4')] });
+
+      await t.service.expireIfDue(RESERVATION_ID);
+
+      expect(t.events.emit).toHaveBeenCalledWith('reservation.expired', {
+        restaurantId: RESTAURANT_ID,
+        dinerId: DINER_ID,
+        reservationId: RESERVATION_ID,
+        status: 'expired',
+        tableId: 't-4',
+        at: NOW.toISOString(),
+      });
+      expect(t.events.emit).toHaveBeenCalledWith('table.status-changed', {
+        restaurantId: RESTAURANT_ID,
+        tableId: 't-4',
+        previousStatus: 'reserved',
+        status: 'available',
+        source: 'system',
+      });
     });
 
     it('marca la reserva como expired con la hora del Clock y no_show (SQL real de TypeORM)', async () => {
@@ -252,7 +276,9 @@ describe('ReservationExpirationService', () => {
       await t.service.expireIfDue(RESERVATION_ID);
 
       const [{ sql }] = t.executed;
-      expect(sql).toMatch(/RETURNING "id", "table_id", "restaurant_id"$/);
+      expect(sql).toMatch(
+        /RETURNING "id", "table_id", "restaurant_id", "diner_id"$/,
+      );
       const returned = /RETURNING (.+)$/
         .exec(sql)![1]
         .split(',')
@@ -307,7 +333,7 @@ describe('ReservationExpirationService', () => {
       expect(t.events.emit).not.toHaveBeenCalled();
     });
 
-    it('mesa que ya no está reserved: la reserva queda vencida pero la mesa no se pisa, sin bitácora ni evento', async () => {
+    it('mesa que ya no está reserved: la reserva queda vencida pero la mesa no se pisa; solo sale reservation.expired', async () => {
       const t = setup({
         expiredRows: [record('t-4')],
         stillReserved: () => false,
@@ -318,11 +344,11 @@ describe('ReservationExpirationService', () => {
       expect(expired).toBe(1);
       expect(t.tablesRepo.update).toHaveBeenCalledTimes(1);
       expect(t.statusLog.record).not.toHaveBeenCalled();
-      expect(t.events.emit).not.toHaveBeenCalled();
       expect(t.log).toEqual([
         'update-reservations',
         'update-table:t-4',
         'commit',
+        'emit:reservation.expired',
       ]);
     });
 
@@ -411,7 +437,9 @@ describe('ReservationExpirationService', () => {
       expect(sql).toMatch(
         /AND "id" IN \(SELECT "id" FROM "reservations" WHERE "status" = 'active' AND "expires_at" <= \$\d+ ORDER BY "expires_at" LIMIT \$\d+ FOR UPDATE SKIP LOCKED\)/,
       );
-      expect(sql).toMatch(/RETURNING "id", "table_id", "restaurant_id"$/);
+      expect(sql).toMatch(
+        /RETURNING "id", "table_id", "restaurant_id", "diner_id"$/,
+      );
       expect(params).toContain(EXPIRY_BATCH_SIZE);
       expect(params.filter((param) => param === NOW).length).toBeGreaterThan(1);
     });
@@ -465,7 +493,7 @@ describe('ReservationExpirationService', () => {
       expect(new Set(tables).size).toBe(105);
     });
 
-    it('un evento por restaurante, y cada uno solo después del commit de su lote', async () => {
+    it('disponibilidad: un evento por restaurante, y cada uno solo después del commit de su lote', async () => {
       const t = setup({
         batches: [
           [...dueRecords(99), record('t-99', OTHER_RESTAURANT_ID, 'r-99')],
@@ -475,16 +503,50 @@ describe('ReservationExpirationService', () => {
 
       await t.service.expireAllDue();
 
+      const availability = `emit:${RESTAURANT_AVAILABILITY_AFFECTED}`;
       const milestones = t.log.filter(
-        (entry) => entry === 'commit' || entry === 'emit',
+        (entry) => entry === 'commit' || entry === availability,
       );
-      expect(milestones).toEqual(['commit', 'emit', 'emit', 'commit', 'emit']);
+      expect(milestones).toEqual([
+        'commit',
+        availability,
+        availability,
+        'commit',
+        availability,
+      ]);
       const emitted = t.events.emit.mock.calls as unknown as unknown[][];
-      expect(emitted.map((call) => call[1])).toEqual([
+      expect(
+        emitted
+          .filter((call) => call[0] === RESTAURANT_AVAILABILITY_AFFECTED)
+          .map((call) => call[1]),
+      ).toEqual([
         { restaurantId: RESTAURANT_ID },
         { restaurantId: OTHER_RESTAURANT_ID },
         { restaurantId: OTHER_RESTAURANT_ID },
       ]);
+    });
+
+    it('reservation.expired y table.status_changed: uno por reserva y por mesa, publicados tras el commit de SU lote', async () => {
+      const t = setup({
+        batches: [
+          dueRecords(99).concat(record('t-99', OTHER_RESTAURANT_ID, 'r-99')),
+          [record('t-100', OTHER_RESTAURANT_ID, 'r-100')],
+        ],
+      });
+
+      await t.service.expireAllDue();
+
+      const firstCommit = t.log.indexOf('commit');
+      const secondCommit = t.log.lastIndexOf('commit');
+      const count = (entries: string[], name: string) =>
+        entries.filter((entry) => entry === name).length;
+      const first = t.log.slice(firstCommit, secondCommit);
+      const second = t.log.slice(secondCommit);
+      expect(t.log.slice(0, firstCommit).join()).not.toContain('emit:');
+      expect(count(first, 'emit:reservation.expired')).toBe(100);
+      expect(count(first, 'emit:table.status-changed')).toBe(100);
+      expect(count(second, 'emit:reservation.expired')).toBe(1);
+      expect(count(second, 'emit:table.status-changed')).toBe(1);
     });
 
     it('una mesa que ya no está reserved no se pisa: sin bitácora y su restaurante no se notifica, pero la reserva cuenta', async () => {
@@ -501,11 +563,20 @@ describe('ReservationExpirationService', () => {
       await expect(t.service.expireAllDue()).resolves.toBe(2);
 
       expect(t.statusLog.record).toHaveBeenCalledTimes(1);
-      expect(t.events.emit).toHaveBeenCalledTimes(1);
-      expect(t.events.emit).toHaveBeenCalledWith(
-        RESTAURANT_AVAILABILITY_AFFECTED,
-        { restaurantId: RESTAURANT_ID },
-      );
+      expect(
+        t.events.emit.mock.calls.filter(
+          ([name]) => name === RESTAURANT_AVAILABILITY_AFFECTED,
+        ),
+      ).toEqual([
+        [RESTAURANT_AVAILABILITY_AFFECTED, { restaurantId: RESTAURANT_ID }],
+      ]);
+      // Las dos vencieron; solo una mesa cambió.
+      expect(
+        t.log.filter((e) => e === 'emit:reservation.expired'),
+      ).toHaveLength(2);
+      expect(
+        t.log.filter((e) => e === 'emit:table.status-changed'),
+      ).toHaveLength(1);
     });
 
     it('la bitácora es automática: source system y sin usuario', async () => {
