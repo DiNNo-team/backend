@@ -28,7 +28,7 @@ type QueryRow = Omit<TableLogRow, 'userEmail'> & { userId: string | null };
 
 // Chainable stand-in for SelectQueryBuilder that records every call, so the
 // tests pin the query (join, restaurant filter, order and limit). The emails
-// come from UsersService.findEmailsByIds, never from a join to users.
+// come from UsersService.findRestaurantAdminEmailsByIds, never from a join to users.
 function createService(
   rows: QueryRow[] = [],
   emails = new Map<string, string>(),
@@ -44,7 +44,9 @@ function createService(
     });
   }
   const logs = { createQueryBuilder: vi.fn(() => builder) };
-  const users = { findEmailsByIds: vi.fn(() => Promise.resolve(emails)) };
+  const users = {
+    findRestaurantAdminEmailsByIds: vi.fn(() => Promise.resolve(emails)),
+  };
   const service = new TableLogsService(
     logs as unknown as Repository<TableLog>,
     users as unknown as UsersService,
@@ -163,8 +165,99 @@ describe('TableLogsService', () => {
       { ...base, id: 'log-2', userEmail: 'mesero@casa72.co' },
       { ...base, id: 'log-1', userEmail: 'admin@casa72.co' },
     ]);
-    expect(users.findEmailsByIds).toHaveBeenCalledTimes(1);
-    expect(users.findEmailsByIds).toHaveBeenCalledWith([OWNER, WAITER, OWNER]);
+    expect(users.findRestaurantAdminEmailsByIds).toHaveBeenCalledTimes(1);
+    expect(users.findRestaurantAdminEmailsByIds).toHaveBeenCalledWith([
+      OWNER,
+      WAITER,
+      OWNER,
+    ]);
+  });
+
+  describe('qué autor conserva su correo (§12.3)', () => {
+    const ADMIN = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+    const DINER = '7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a';
+    const row = (
+      id: string,
+      userId: string | null,
+      source: QueryRow['source'],
+    ): QueryRow => ({
+      id,
+      tableId: TABLE_ID,
+      tableIdentifier: '04',
+      previousStatus: 'available',
+      newStatus: 'reserved',
+      changedAt: new Date('2026-10-08T19:30:00Z'),
+      userId,
+      source,
+    });
+    // Como responde identity-access: solo los correos de restaurant_admin.
+    const adminEmails = new Map([[ADMIN, 'admin@casa72.co']]);
+
+    it('una fila de reserva de un comensal trae userEmail null y ningún fragmento del correo', async () => {
+      const { service } = createService(
+        [row('log-1', DINER, 'reservation')],
+        adminEmails,
+      );
+
+      const [log] = await service.findForRestaurant(RESTAURANT_ID);
+
+      expect(log).toMatchObject({ source: 'reservation', userEmail: null });
+      expect(JSON.stringify(log)).not.toContain('@');
+    });
+
+    it('una fila manual conserva el correo del admin', async () => {
+      const { service } = createService(
+        [row('log-1', ADMIN, 'manual')],
+        adminEmails,
+      );
+
+      const [log] = await service.findForRestaurant(RESTAURANT_ID);
+
+      expect(log).toMatchObject({
+        source: 'manual',
+        userEmail: 'admin@casa72.co',
+      });
+    });
+
+    it('una fila de reserva del admin (el check-in) conserva su correo', async () => {
+      const { service } = createService(
+        [row('log-1', ADMIN, 'reservation')],
+        adminEmails,
+      );
+
+      const [log] = await service.findForRestaurant(RESTAURANT_ID);
+
+      expect(log).toMatchObject({
+        source: 'reservation',
+        userEmail: 'admin@casa72.co',
+      });
+    });
+
+    it('una fila system trae userEmail null', async () => {
+      const { service } = createService(
+        [row('log-1', null, 'system')],
+        adminEmails,
+      );
+
+      const [log] = await service.findForRestaurant(RESTAURANT_ID);
+
+      expect(log).toMatchObject({ source: 'system', userEmail: null });
+    });
+
+    it('filas de los tres tipos se resuelven con una sola consulta de correos', async () => {
+      const { service, users } = createService(
+        [
+          row('log-3', DINER, 'reservation'),
+          row('log-2', ADMIN, 'manual'),
+          row('log-1', null, 'system'),
+        ],
+        adminEmails,
+      );
+
+      await service.findForRestaurant(RESTAURANT_ID);
+
+      expect(users.findRestaurantAdminEmailsByIds).toHaveBeenCalledTimes(1);
+    });
   });
 
   const automaticRow: QueryRow = {
@@ -200,7 +293,7 @@ describe('TableLogsService', () => {
 
     await service.findForRestaurant(RESTAURANT_ID);
 
-    expect(users.findEmailsByIds).toHaveBeenCalledWith([]);
+    expect(users.findRestaurantAdminEmailsByIds).toHaveBeenCalledWith([]);
   });
 
   it('no descarta una fila cuyo autor no se encuentra: sale con userEmail null', async () => {

@@ -185,12 +185,16 @@ function createLogsRepository(stored: () => StoredLog[]) {
   };
 }
 
-// The users lookup of the authors' emails: one query with every id.
+// The users lookup of the admins' emails: one query with every id, filtered by
+// role the way the SQL would.
 const usersFind = vi.fn(
-  ({ where }: { where: { id: FindOperator<string[]> } }) =>
+  ({ where }: { where: { id: FindOperator<string[]>; role: UserRole } }) =>
     Promise.resolve(
       users
-        .filter((user) => where.id.value.includes(user.id))
+        .filter(
+          (user) =>
+            where.id.value.includes(user.id) && user.role === where.role,
+        )
         .map(({ id, email }) => ({ id, email })),
     ),
 );
@@ -223,7 +227,7 @@ describe('Table logs (e2e)', () => {
       .useValue({
         findOneBy: ({ id }: { id: string }) =>
           Promise.resolve(users.find((user) => user.id === id) ?? null),
-        // UsersService.findEmailsByIds: where: { id: In([...]) }.
+        // UsersService.findRestaurantAdminEmailsByIds: where: { id: In([...]), role }.
         find: usersFind,
       })
       .overrideProvider(getRepositoryToken(Restaurant))
@@ -295,6 +299,79 @@ describe('Table logs (e2e)', () => {
       id: stored[4].id,
       userEmail: null,
       source: 'system',
+    });
+  });
+
+  describe('qué autor conserva su correo (§12.3)', () => {
+    const rowOf = (body: { id: string }[], entry: StoredLog) =>
+      body.find((row) => row.id === entry.id);
+
+    it('una fila de reserva de un comensal trae userEmail null y ningún fragmento del correo', async () => {
+      // El comensal es rol@example.com.
+      const entry = log(
+        5,
+        TABLE_02,
+        DINER_USER_ID,
+        '2026-10-08T19:00:00Z',
+        'reservation',
+      );
+      stored.push(entry);
+
+      const res = await get().expect(200);
+
+      const row = rowOf(res.body, entry);
+      expect(row).toMatchObject({ source: 'reservation', userEmail: null });
+      expect(JSON.stringify(row)).not.toContain('rol');
+      expect(JSON.stringify(res.body)).not.toContain('rol@');
+      expect(JSON.stringify(res.body)).not.toContain('example.com');
+    });
+
+    it('una fila manual conserva el correo del admin', async () => {
+      const entry = log(
+        5,
+        TABLE_02,
+        OWNER_ID,
+        '2026-10-08T19:00:00Z',
+        'manual',
+      );
+      stored.push(entry);
+
+      const res = await get().expect(200);
+
+      expect(rowOf(res.body, entry)).toMatchObject({
+        source: 'manual',
+        userEmail: 'admin@casa72.co',
+      });
+    });
+
+    it('una fila de reserva del admin (el check-in) conserva su correo', async () => {
+      const entry = log(
+        5,
+        TABLE_02,
+        OWNER_ID,
+        '2026-10-08T19:00:00Z',
+        'reservation',
+      );
+      stored.push(entry);
+
+      const res = await get().expect(200);
+
+      expect(rowOf(res.body, entry)).toMatchObject({
+        source: 'reservation',
+        userEmail: 'admin@casa72.co',
+      });
+    });
+
+    it('una fila system trae userEmail null', async () => {
+      const entry = log(5, TABLE_02, null, '2026-10-08T19:00:00Z', 'system');
+      stored.push(entry);
+
+      const res = await get().expect(200);
+
+      expect(rowOf(res.body, entry)).toMatchObject({
+        source: 'system',
+        userEmail: null,
+      });
     });
   });
 

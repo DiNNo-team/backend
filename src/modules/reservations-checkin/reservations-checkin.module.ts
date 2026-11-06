@@ -7,6 +7,10 @@ import {
 } from '../restaurant-operations/index.js';
 import { SearchAvailabilityModule } from '../search-availability/index.js';
 import { CheckIn } from './check-ins/check-in.entity.js';
+import { CheckInService } from './check-ins/check-in.service.js';
+import { CheckInsController } from './check-ins/check-ins.controller.js';
+import { ReservationLabelsReader } from './check-ins/reservation-labels.reader.js';
+import { RestaurantReservationsService } from './check-ins/restaurant-reservations.service.js';
 import { CreateReservationService } from './reservations/create-reservation.service.js';
 import {
   CodeGenerator,
@@ -31,8 +35,11 @@ import { ReservationsForTables } from './reservations/reservations-for-tables.js
     SearchAvailabilityModule,
     RestaurantOperationsModule,
   ],
-  controllers: [ReservationsController],
+  controllers: [ReservationsController, CheckInsController],
   providers: [
+    CheckInService,
+    RestaurantReservationsService,
+    ReservationLabelsReader,
     CreateReservationService,
     ReservationExpirationService,
     ReservationCancellationService,

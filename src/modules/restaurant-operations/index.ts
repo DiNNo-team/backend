@@ -19,6 +19,13 @@ export {
   TableReservationsAccess,
   type ActiveTableReservation,
 } from './shared/table-reservations.js';
+// The 403 of a session user without a restaurant, for the restaurant routes of
+// other modules (the check-in and the reservation list).
+export {
+  RESTAURANT_REQUIRED_CODE,
+  RESTAURANT_REQUIRED_MESSAGE,
+  requireRestaurant,
+} from './shared/restaurant-required.js';
 // Internal event emitted after a change that affects availability is saved.
 export {
   RESTAURANT_AVAILABILITY_AFFECTED,

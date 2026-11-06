@@ -92,14 +92,14 @@ describe('UsersService', () => {
     });
   });
 
-  describe('findEmailsByIds', () => {
-    it('looks up every distinct id in one query and maps id to email', async () => {
+  describe('findRestaurantAdminEmailsByIds', () => {
+    it('looks up every distinct id in one query, only among restaurant admins, and maps id to email', async () => {
       usersRepository.find.mockResolvedValue([
         { id: 'user-a', email: 'a@example.com' },
         { id: 'user-b', email: 'b@example.com' },
       ]);
 
-      const emails = await usersService.findEmailsByIds([
+      const emails = await usersService.findRestaurantAdminEmailsByIds([
         'user-a',
         'user-b',
         'user-a',
@@ -107,7 +107,10 @@ describe('UsersService', () => {
 
       expect(usersRepository.find).toHaveBeenCalledTimes(1);
       expect(usersRepository.find).toHaveBeenCalledWith({
-        where: { id: In(['user-a', 'user-b']) },
+        where: {
+          id: In(['user-a', 'user-b']),
+          role: UserRole.RESTAURANT_ADMIN,
+        },
         select: { id: true, email: true },
       });
       expect(emails).toEqual(
@@ -119,10 +122,76 @@ describe('UsersService', () => {
     });
 
     it('does not query for an empty list', async () => {
-      await expect(usersService.findEmailsByIds([])).resolves.toEqual(
-        new Map(),
-      );
+      await expect(
+        usersService.findRestaurantAdminEmailsByIds([]),
+      ).resolves.toEqual(new Map());
       expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findPublicDisplayNamesByIds', () => {
+    const namesFor = async (displayName: string | null, email: string) => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'user-a', displayName, email },
+      ]);
+      const names = await usersService.findPublicDisplayNamesByIds(['user-a']);
+      return names.get('user-a');
+    };
+
+    it('looks up every distinct id in one query and keeps a null name', async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'user-a', displayName: 'Ana', email: 'a@example.com' },
+        { id: 'user-b', displayName: null, email: 'b@example.com' },
+      ]);
+
+      const names = await usersService.findPublicDisplayNamesByIds([
+        'user-a',
+        'user-b',
+        'user-a',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledTimes(1);
+      expect(usersRepository.find).toHaveBeenCalledWith({
+        where: { id: In(['user-a', 'user-b']) },
+        select: { id: true, displayName: true, email: true },
+      });
+      expect(names).toEqual(
+        new Map([
+          ['user-a', 'Ana'],
+          ['user-b', null],
+        ]),
+      );
+    });
+
+    it('does not query for an empty list', async () => {
+      await expect(
+        usersService.findPublicDisplayNamesByIds([]),
+      ).resolves.toEqual(new Map());
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('never falls back to the email: a null name stays null', async () => {
+      await expect(namesFor(null, 'ana.perez@example.com')).resolves.toBeNull();
+    });
+
+    it.each([
+      ['the same text', 'ana.perez', 'ana.perez@example.com'],
+      ['other case in the name', 'Ana.Perez', 'ana.perez@example.com'],
+      ['other case in the email', 'ana.perez', 'Ana.Perez@Example.com'],
+      ['spaces around the name', ' ana.perez ', 'ana.perez@example.com'],
+      ['a plus alias', 'equipo+comensal', 'equipo+comensal@gmail.com'],
+      ['the column cut', 'a'.repeat(60), `${'a'.repeat(64)}@example.com`],
+    ])('hides a name equal to the email before the @: %s', async (_c, n, e) => {
+      await expect(namesFor(n, e)).resolves.toBeNull();
+    });
+
+    it.each([
+      ['Ana', 'ana.perez@example.com'],
+      ['Ana María', 'ana@example.com'],
+      ['ana perez', 'ana.perez@example.com'],
+      ['example.com', 'ana@example.com'],
+    ])('keeps the real name %j with %s', async (name, email) => {
+      await expect(namesFor(name, email)).resolves.toBe(name);
     });
   });
 

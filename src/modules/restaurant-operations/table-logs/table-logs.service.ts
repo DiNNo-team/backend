@@ -20,7 +20,8 @@ export interface TableLogRow {
   previousStatus: TableLogStatus;
   newStatus: TableLogStatus;
   changedAt: Date;
-  // null en los registros automáticos (source = 'system'), que no tienen usuario.
+  // Solo el correo de un restaurant_admin. null en los registros automáticos
+  // (source = 'system') y en los de un comensal (source = 'reservation').
   userEmail: string | null;
   source: TableLogSource;
 }
@@ -41,7 +42,7 @@ export class TableLogsService {
   // Newest first. table_logs has no restaurant_id: the restaurant filter goes
   // through the join to tables, always with the session restaurant (agreed
   // with Elizabeth). A tableId of another restaurant just matches no rows.
-  // The authors' emails come from identity-access in one more query.
+  // The admins' emails come from identity-access in one more query.
   async findForRestaurant(
     restaurantId: string | null,
     tableId?: string,
@@ -71,12 +72,12 @@ export class TableLogsService {
       .limit(TABLE_LOGS_LIMIT)
       .getRawMany<TableLogQueryRow>();
 
-    const emails = await this.users.findEmailsByIds(
+    const emails = await this.users.findRestaurantAdminEmailsByIds(
       rows.flatMap((row) => (row.userId === null ? [] : [row.userId])),
     );
-    // Los registros automáticos no tienen usuario y salen con userEmail null.
-    // Un autor que no se encuentre no puede ocurrir (FK a users), pero la fila
-    // tampoco se descarta: sale con userEmail null.
+    // Solo un restaurant_admin conserva su correo. Salen con userEmail null los
+    // registros automáticos, que no tienen usuario, y los de un comensal: su
+    // correo nunca se le muestra al restaurante (§12.3). La fila no se descarta.
     return rows.map(({ userId, ...row }) => ({
       ...row,
       userEmail: userId === null ? null : (emails.get(userId) ?? null),

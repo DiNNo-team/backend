@@ -6,6 +6,8 @@ export {
 } from './availability/availability.service.js';
 // To fix the time in the tests: .overrideProvider(Clock).useValue(...).
 export { Clock } from './availability/clock.js';
+// The time shown in the check-in messages (HH:mm in Bogotá).
+export { formatBogotaClock } from './availability/bogota-time.js';
 // The 404 of the public detail, reused by the reservation (same visibility rule).
 export {
   RESTAURANT_NOT_FOUND_CODE,

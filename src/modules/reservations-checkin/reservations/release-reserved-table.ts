@@ -16,38 +16,49 @@ export interface TableRelease {
   changedAt: Date;
 }
 
-// LA regla de "liberar la mesa de una reserva que termina": reserved → available
-// SOLO si la mesa sigue reserved (el UPDATE lleva la condición). Nunca se pisa un
-// estado que el restaurante cambió después. La bitácora se escribe solo si la
-// mesa realmente cambió. Devuelve true si cambió.
+// A dónde pasa la mesa de una reserva que termina (§12.3): vuelve a Disponible
+// (vencer, cancelar) o queda Ocupada (check-in).
+export interface ReservedTableMove extends TableRelease {
+  to: 'available' | 'occupied';
+}
+
+// LA regla de "mover la mesa de una reserva que termina": sale de reserved SOLO
+// si sigue reserved (el UPDATE lleva la condición). Nunca se pisa un estado que
+// el restaurante cambió después. La bitácora se escribe solo si la mesa realmente
+// cambió. Devuelve true si cambió.
 //
 // No abre transacciones ni emite eventos: actúa con el manager recibido, y quien
-// lo llama emite el evento después de su commit. La usan el vencimiento y la
-// cancelación; no se repite en otro lugar.
-export async function releaseReservedTable(
+// lo llama emite el evento después de su commit. No se repite en otro lugar.
+export async function moveReservedTable(
   manager: EntityManager,
   statusLog: TableStatusLog,
-  release: TableRelease,
+  move: ReservedTableMove,
 ): Promise<boolean> {
-  const released = await manager
+  const moved = await manager
     .getRepository<TableRow>('Table')
-    .update(
-      { id: release.tableId, status: 'reserved' },
-      { status: 'available' },
-    );
-  if (released.affected !== 1) {
+    .update({ id: move.tableId, status: 'reserved' }, { status: move.to });
+  if (moved.affected !== 1) {
     return false;
   }
   await statusLog.record(
     {
-      tableId: release.tableId,
+      tableId: move.tableId,
       previousStatus: 'reserved',
-      newStatus: 'available',
-      userId: release.userId,
-      source: release.source,
-      changedAt: release.changedAt,
+      newStatus: move.to,
+      userId: move.userId,
+      source: move.source,
+      changedAt: move.changedAt,
     },
     manager,
   );
   return true;
+}
+
+// Liberar la mesa: reserved → available. La usan el vencimiento y la cancelación.
+export function releaseReservedTable(
+  manager: EntityManager,
+  statusLog: TableStatusLog,
+  release: TableRelease,
+): Promise<boolean> {
+  return moveReservedTable(manager, statusLog, { ...release, to: 'available' });
 }

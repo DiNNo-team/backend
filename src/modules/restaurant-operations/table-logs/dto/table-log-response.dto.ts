@@ -59,7 +59,7 @@ export class TableLogResponseDto {
     nullable: true,
     example: 'admin@example.com',
     description:
-      'Correo del usuario que hizo el cambio (users no tiene nombre). null en los cambios automáticos (source = system): la web los muestra como "Automático".',
+      'Correo del restaurant_admin que hizo el cambio. null en dos casos: los cambios automáticos (source = system, la web muestra "Automático") y los de un comensal (source = reservation, la web muestra "Comensal"): su correo nunca se le muestra al restaurante.',
   })
   userEmail: string | null;
 
