@@ -69,10 +69,11 @@ opcional: sin ella solo `GET /v1/geocode` deja de funcionar (responde `503`).
 
 - **Monolito modular.** El código de negocio vive bajo `src/modules/`, uno por dominio,
   registrado en [`src/app.module.ts`](src/app.module.ts). Hoy existen 5 módulos.
-  `restaurant-operations` ya tiene controladores y servicios (registro, consulta y edición del
-  restaurante, estado abierto/cerrado, mesas y bitácora de mesas);
-  `identity-access` ya tiene el usuario actual (guard, resolver y `UsersService`); los otros
-  tres siguen vacíos:
+  `restaurant-operations` (registro, consulta y edición del restaurante, estado abierto/cerrado,
+  mesas y bitácora de mesas), `identity-access` (usuario actual, roles, cuentas y autenticación
+  del WebSocket), `search-availability` (búsqueda, detalle público, disponibilidad y WebSocket)
+  y `reservations-checkin` (microreservas, vencimiento y check-in) ya tienen código;
+  `notifications` sigue vacío:
   - `identity-access`
   - `restaurant-operations`
   - `reservations-checkin`
@@ -177,8 +178,8 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 
 ### Tiempo real: escuchar `availability.changed`
 
-El WebSocket (Socket.IO) corre en el mismo host y puerto que la API (`/socket.io`) y solo acepta
-comensales. Para ver llegar los eventos mientras cambias mesas o el estado del restaurante, usa el
+El WebSocket (Socket.IO) corre en el mismo host y puerto que la API (`/socket.io`) y acepta
+comensales y restaurantes con restaurante registrado (salas y eventos en `CLAUDE.md` §12.7). Para ver llegar los eventos mientras cambias mesas o el estado del restaurante, usa el
 script de QA (necesita `npm install`, porque usa `socket.io-client`):
 
 ```bash
@@ -194,14 +195,14 @@ DINNO_TOKEN=<token> node scripts/listen-availability.mjs --url https://dinno-bac
 Imprime cada evento con la hora, por ejemplo
 `[14:05:12] availability.changed {"restaurantId":"…","availability":"few","isOpenNow":true,"isSearchable":true}`.
 Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `EMAIL_NOT_VERIFIED`,
-`PROFILE_REQUIRED` o `RESTAURANT_ACCOUNT`) y termina. Sal con Ctrl+C.
+`PROFILE_REQUIRED` o `RESTAURANT_REQUIRED`) y termina. Sal con Ctrl+C.
 
 ## 7. Despliegue
 
 - Desplegado en **Render** como *Web Service*.
 - **Auto-deploy activado**: cada push a la rama `develop` dispara un nuevo despliegue.
 - **URL de producción:** https://dinno-backend.onrender.com
-- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID` y `GOOGLE_GEOCODING_API_KEY`)
+- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID`, `GOOGLE_GEOCODING_API_KEY`, `RESERVATION_TTL_MINUTES` y `RESERVATION_EXPIRY_ENABLED`)
   se configuran directamente en el dashboard de Render — **no viven en el repositorio**.
   `FIREBASE_PROJECT_ID` es obligatoria porque en Render el usuario de desarrollo está apagado:
   si falta, la app no arranca. `PORT` no se define ahí: Render lo asigna en tiempo de ejecución.
@@ -225,9 +226,9 @@ Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `
 - El **frontend** (React + Vite, desplegado en Vercel) y el **mobile** (Expo) consumen esta API
   a través de las variables `VITE_API_URL` y `EXPO_PUBLIC_API_URL` respectivamente, apuntando a
   `https://dinno-backend.onrender.com/v1` en producción (o `http://localhost:3000/v1` en local).
-- **Tiempo real:** la app se conecta por Socket.IO a la misma URL **sin** `/v1`
+- **Tiempo real:** la app (comensal) y la web (restaurante) se conectan por Socket.IO a la misma URL **sin** `/v1`
   (`https://dinno-backend.onrender.com`), con `auth` como función que entrega el token de Firebase.
-  Contrato en `CLAUDE.md`, sección 10, "Tiempo real".
+  Contrato en `CLAUDE.md`, sección 10, "Tiempo real", y §12.7.
 - Si cambia la URL de despliegue del frontend o del mobile (por ejemplo, un nuevo dominio de
   Vercel), hay que **actualizar `CORS_ORIGINS` en el dashboard de Render** agregando el nuevo
   origen a la lista separada por comas — de lo contrario el navegador bloqueará las peticiones

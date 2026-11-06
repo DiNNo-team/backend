@@ -162,8 +162,8 @@ Una tarea está lista solo si:
 | Restaurante en endpoint de comensal | 403 | `RESTAURANT_ACCOUNT` | Esta es una cuenta de restaurante. Administra tu restaurante desde la web. |
 | Restaurante habilitado sin restaurante registrado | 403 | `RESTAURANT_REQUIRED` | Primero registra tu restaurante. *(sin cambios)* |
 
-- **Endpoints de restaurante:** todos los del Sprint 1 (`/v1/restaurants`, `/v1/restaurants/me*`, `/v1/tables*`, `/v1/table-logs`).
-- **Endpoints de comensal:** `/v1/search/*` y `/v1/restaurants/:id/public`.
+- **Endpoints de restaurante:** todos los del Sprint 1 (`/v1/restaurants`, `/v1/restaurants/me*`, `/v1/tables*`, `/v1/table-logs`) y los de restaurante de §12.8.
+- **Endpoints de comensal:** `/v1/search/*` y `/v1/restaurants/:id/public`, y los de comensal de §12.8 (`/v1/reservations*`).
 - **Ambos roles:** `GET /v1/me` y `GET /v1/geocode` (una cuenta sin perfil recibe `PROFILE_REQUIRED` en los dos).
 - La forma del error no cambia: `{ statusCode, message, error, errorCode? }`. Los clientes deciden por `errorCode`, nunca por el texto.
 
@@ -212,7 +212,7 @@ Todos bajo `/v1`, con `Authorization: Bearer <token de Firebase>`.
 - Un token que vence **no desconecta** un socket ya abierto: el token solo se revisa al conectar, y la siguiente reconexión pide uno nuevo con la función de `auth`.
 - Evento del servidor `availability.changed`: `{ restaurantId, availability, isOpenNow, isSearchable }`. Se envía a todos los comensales conectados.
   - `isSearchable` = cumple las reglas para aparecer en la búsqueda (sin filtros). Si es `false` → la app lo quita de la lista y del mapa (el detalle muestra `closed` si `isOpenNow` es `false`). Si es `true` y el restaurante no estaba en la lista → la app vuelve a consultar la búsqueda.
-- Se emite cuando: cambia el estado de una mesa, se crea, desactiva o reactiva una mesa, se abre o cierra el restaurante, o se edita su horario o ubicación. Solo después de que la operación queda guardada.
+- Se emite cuando: cambia el estado de una mesa (salvo el check-in, `reserved` → `occupied`), se crea, desactiva o reactiva una mesa, se abre o cierra el restaurante, o se edita su horario o ubicación. Solo después de que la operación queda guardada.
 - Respaldo en la app: vuelve a consultar al regresar al primer plano, al reconectarse y cada 60 s en resultados y detalle.
 
 ### Cuándo está listo cada contrato en `develop`
@@ -300,7 +300,7 @@ El módulo `reservations-checkin` tiene la creación, la consulta y la cancelaci
 - `npm run migration:run` aplica las pendientes; `npm run migration:revert` deshace la última.
 - Los tres compilan primero (`npm run build`): el CLI de TypeORM lee de `dist/` y `migration:run` solo opera sobre `.js`.
 - **No se usa `typeorm-ts-node-esm`:** `ts-node` no está instalado y no se va a instalar. No lo propongas.
-- `src/data-source.ts` es solo para el CLI y el seed, y lee `process.env` directo porque vive fuera de la inyección de dependencias de Nest. Es una de las **dos** excepciones conscientes a la regla de "Configuración y variables de entorno"; la otra es `src/main.ts`, que lee `PORT` porque lo necesita antes de crear la app. Ningún otro archivo lee `process.env`.
+- `src/data-source.ts` es solo para el CLI y el seed, y lee `process.env` directo porque vive fuera de la inyección de dependencias de Nest. Es una de las **tres** excepciones conscientes a la regla de "Configuración y variables de entorno"; las otras son `src/main.ts`, que lee `PORT` porque lo necesita antes de crear la app, y `src/scripts/*/main.ts` (`export:data` y `demo:reset`), que leen `DATABASE_URL` solo para mostrar a qué base apuntan. Ningún otro archivo lee `process.env`.
 
 **Quién las corre**
 - En el Sprint 1 los cinco compartimos una sola base en Neon. Por eso **solo Elizabeth ejecuta `migration:run` y `migration:generate`.**
@@ -366,7 +366,7 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - Rutas en inglés, sustantivos en plural y `kebab-case` (por ejemplo `/v1/restaurants/me`, `/v1/tables/:id/status`).
 - **Toda entrada se valida en el backend**, aunque la web también valide, con `class-validator` y `class-transformer`: decoradores sobre el DTO, cada uno con su `message` en español que diga cómo corregir. El `ValidationPipe` es global (en `app.setup.ts`, con `whitelist`, `forbidNonWhitelisted` y `transform`): **cualquier campo que no esté en el DTO se rechaza con 400**, en todos los endpoints.
 - Errores con las excepciones HTTP de Nest (`BadRequestException`, `NotFoundException`, `ForbiddenException`…) y un mensaje claro. Nunca se devuelve un error interno, una consulta SQL ni un stack trace.
-- Forma de los errores: `{ statusCode, message, error }` y, a veces, `errorCode` (`src/common/dto/error-response.dto.ts`). **Lleva `errorCode` el error donde el front tiene que ramificar según el motivo; los demás no lo llevan.** Hoy existen `EMAIL_NOT_VERIFIED` (401 del correo sin verificar), `RESTAURANT_REQUIRED` (403 del usuario sin restaurante) los cuatro códigos de cuenta del Sprint 2 (`ACCOUNT_NOT_ENABLED`, `PROFILE_REQUIRED`, `DINER_ACCOUNT`, `RESTAURANT_ACCOUNT`; tabla en la sección 10, textos en `identity-access/roles/account-errors.ts`) `RESTAURANT_NOT_FOUND` (404 del detalle público, `search-availability/public-restaurant/restaurant-not-found.ts`) y los dos de `GET /v1/geocode`, `ADDRESS_NOT_FOUND` (404) y `GEOCODING_UNAVAILABLE` (503) (`restaurant-operations/geocoding/geocoding-errors.ts`). Se usa la opción nativa de Nest 12 (`HttpExceptionOptions.errorCode`): `new ForbiddenException(mensaje, { errorCode: '...' })`. No se arma el cuerpo a mano ni se crea un campo propio.
+- Forma de los errores: `{ statusCode, message, error }` y, a veces, `errorCode` (`src/common/dto/error-response.dto.ts`). **Lleva `errorCode` el error donde el front tiene que ramificar según el motivo; los demás no lo llevan.** Hoy existen `EMAIL_NOT_VERIFIED` (401 del correo sin verificar), `RESTAURANT_REQUIRED` (403 del usuario sin restaurante) los cuatro códigos de cuenta del Sprint 2 (`ACCOUNT_NOT_ENABLED`, `PROFILE_REQUIRED`, `DINER_ACCOUNT`, `RESTAURANT_ACCOUNT`; tabla en la sección 10, textos en `identity-access/roles/account-errors.ts`) `RESTAURANT_NOT_FOUND` (404 del detalle público, `search-availability/public-restaurant/restaurant-not-found.ts`) y los dos de `GET /v1/geocode`, `ADDRESS_NOT_FOUND` (404) y `GEOCODING_UNAVAILABLE` (503) (`restaurant-operations/geocoding/geocoding-errors.ts`), y los once del Sprint 3 (§12.9). Se usa la opción nativa de Nest 12 (`HttpExceptionOptions.errorCode`): `new ForbiddenException(mensaje, { errorCode: '...' })`. No se arma el cuerpo a mano ni se crea un campo propio.
 - **Un error no controlado** (no es una excepción HTTP: se cae la base, un bug) responde `500` con la forma de Nest y el mensaje en español "No pudimos completar la acción. Intenta de nuevo en un momento.", sin `errorCode`. El detalle real (mensaje, stack) **solo va al log del servidor, nunca al cliente**. Lo hace el filtro global `src/common/filters/unhandled-exception.filter.ts`, registrado en `app.setup.ts`: nadie monta su propio manejo de errores genéricos, y las excepciones HTTP que lanzamos pasan sin cambios.
 - No cambies la forma de una respuesta existente sin avisar (sección 7).
 
@@ -454,7 +454,7 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - **Listener:** si `getForRestaurant` devuelve `null`, no envía nada. Cualquier error se atrapa y queda un WARN con el `restaurantId` y el tipo de error; nunca afecta la respuesta HTTP de quien hizo el cambio (corre después y aparte, `async: true`).
 - **Gateway** (`availability.gateway.ts`): mismo host y puerto, `/socket.io`, CORS con `CORS_ORIGINS` (`CorsIoAdapter` en `src/config/socket-io.adapter.ts`, registrado en `configureApp`). El handshake se valida en un middleware (`server.use`), que guarda el usuario en `socket.data` para asignar las salas en `handleConnection`: un rechazo llega como `connect_error` y el cliente nunca queda conectado. No recalcula nada. El log solo tiene conteos de conexiones.
 - **Identidad en el handshake:** `SocketAuthenticator` (`identity-access/realtime/socket-authenticator.ts`, exportado en `identity-access/index.ts`) acepta comensales y `restaurant_admin` con restaurante, y arma `{ headers }` desde `auth` (`authorization: Bearer <auth.token>` y, en local, `x-dev-user-id: <auth.devUserId>`) y llama al mismo `CurrentUserResolver` que HTTP (Firebase, vinculación por correo, usuario de desarrollo). `CurrentUserResolver.resolve` recibe `IdentityRequest` (`{ headers }`), no el `Request` de Express. `devUserId` no tiene efecto con el usuario de desarrollo apagado ni en un ambiente desplegado, porque ese resolver nunca se selecciona ahí. Un fallo que no es de sesión (la base caída) responde `connect_error` `SERVER_ERROR`.
-- **Códigos de rechazo (`SOCKET_REJECTION_CODES`):** `UNAUTHORIZED`, `EMAIL_NOT_VERIFIED`, `PROFILE_REQUIRED` y `RESTAURANT_REQUIRED` (admin sin restaurante; mismo código que el `403` de HTTP, y una prueba los mantiene iguales porque este módulo no puede importarlo). Más `SERVER_ERROR` del gateway. **`RESTAURANT_ACCOUNT` ya no se envía por el socket:** con dos roles, un admin entra o recibe `RESTAURANT_REQUIRED`. Sigue existiendo en HTTP. §10 todavía lo lista y dice "solo se aceptan comensales"; manda §12.7 (ver `AVISOS.md`).
+- **Códigos de rechazo (`SOCKET_REJECTION_CODES`):** `UNAUTHORIZED`, `EMAIL_NOT_VERIFIED`, `PROFILE_REQUIRED` y `RESTAURANT_REQUIRED` (admin sin restaurante; mismo código que el `403` de HTTP, y una prueba los mantiene iguales porque este módulo no puede importarlo). Más `SERVER_ERROR` del gateway. **`RESTAURANT_ACCOUNT` ya no se envía por el socket:** con dos roles, un admin entra o recibe `RESTAURANT_REQUIRED`. Sigue existiendo en HTTP.
 - **Probarlo a mano:** `node scripts/listen-availability.mjs --dev-user-id <uuid del comensal>` (local) o con `DINNO_TOKEN=<token>` contra Render; imprime cada `availability.changed` con la hora (README, sección 6).
 - **Una sola instancia, sin Redis (tarea 5.1.6):** Render corre una instancia, así que las salas (`diners`, `diner:{id}`, `restaurant:{id}`) viven en la memoria del proceso y no se usa un adaptador de Redis para Socket.IO. **El adaptador pasa al Sprint 4,** con la migración a Azure y varias réplicas (§12.10), junto con sesiones pegajosas.
 
@@ -741,7 +741,9 @@ Los 404 y 409 existentes de mesas siguen sin `errorCode`; no se cambian en este 
 - Adaptador de Redis para Socket.IO (Sprint 4, Azure).
 - Extender el tiempo de una reserva.
 
-### 12.11 Cuándo está listo cada cosa (backend en `develop`, desplegado en Render)
+### 12.11 Cuándo está listo cada cosa (plan original; el estado real está en `AVISOS.md`)
+
+> Plan original por días, del 3 nov. **Estado real:** las tareas 1 a 10 del backend están hechas en `feat/sprint3-backend` y se despliegan en Render cuando se fusione a `develop`. El orden de merge está en la entrada de cierre del 6 nov de `AVISOS.md`.
 
 | Día | Qué queda listo |
 |---|---|
