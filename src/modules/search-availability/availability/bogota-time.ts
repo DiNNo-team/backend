@@ -40,3 +40,11 @@ export function toBogotaTime(instant: Date): BogotaTime {
     minuteOfDay: Number(parts.get('hour')) * 60 + Number(parts.get('minute')),
   };
 }
+
+// An instant as "HH:mm" (24 h), as a clock in Bogotá shows it.
+export function formatBogotaClock(instant: Date): string {
+  const { minuteOfDay } = toBogotaTime(instant);
+  const hours = String(Math.floor(minuteOfDay / 60)).padStart(2, '0');
+  const minutes = String(minuteOfDay % 60).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}

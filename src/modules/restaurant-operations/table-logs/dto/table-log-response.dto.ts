@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  TABLE_LOG_SOURCES,
   TABLE_LOG_STATUSES,
+  type TableLogSource,
   type TableLogStatus,
 } from '../../tables/table-status-log.js';
 import type { TableLogRow } from '../table-logs.service.js';
@@ -53,11 +55,21 @@ export class TableLogResponseDto {
   changedAt: Date;
 
   @ApiProperty({
+    type: String,
+    nullable: true,
     example: 'admin@example.com',
     description:
-      'Correo del usuario que hizo el cambio (users no tiene nombre).',
+      'Correo del restaurant_admin que hizo el cambio. null en dos casos: los cambios automáticos (source = system, la web muestra "Automático") y los de un comensal (source = reservation, la web muestra "Comensal"): su correo nunca se le muestra al restaurante.',
   })
-  userEmail: string;
+  userEmail: string | null;
+
+  @ApiProperty({
+    enum: TABLE_LOG_SOURCES,
+    example: 'manual',
+    description:
+      'Quién originó el cambio: manual = el restaurante a mano, reservation = una microreserva (crear, cancelar o check-in), system = automático (vencimiento de una reserva).',
+  })
+  source: TableLogSource;
 
   static fromRow(row: TableLogRow): TableLogResponseDto {
     return {
@@ -68,6 +80,7 @@ export class TableLogResponseDto {
       newStatus: row.newStatus,
       changedAt: new Date(row.changedAt),
       userEmail: row.userEmail,
+      source: row.source,
     };
   }
 }

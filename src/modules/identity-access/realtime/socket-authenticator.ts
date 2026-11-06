@@ -8,14 +8,15 @@ import {
 import { DEV_USER_HEADER } from '../current-user/dev-user.resolver.js';
 import { UserRole } from '../roles/user-role.js';
 
-// Codes of the WebSocket connect_error (Sprint 2 contract, "Tiempo real"):
-// the client reads them in error.message. UNAUTHORIZED only exists here; in
-// HTTP it is the 401 without errorCode.
+// Codes of the WebSocket connect_error (CLAUDE.md §10 and §12.7): the client
+// reads them in error.message. UNAUTHORIZED only exists here; in HTTP it is the
+// 401 without errorCode. RESTAURANT_REQUIRED is the same code as the HTTP 403 of
+// restaurant-operations (this module cannot import it; a test keeps them equal).
 export const SOCKET_REJECTION_CODES = [
   'UNAUTHORIZED',
   'EMAIL_NOT_VERIFIED',
   'PROFILE_REQUIRED',
-  'RESTAURANT_ACCOUNT',
+  'RESTAURANT_REQUIRED',
 ] as const;
 export type SocketRejectionCode = (typeof SOCKET_REJECTION_CODES)[number];
 
@@ -35,12 +36,13 @@ interface HandshakeAuth {
   devUserId?: unknown;
 }
 
-// The diner of a WebSocket handshake, with the same resolution as HTTP
-// (Firebase, link by email, development user): it only translates the auth
-// payload into headers and the outcome into a connect_error code. Errors that
-// are not about the session (the database is down) propagate unchanged.
+// Who connects to the WebSocket: a diner or a restaurant_admin with a restaurant
+// (§12.7), with the same resolution as HTTP (Firebase, link by email, development
+// user). It only translates the auth payload into headers and the outcome into a
+// connect_error code. Errors that are not about the session (the database is
+// down) propagate unchanged.
 @Injectable()
-export class DinerSocketAuthenticator {
+export class SocketAuthenticator {
   constructor(private readonly resolver: CurrentUserResolver) {}
 
   async authenticate(auth: unknown): Promise<CurrentUserData> {
@@ -60,8 +62,11 @@ export class DinerSocketAuthenticator {
     if (identity.kind === 'unregistered') {
       throw new SocketRejection('PROFILE_REQUIRED');
     }
-    if (identity.user.role !== UserRole.DINER) {
-      throw new SocketRejection('RESTAURANT_ACCOUNT');
+    if (
+      identity.user.role === UserRole.RESTAURANT_ADMIN &&
+      identity.user.restaurantId === null
+    ) {
+      throw new SocketRejection('RESTAURANT_REQUIRED');
     }
     return identity.user;
   }

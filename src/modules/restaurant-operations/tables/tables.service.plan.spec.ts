@@ -1,3 +1,4 @@
+import { fakeTableReservations } from '../../../../test/support/table-reservations.js';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BadRequestException,
@@ -122,6 +123,7 @@ describe('TablesService.savePlan', () => {
       store.repository,
       statusLog as unknown as TableStatusLog,
       events as unknown as EventEmitter2,
+      fakeTableReservations(),
     );
   });
 

@@ -18,7 +18,9 @@ import {
   createRedisClient,
 } from './config/redis.config.js';
 import { IdentityAccessModule } from './modules/identity-access/identity-access.module.js';
+import { RequireTableReservationsPort } from './modules/restaurant-operations/index.js';
 import { RestaurantOperationsModule } from './modules/restaurant-operations/restaurant-operations.module.js';
+import { ReservationExpiryModule } from './modules/reservations-checkin/index.js';
 import { ReservationsCheckinModule } from './modules/reservations-checkin/reservations-checkin.module.js';
 import { SearchAvailabilityModule } from './modules/search-availability/search-availability.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
@@ -57,12 +59,18 @@ const logger = new Logger('Database');
     IdentityAccessModule,
     RestaurantOperationsModule,
     ReservationsCheckinModule,
+    // El proceso que vence reservas cada 15 s: solo en la aplicación real.
+    ReservationExpiryModule,
     SearchAvailabilityModule,
     NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
+    // La composición real exige que reservations-checkin registre el puerto de
+    // reservas de las mesas: si falta, la app no arranca (en vez de dejar las
+    // mesas con reserva activa sin proteger).
+    RequireTableReservationsPort,
     {
       provide: REDIS_CLIENT,
       inject: [ConfigService],

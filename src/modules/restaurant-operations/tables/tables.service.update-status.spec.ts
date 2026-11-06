@@ -1,3 +1,4 @@
+import { fakeTableReservations } from '../../../../test/support/table-reservations.js';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ConflictException,
@@ -101,9 +102,12 @@ function createStore() {
 function createService(record = vi.fn(() => Promise.resolve())) {
   const store = createStore();
   const statusLog = { record } as unknown as TableStatusLog;
-  const service = new TablesService(store.repository, statusLog, {
-    emit: vi.fn(),
-  } as unknown as EventEmitter2);
+  const service = new TablesService(
+    store.repository,
+    statusLog,
+    { emit: vi.fn() } as unknown as EventEmitter2,
+    fakeTableReservations(),
+  );
   return { service, store, record };
 }
 
@@ -117,7 +121,7 @@ describe('TablesService.updateStatus', () => {
     expect(store.stored(TABLE_ID)?.status).toBe('occupied');
   });
 
-  it('records the five fields of the change, inside the same transaction', async () => {
+  it('records the six fields of the change, inside the same transaction', async () => {
     const { service, store, record } = createService();
     const before = Date.now();
 
@@ -133,6 +137,7 @@ describe('TablesService.updateStatus', () => {
       previousStatus: 'available',
       newStatus: 'reserved',
       userId: USER_ID,
+      source: 'manual',
       changedAt: expect.any(Date),
     });
     expect(change.changedAt.getTime()).toBeGreaterThanOrEqual(before);

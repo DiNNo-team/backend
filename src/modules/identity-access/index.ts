@@ -22,10 +22,10 @@ export {
   type AccountErrorCode,
 } from './roles/account-errors.js';
 export { UsersService } from './users/users.service.js';
-// WebSocket handshake of the diners (Sprint 2, real time).
+// WebSocket handshake of diners and restaurants (real time).
 export {
-  DinerSocketAuthenticator,
+  SocketAuthenticator,
   SocketRejection,
   SOCKET_REJECTION_CODES,
   type SocketRejectionCode,
-} from './realtime/diner-socket-authenticator.js';
+} from './realtime/socket-authenticator.js';

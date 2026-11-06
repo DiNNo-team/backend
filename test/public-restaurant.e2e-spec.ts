@@ -388,6 +388,7 @@ describe('Public restaurant detail (e2e)', () => {
           address: ADDRESS,
           latitude: 4.655671,
           longitude: -74.057006,
+          activeReservationsCount: 0,
           schedules: [
             {
               dayOfWeek: 1,

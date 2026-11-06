@@ -25,6 +25,7 @@ import {
   RESTAURANT_REQUIRED_MESSAGE,
 } from '../shared/restaurant-required.js';
 import { RegisterRestaurantDto } from './dto/register-restaurant.dto.js';
+import { TableReservationsAccess } from '../shared/table-reservations.js';
 import { RestaurantProfileResponseDto } from './dto/restaurant-profile-response.dto.js';
 import {
   ALREADY_REGISTERED_MESSAGE,
@@ -40,6 +41,7 @@ import {
 export class RestaurantRegistrationController {
   constructor(
     private readonly registrationService: RestaurantRegistrationService,
+    private readonly reservations: TableReservationsAccess,
   ) {}
 
   @Post()
@@ -91,7 +93,8 @@ export class RestaurantRegistrationController {
       user,
       dto,
     );
-    return RestaurantProfileResponseDto.fromEntities(restaurant, schedules);
+    // Un restaurante recién registrado no puede tener reservas.
+    return RestaurantProfileResponseDto.fromEntities(restaurant, schedules, 0);
   }
 
   @Get('me')
@@ -127,6 +130,10 @@ export class RestaurantRegistrationController {
     const { restaurant, schedules } = await this.registrationService.findMine(
       user.restaurantId,
     );
-    return RestaurantProfileResponseDto.fromEntities(restaurant, schedules);
+    return RestaurantProfileResponseDto.fromEntities(
+      restaurant,
+      schedules,
+      await this.reservations.countActive(restaurant.id),
+    );
   }
 }

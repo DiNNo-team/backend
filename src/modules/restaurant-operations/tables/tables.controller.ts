@@ -50,6 +50,12 @@ import {
 import { TABLE_ID_INVALID } from '../shared/table-id-invalid.js';
 import { identifierTakenMessage } from './table-identifier.js';
 import {
+  TABLE_HAS_ACTIVE_RESERVATION_CODE,
+  TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+  TABLE_NOT_AVAILABLE_TO_DEACTIVATE_CODE,
+  TABLE_NOT_AVAILABLE_TO_DEACTIVATE_MESSAGE,
+} from './table-reservation-errors.js';
+import {
   NO_TABLE_CHANGES_MESSAGE,
   TABLE_ALREADY_ACTIVE_MESSAGE,
   TABLE_ALREADY_INACTIVE_MESSAGE,
@@ -232,12 +238,26 @@ export class TablesController {
   @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
   @ApiConflictResponse({
     description:
-      'La mesa está inactiva (isActive: false): una mesa desactivada no cambia de estado.',
+      'La mesa está inactiva (isActive: false): una mesa desactivada no cambia de estado (sin errorCode). O la mesa tiene una reserva de DiNNo activa (errorCode TABLE_HAS_ACTIVE_RESERVATION): se libera sola cuando el comensal llegue, cancele o se venza la reserva; también responde así si el estado pedido es el que ya tiene. Una mesa Reservada u Ocupada a mano, sin reserva de DiNNo, sí cambia.',
     type: ErrorResponseDto,
-    example: {
-      statusCode: 409,
-      message: TABLE_INACTIVE_MESSAGE,
-      error: 'Conflict',
+    examples: {
+      inactive: {
+        summary: 'Mesa inactiva',
+        value: {
+          statusCode: 409,
+          message: TABLE_INACTIVE_MESSAGE,
+          error: 'Conflict',
+        },
+      },
+      activeReservation: {
+        summary: 'Mesa con reserva de DiNNo activa',
+        value: {
+          statusCode: 409,
+          message: TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_HAS_ACTIVE_RESERVATION_CODE,
+        },
+      },
     },
   })
   async updateStatus(
@@ -268,7 +288,26 @@ export class TablesController {
     },
   })
   @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
-  @ApiConflictResponse(IDENTIFIER_TAKEN_RESPONSE)
+  @ApiConflictResponse({
+    description:
+      'Ya existe una mesa con ese identificador en el restaurante (sin errorCode), o la mesa tiene una reserva de DiNNo activa y la nueva capacidad queda por debajo de las personas de la reserva (errorCode TABLE_HAS_ACTIVE_RESERVATION). Cambiar solo el identificador siempre se permite.',
+    type: ErrorResponseDto,
+    examples: {
+      identifierTaken: {
+        summary: 'Identificador repetido',
+        value: IDENTIFIER_TAKEN_RESPONSE.example,
+      },
+      activeReservation: {
+        summary: 'Capacidad por debajo de la reserva en curso',
+        value: {
+          statusCode: 409,
+          message: TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_HAS_ACTIVE_RESERVATION_CODE,
+        },
+      },
+    },
+  })
   async update(
     @CurrentUser() user: CurrentUserData,
     @TableIdParam() id: string,
@@ -283,21 +322,54 @@ export class TablesController {
   @ApiOperation({
     summary: 'Desactivar una mesa',
     description:
-      'La mesa deja de ser operativa (isActive: false) y conserva su último estado. Se registra en la bitácora (estado anterior → inactive) en la misma transacción: si la bitácora falla, la mesa no cambia. Sin cuerpo.',
+      'La mesa deja de ser operativa (isActive: false). Solo se desactiva una mesa Disponible y sin reserva de DiNNo en curso; si está Reservada u Ocupada a mano, primero se marca como Disponible. Se registra en la bitácora (available → inactive) en la misma transacción: si la bitácora falla, la mesa no cambia. Sin cuerpo.',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'Id de la mesa.' })
   @ApiOkResponse({
     description: 'Mesa desactivada (isActive: false).',
     type: TableResponseDto,
   })
-  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
-  @ApiConflictResponse({
-    description: 'La mesa ya estaba inactiva.',
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID. message es una lista.',
     type: ErrorResponseDto,
     example: {
-      statusCode: 409,
-      message: TABLE_ALREADY_INACTIVE_MESSAGE,
-      error: 'Conflict',
+      statusCode: 400,
+      message: [TABLE_ID_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  @ApiConflictResponse({
+    description:
+      'La mesa ya estaba inactiva (sin errorCode), tiene una reserva de DiNNo activa (TABLE_HAS_ACTIVE_RESERVATION, tiene prioridad) o no está Disponible (TABLE_NOT_AVAILABLE_TO_DEACTIVATE: primero se marca como Disponible). Se evalúan en ese orden.',
+    type: ErrorResponseDto,
+    examples: {
+      alreadyInactive: {
+        summary: 'Ya estaba inactiva',
+        value: {
+          statusCode: 409,
+          message: TABLE_ALREADY_INACTIVE_MESSAGE,
+          error: 'Conflict',
+        },
+      },
+      activeReservation: {
+        summary: 'Mesa con reserva de DiNNo activa',
+        value: {
+          statusCode: 409,
+          message: TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_HAS_ACTIVE_RESERVATION_CODE,
+        },
+      },
+      notAvailable: {
+        summary: 'Mesa Reservada u Ocupada a mano',
+        value: {
+          statusCode: 409,
+          message: TABLE_NOT_AVAILABLE_TO_DEACTIVATE_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_NOT_AVAILABLE_TO_DEACTIVATE_CODE,
+        },
+      },
     },
   })
   async deactivate(
@@ -319,6 +391,15 @@ export class TablesController {
   @ApiOkResponse({
     description: 'Mesa reactivada (isActive: true, status: available).',
     type: TableResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [TABLE_ID_INVALID],
+      error: 'Bad Request',
+    },
   })
   @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
   @ApiConflictResponse({

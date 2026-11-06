@@ -10,21 +10,33 @@ import { DevUserResolver } from '../current-user/dev-user.resolver.js';
 import { UserRole } from '../roles/user-role.js';
 import type { User } from '../users/user.entity.js';
 import type { UsersService } from '../users/users.service.js';
+import { RESTAURANT_REQUIRED_CODE } from '../../restaurant-operations/index.js';
 import {
-  DinerSocketAuthenticator,
+  SOCKET_REJECTION_CODES,
+  SocketAuthenticator,
   SocketRejection,
-} from './diner-socket-authenticator.js';
+} from './socket-authenticator.js';
 
 const DINER_ID = '7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a';
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+const RESTAURANT_ID = '55bb0482-be1e-490b-9ba8-7533335d958b';
 
 const diner: RequestIdentity = {
   kind: 'registered',
   user: { userId: DINER_ID, restaurantId: null, role: UserRole.DINER },
 };
 
+const owner: RequestIdentity = {
+  kind: 'registered',
+  user: {
+    userId: OWNER_ID,
+    restaurantId: RESTAURANT_ID,
+    role: UserRole.RESTAURANT_ADMIN,
+  },
+};
+
 async function rejectionCode(
-  authenticator: DinerSocketAuthenticator,
+  authenticator: SocketAuthenticator,
   auth: unknown,
 ): Promise<string> {
   try {
@@ -40,11 +52,26 @@ async function rejectionCode(
   throw new Error('Expected the handshake to be rejected');
 }
 
-describe('DinerSocketAuthenticator', () => {
+describe('SocketAuthenticator', () => {
   function withResolver(resolve: ReturnType<typeof vi.fn>) {
     const resolver = { resolve } as unknown as CurrentUserResolver;
-    return { authenticator: new DinerSocketAuthenticator(resolver), resolve };
+    return { authenticator: new SocketAuthenticator(resolver), resolve };
   }
+
+  it('accepts a restaurant_admin with a restaurant and returns its restaurant', async () => {
+    const { authenticator } = withResolver(vi.fn().mockResolvedValue(owner));
+
+    await expect(authenticator.authenticate({ token: 't' })).resolves.toEqual({
+      userId: OWNER_ID,
+      restaurantId: RESTAURANT_ID,
+      role: UserRole.RESTAURANT_ADMIN,
+    });
+  });
+
+  it('uses the same RESTAURANT_REQUIRED code as the HTTP 403, and no longer RESTAURANT_ACCOUNT', () => {
+    expect(SOCKET_REJECTION_CODES).toContain(RESTAURANT_REQUIRED_CODE);
+    expect(SOCKET_REJECTION_CODES).not.toContain('RESTAURANT_ACCOUNT');
+  });
 
   it('accepts a diner and builds the Authorization header from auth.token', async () => {
     const { authenticator, resolve } = withResolver(
@@ -117,7 +144,7 @@ describe('DinerSocketAuthenticator', () => {
       'PROFILE_REQUIRED',
     ],
     [
-      'a restaurant account → RESTAURANT_ACCOUNT',
+      'a restaurant_admin without a restaurant → RESTAURANT_REQUIRED',
       vi.fn().mockResolvedValue({
         kind: 'registered',
         user: {
@@ -126,7 +153,7 @@ describe('DinerSocketAuthenticator', () => {
           role: UserRole.RESTAURANT_ADMIN,
         },
       }),
-      'RESTAURANT_ACCOUNT',
+      'RESTAURANT_REQUIRED',
     ],
   ])('rejects %s', async (_case, resolve, code) => {
     const { authenticator } = withResolver(resolve);
@@ -175,7 +202,7 @@ describe('DinerSocketAuthenticator', () => {
         } as unknown as ConfigService,
       );
       return {
-        authenticator: new DinerSocketAuthenticator(resolver),
+        authenticator: new SocketAuthenticator(resolver),
         users,
       };
     }

@@ -1,4 +1,37 @@
-import { toBogotaTime } from './bogota-time.js';
+import { formatBogotaClock, toBogotaTime } from './bogota-time.js';
+
+describe('formatBogotaClock', () => {
+  const originalTz = process.env.TZ;
+
+  afterEach(() => {
+    if (originalTz === undefined) {
+      delete process.env.TZ;
+    } else {
+      process.env.TZ = originalTz;
+    }
+  });
+
+  it.each([
+    // Cerca de la medianoche UTC: en Bogotá sigue siendo el día anterior.
+    ['2026-11-06T04:41:00Z', '23:41'],
+    ['2026-11-06T00:05:00Z', '19:05'],
+    // Medianoche en Bogotá en formato de 24 h: 00, nunca 24.
+    ['2026-11-06T05:00:00Z', '00:00'],
+    ['2026-11-06T05:07:00Z', '00:07'],
+    ['2026-11-05T17:41:00Z', '12:41'],
+  ])('%s se muestra como %s', (instant, expected) => {
+    expect(formatBogotaClock(new Date(instant))).toBe(expected);
+  });
+
+  it.each(['UTC', 'Asia/Tokyo', 'America/Bogota'])(
+    'no depende de la zona de la máquina (TZ=%s)',
+    (timeZone) => {
+      process.env.TZ = timeZone;
+
+      expect(formatBogotaClock(new Date('2026-11-06T04:41:00Z'))).toBe('23:41');
+    },
+  );
+});
 
 // Bogotá is UTC-5 all year (no daylight saving time).
 describe('toBogotaTime', () => {

@@ -1,3 +1,4 @@
+import { fakeTableReservations } from '../../../../test/support/table-reservations.js';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BadRequestException,
@@ -156,9 +157,12 @@ function createStore() {
 function createService(record = vi.fn(() => Promise.resolve())) {
   const store = createStore();
   const statusLog = { record } as unknown as TableStatusLog;
-  const service = new TablesService(store.repository, statusLog, {
-    emit: vi.fn(),
-  } as unknown as EventEmitter2);
+  const service = new TablesService(
+    store.repository,
+    statusLog,
+    { emit: vi.fn() } as unknown as EventEmitter2,
+    fakeTableReservations(),
+  );
   return { service, store, record };
 }
 
@@ -348,22 +352,23 @@ describe('TablesService.update', () => {
 });
 
 describe('TablesService.deactivate', () => {
-  it('deactivates keeping the status and logs status → inactive in the same transaction', async () => {
+  it('deactivates an available table and logs available → inactive in the same transaction', async () => {
     const { service, store, record } = createService();
 
-    const table = await service.deactivate(owner, TABLE_ID);
+    const table = await service.deactivate(owner, OTHER_TABLE_ID);
 
-    expect(table).toMatchObject({ isActive: false, status: 'occupied' });
-    expect(store.stored(TABLE_ID)).toMatchObject({
+    expect(table).toMatchObject({ isActive: false, status: 'available' });
+    expect(store.stored(OTHER_TABLE_ID)).toMatchObject({
       isActive: false,
-      status: 'occupied',
+      status: 'available',
     });
     const [change, manager] = loggedChange(record);
     expect(change).toEqual({
-      tableId: TABLE_ID,
-      previousStatus: 'occupied',
+      tableId: OTHER_TABLE_ID,
+      previousStatus: 'available',
       newStatus: 'inactive',
       userId: USER_ID,
+      source: 'manual',
       changedAt: expect.any(Date),
     });
     expect(manager).toBe(store.managers[0]);
@@ -372,23 +377,23 @@ describe('TablesService.deactivate', () => {
   it('locks the row while deactivating', async () => {
     const { service, store } = createService();
 
-    await service.deactivate(owner, TABLE_ID);
+    await service.deactivate(owner, OTHER_TABLE_ID);
 
     const manager = store.managers[0] as unknown as {
       findOne: ReturnType<typeof vi.fn>;
     };
     expect(manager.findOne.mock.calls[0][1]).toMatchObject({
-      where: { id: TABLE_ID, restaurantId: RESTAURANT_ID },
+      where: { id: OTHER_TABLE_ID, restaurantId: RESTAURANT_ID },
       lock: { mode: 'pessimistic_write' },
     });
   });
 
   it('answers 409 the second time and logs nothing', async () => {
     const { service, record } = createService();
-    await service.deactivate(owner, TABLE_ID);
+    await service.deactivate(owner, OTHER_TABLE_ID);
     record.mockClear();
 
-    const result = service.deactivate(owner, TABLE_ID);
+    const result = service.deactivate(owner, OTHER_TABLE_ID);
 
     await expect(result).rejects.toBeInstanceOf(ConflictException);
     await expect(result).rejects.toThrow(TABLE_ALREADY_INACTIVE_MESSAGE);
@@ -399,10 +404,10 @@ describe('TablesService.deactivate', () => {
     const failingLog = vi.fn(() => Promise.reject(new Error('log down')));
     const { service, store } = createService(failingLog);
 
-    await expect(service.deactivate(owner, TABLE_ID)).rejects.toThrow(
+    await expect(service.deactivate(owner, OTHER_TABLE_ID)).rejects.toThrow(
       'log down',
     );
-    expect(store.stored(TABLE_ID)?.isActive).toBe(true);
+    expect(store.stored(OTHER_TABLE_ID)?.isActive).toBe(true);
   });
 
   it('answers 404 for a table of another restaurant', async () => {
@@ -416,9 +421,9 @@ describe('TablesService.deactivate', () => {
 
   it('a deactivated table still rejects status changes', async () => {
     const { service } = createService();
-    await service.deactivate(owner, TABLE_ID);
+    await service.deactivate(owner, OTHER_TABLE_ID);
 
-    const result = service.updateStatus(owner, TABLE_ID, 'available');
+    const result = service.updateStatus(owner, OTHER_TABLE_ID, 'available');
 
     await expect(result).rejects.toBeInstanceOf(ConflictException);
     await expect(result).rejects.toThrow(TABLE_INACTIVE_MESSAGE);
@@ -442,6 +447,7 @@ describe('TablesService.reactivate', () => {
       previousStatus: 'inactive',
       newStatus: 'available',
       userId: USER_ID,
+      source: 'manual',
       changedAt: expect.any(Date),
     });
     expect(manager).toBe(store.managers[0]);

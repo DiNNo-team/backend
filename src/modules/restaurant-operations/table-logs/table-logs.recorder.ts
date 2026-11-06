@@ -21,6 +21,7 @@ export class DbTableStatusLog extends TableStatusLog {
       previousStatus: change.previousStatus,
       newStatus: change.newStatus,
       userId: change.userId,
+      source: change.source,
       changedAt: change.changedAt,
     });
   }

@@ -54,6 +54,8 @@ Todas están documentadas con placeholders en [`.env.example`](.env.example):
 | `REDIS_URL` | **Sí** | Cadena de conexión de Redis. | Panel de **Upstash** → tu base de datos → "Connect" (usar la URL `rediss://...` con TLS). | `redis://default:password@host:puerto` |
 | `FIREBASE_PROJECT_ID` | **Sí**, si el usuario de desarrollo está apagado (siempre en Render) | ID del proyecto de Firebase con el que se verifican los ID tokens. No es un secreto. | Consola de **Firebase** → configuración del proyecto. | `mi-proyecto-firebase` |
 | `GOOGLE_GEOCODING_API_KEY` | No | Llave de Google Geocoding API para `GET /v1/geocode`. **Secreto.** Sin ella la app arranca y esa ruta responde `503 GEOCODING_UNAVAILABLE`. | Consola de **Google Cloud** → APIs y servicios → Credenciales (restringida a Geocoding API). La entrega el equipo de Google Cloud por canal privado. | *(sin valor en `.env.example`)* |
+| `RESERVATION_TTL_MINUTES` | No (por defecto `15`) | Vigencia de la microreserva, en minutos enteros de 2 a 15. Un valor inválido (texto, vacío, fuera de rango) impide que la app arranque. | La defines tú en tu `.env` y en el panel de Render. `3` solo durante la demo de expiración. | `15` |
+| `RESERVATION_EXPIRY_ENABLED` | No (por defecto `true`) | Activa el proceso que vence las reservas cada 15 s y al arrancar. `true` o `false`; cualquier otro valor (también vacío) impide que la app arranque. Con `false` las reservas vencidas se siguen venciendo al leerlas u operarlas. | La defines tú; en Render va en `true`. | `true` |
 | `DEV_USER_ENABLED` | No (por defecto apagado) | Activa el usuario de desarrollo. **Solo local:** se apaga solo en Render aunque esté en `true`. | La defines tú en tu `.env`. **No la definas en Render.** | `true` |
 | `DEV_USER_ID` | Si `DEV_USER_ENABLED=true` | UUID (tabla `users`) del usuario de desarrollo por defecto. | Lo imprime `npm run seed`. | `3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f` |
 
@@ -67,10 +69,11 @@ opcional: sin ella solo `GET /v1/geocode` deja de funcionar (responde `503`).
 
 - **Monolito modular.** El código de negocio vive bajo `src/modules/`, uno por dominio,
   registrado en [`src/app.module.ts`](src/app.module.ts). Hoy existen 5 módulos.
-  `restaurant-operations` ya tiene controladores y servicios (registro, consulta y edición del
-  restaurante, estado abierto/cerrado, mesas y bitácora de mesas);
-  `identity-access` ya tiene el usuario actual (guard, resolver y `UsersService`); los otros
-  tres siguen vacíos:
+  `restaurant-operations` (registro, consulta y edición del restaurante, estado abierto/cerrado,
+  mesas y bitácora de mesas), `identity-access` (usuario actual, roles, cuentas y autenticación
+  del WebSocket), `search-availability` (búsqueda, detalle público, disponibilidad y WebSocket)
+  y `reservations-checkin` (microreservas, vencimiento y check-in) ya tienen código;
+  `notifications` sigue vacío:
   - `identity-access`
   - `restaurant-operations`
   - `reservations-checkin`
@@ -128,6 +131,9 @@ src/
 | `npm run test:watch` | Pruebas unitarias en modo watch. |
 | `npm run test:cov` | Pruebas unitarias con reporte de cobertura. |
 | `npm run test:e2e` | Pruebas e2e de la capa HTTP (prefijo, CORS, Swagger) — no requieren PostgreSQL ni Redis. |
+| `npm run test:db` | Pruebas contra un Postgres real (solo la base de pruebas, con `.env.test`); no están en CI. Ver [CLAUDE.md §11](CLAUDE.md#pruebas). |
+| `npm run export:data` | Exportación anónima de reservas, check-ins y bitácora a CSV (solo lectura). **Solo Elizabeth.** Ver [CLAUDE.md §11](CLAUDE.md#scripts-de-datos-srcscripts-elizabeth). |
+| `npm run demo:reset` | Deja la demo limpia: Casa 72 sin reservas activas y con sus mesas en el estado inicial. Dry-run por defecto; `--apply` pide confirmar la base. **Solo Elizabeth.** Ver [CLAUDE.md §11](CLAUDE.md#scripts-de-datos-srcscripts-elizabeth). |
 | `npm run seed` | Crea los datos de prueba (ver [sección 9](#9-base-de-datos-migraciones-y-datos-de-prueba)). |
 | `npm run migration:create -- src/migrations/<Nombre>` | Crea una migración vacía para escribir el SQL a mano. |
 | `npm run migration:generate -- src/migrations/<Nombre>` | Genera una migración comparando las entidades con la base. **Solo Elizabeth.** |
@@ -172,8 +178,8 @@ También puedes abrir `http://localhost:3000/docs` para ver el contrato de la AP
 
 ### Tiempo real: escuchar `availability.changed`
 
-El WebSocket (Socket.IO) corre en el mismo host y puerto que la API (`/socket.io`) y solo acepta
-comensales. Para ver llegar los eventos mientras cambias mesas o el estado del restaurante, usa el
+El WebSocket (Socket.IO) corre en el mismo host y puerto que la API (`/socket.io`) y acepta
+comensales y restaurantes con restaurante registrado (salas y eventos en `CLAUDE.md` §12.7). Para ver llegar los eventos mientras cambias mesas o el estado del restaurante, usa el
 script de QA (necesita `npm install`, porque usa `socket.io-client`):
 
 ```bash
@@ -189,14 +195,14 @@ DINNO_TOKEN=<token> node scripts/listen-availability.mjs --url https://dinno-bac
 Imprime cada evento con la hora, por ejemplo
 `[14:05:12] availability.changed {"restaurantId":"…","availability":"few","isOpenNow":true,"isSearchable":true}`.
 Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `EMAIL_NOT_VERIFIED`,
-`PROFILE_REQUIRED` o `RESTAURANT_ACCOUNT`) y termina. Sal con Ctrl+C.
+`PROFILE_REQUIRED` o `RESTAURANT_REQUIRED`) y termina. Sal con Ctrl+C.
 
 ## 7. Despliegue
 
 - Desplegado en **Render** como *Web Service*.
 - **Auto-deploy activado**: cada push a la rama `develop` dispara un nuevo despliegue.
 - **URL de producción:** https://dinno-backend.onrender.com
-- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID` y `GOOGLE_GEOCODING_API_KEY`)
+- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID`, `GOOGLE_GEOCODING_API_KEY`, `RESERVATION_TTL_MINUTES` y `RESERVATION_EXPIRY_ENABLED`)
   se configuran directamente en el dashboard de Render — **no viven en el repositorio**.
   `FIREBASE_PROJECT_ID` es obligatoria porque en Render el usuario de desarrollo está apagado:
   si falta, la app no arranca. `PORT` no se define ahí: Render lo asigna en tiempo de ejecución.
@@ -220,9 +226,9 @@ Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `
 - El **frontend** (React + Vite, desplegado en Vercel) y el **mobile** (Expo) consumen esta API
   a través de las variables `VITE_API_URL` y `EXPO_PUBLIC_API_URL` respectivamente, apuntando a
   `https://dinno-backend.onrender.com/v1` en producción (o `http://localhost:3000/v1` en local).
-- **Tiempo real:** la app se conecta por Socket.IO a la misma URL **sin** `/v1`
+- **Tiempo real:** la app (comensal) y la web (restaurante) se conectan por Socket.IO a la misma URL **sin** `/v1`
   (`https://dinno-backend.onrender.com`), con `auth` como función que entrega el token de Firebase.
-  Contrato en `CLAUDE.md`, sección 10, "Tiempo real".
+  Contrato en `CLAUDE.md`, sección 10, "Tiempo real", y §12.7.
 - Si cambia la URL de despliegue del frontend o del mobile (por ejemplo, un nuevo dominio de
   Vercel), hay que **actualizar `CORS_ORIGINS` en el dashboard de Render** agregando el nuevo
   origen a la lista separada por comas — de lo contrario el navegador bloqueará las peticiones

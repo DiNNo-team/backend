@@ -38,3 +38,6 @@ docker-compose.override.yml
 
 # TypeScript incremental
 *.tsbuildinfo
+
+# Exportaciones de datos (export:data): pueden ser sensibles
+/exports

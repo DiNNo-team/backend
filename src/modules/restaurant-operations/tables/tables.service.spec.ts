@@ -1,3 +1,4 @@
+import { fakeTableReservations } from '../../../../test/support/table-reservations.js';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { QueryFailedError, type Repository } from 'typeorm';
@@ -36,6 +37,7 @@ function createService() {
     tables as unknown as Repository<Table>,
     { record: vi.fn() } as unknown as TableStatusLog,
     { emit: vi.fn() } as unknown as EventEmitter2,
+    fakeTableReservations(),
   );
   return { service, tables };
 }
