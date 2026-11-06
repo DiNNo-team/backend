@@ -96,6 +96,9 @@ export class CreateReservationService {
     // la creación no cambia. Si la creación falla después, el vencimiento ya
     // hecho sigue siendo correcto: esa reserva estaba vencida de todos modos.
     await this.expiration.expireDueForDiner(user.userId);
+    // También las del restaurante: si está lleno solo por reservas ya vencidas de
+    // otros comensales, este comensal debe recibir mesa, no NO_TABLE_AVAILABLE.
+    await this.expiration.expireDueForRestaurant(restaurant.id);
 
     const { reservation, table } = await this.saveWithCodeRetry(
       user.userId,

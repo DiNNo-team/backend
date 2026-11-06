@@ -490,7 +490,7 @@ describe('vencimiento al leer y al crear: Postgres real', () => {
   });
 
   describe('6. el vencimiento libera el índice único parcial de la mesa', () => {
-    it('tras vencer, la misma mesa se puede reservar otra vez', () =>
+    it('restaurante lleno solo por una reserva vencida ajena: crear la vence y el comensal nuevo recibe esa mesa', () =>
       withScenario(
         [{ identifier: '01', capacity: 4, status: 'reserved' }],
         2,
@@ -501,27 +501,45 @@ describe('vencimiento al leer y al crear: Postgres real', () => {
             tableIdentifier: '01',
             expiresAt: DUE,
           });
-          const { creation, expiration } = buildServices();
+          const { creation } = buildServices();
           const request = { restaurantId: s.restaurantId, partySize: 4 };
 
-          // Antes de vencer, la mesa sigue reservada: el segundo comensal no la
-          // recibe (vencer a otros comensales es del proceso periódico, tarea 6).
-          const before = await creation
-            .create(asDiner(second), request)
-            .catch((e: unknown) => e);
-          expect(errorCodeOf(before)).toBe('NO_TABLE_AVAILABLE');
+          const created = await creation.create(asDiner(second), request);
 
-          await expiration.expireIfDue(staleId);
-          const after = await creation.create(asDiner(second), request);
-
-          expect(after.status).toBe('active');
-          expect(after.table.identifier).toBe('01');
+          expect(created.status).toBe('active');
+          expect(created.table.identifier).toBe('01');
           const [{ count }] = await dataSource.query<{ count: string }[]>(
             `SELECT count(*) FROM reservations WHERE table_id = $1 AND status = 'active'`,
             [s.tableIds.get('01')],
           );
           expect(Number(count)).toBe(1);
           expect((await readReservation(staleId)).status).toBe('expired');
+          expect((await readLogs(s, '01')).map(({ source }) => source)).toEqual(
+            ['system', 'reservation'],
+          );
+        },
+      ));
+
+    it('una reserva vigente ajena sí ocupa la mesa: NO_TABLE_AVAILABLE, y al vencer se puede reservar', () =>
+      withScenario(
+        [{ identifier: '01', capacity: 4, status: 'reserved' }],
+        2,
+        async (s) => {
+          const [first, second] = s.dinerIds;
+          await insertReservation(s, {
+            dinerId: first,
+            tableIdentifier: '01',
+            expiresAt: NOT_DUE,
+          });
+          const { creation } = buildServices();
+          const request = { restaurantId: s.restaurantId, partySize: 4 };
+
+          const error = await creation
+            .create(asDiner(second), request)
+            .catch((e: unknown) => e);
+
+          expect(errorCodeOf(error)).toBe('NO_TABLE_AVAILABLE');
+          expect(await readTableStatus(s, '01')).toBe('reserved');
         },
       ));
   });

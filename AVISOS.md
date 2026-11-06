@@ -9,6 +9,12 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
 
+- **Nuevo (2026-11-05): Expiración automática lista en la rama (tareas 3.2.1 a 3.2.3)** (`feat/sprint3-backend`; contrato en `CLAUDE.md` §12.5; pendiente de PR y de `develop`).
+  - **Para Render y Azure:** variable nueva `RESERVATION_EXPIRY_ENABLED=true` (es el valor por defecto; un valor distinto de `true` o `false` impide que la app arranque). Está en `.env.example`.
+  - **Comportamiento:** una mesa de reserva vencida se libera sola en máximo ~15 s, sin que nadie consulte la reserva. Al arrancar, el servidor vence lo que quedó pendiente mientras estuvo apagado. La reserva queda `expired` con `no_show = true`, y la bitácora lo registra como «Automático» (`source: "system"`, usuario `null`).
+  - **Al crear una reserva:** ahora se vencen primero también las reservas ya vencidas del restaurante, así que un restaurante lleno solo por reservas vencidas de otros comensales da mesa en vez de `NO_TABLE_AVAILABLE`.
+  - **Para la web y la app:** `availability.changed` sale como siempre cuando la mesa se libera. Todavía NO hay `reservation.expired` por WebSocket (Día 4).
+  - **Sin cambios de base de datos ni dependencias nuevas.**
 - **Nuevo (2026-11-05): `POST /v1/reservations/:id/cancel` listo en la rama `feat/sprint3-backend`** (Sprint 3; contrato en `CLAUDE.md` §12.8 y §12.9; pendiente de PR y de `develop`).
   - **API:** el comensal cancela su reserva activa y recibe `200 Reservation` con `status: "cancelled"`, `cancelledAt` (ISO UTC) y `code: null`; la mesa vuelve a Disponible (si el restaurante no la cambió a mano) y el cambio queda en la bitácora como del comensal. Sin cuerpo.
   - **Para Sebastián (app):** errores nuevos, ambos con `errorCode`: `404 RESERVATION_NOT_FOUND` (no existe o es de otro comensal: volver a la búsqueda) y `409 RESERVATION_NOT_ACTIVE` («Esta reserva ya no está activa.»: estaba cancelada, vencida o cumplida; también si acaba de vencer). **Ante el 409 la app debe consultar `GET /v1/reservations/:id` y mostrar el estado real** (por ejemplo `expired`). Un id que no es UUID da `400`.

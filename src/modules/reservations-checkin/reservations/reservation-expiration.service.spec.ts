@@ -6,7 +6,10 @@ import {
   type TableStatusLog,
 } from '../../restaurant-operations/index.js';
 import type { Clock } from '../../search-availability/index.js';
-import { ReservationExpirationService } from './reservation-expiration.service.js';
+import {
+  EXPIRY_BATCH_SIZE,
+  ReservationExpirationService,
+} from './reservation-expiration.service.js';
 import { Reservation } from './reservation.entity.js';
 
 const RESERVATION_ID = '5f1c2d3e-4a5b-4c6d-8e7f-9a0b1c2d3e4f';
@@ -57,6 +60,8 @@ function postgresRows(sql: string, records: DbRecord[]) {
 interface Options {
   // Filas que debería devolver el UPDATE ... RETURNING (las que vence).
   expiredRows?: DbRecord[];
+  // Para el barrido: lo que devuelve cada UPDATE, en orden. Agotados, ninguna fila.
+  batches?: DbRecord[][];
   // Mesas que siguen en reserved (el UPDATE de la mesa afecta una fila).
   // Por defecto, todas.
   stillReserved?: (tableId: string) => boolean;
@@ -85,7 +90,12 @@ function setup(options: Options = {}) {
       const [sql, params] = this.getQueryAndParameters();
       executed.push({ sql, params });
       log.push('update-reservations');
-      const raw = postgresRows(sql, options.expiredRows ?? []);
+      const raw = postgresRows(
+        sql,
+        options.batches
+          ? (options.batches.shift() ?? [])
+          : (options.expiredRows ?? []),
+      );
       return Promise.resolve({ raw, affected: raw.length, generatedMaps: [] });
     } as never,
   );
@@ -154,12 +164,11 @@ function setup(options: Options = {}) {
   };
 }
 
-// El núcleo aún no se expone (la tarea 6 agrega expireAllDue sobre él): se
-// prueba por el cast para fijar que sin scope vence todas las debidas.
-const expireDue = (service: ReservationExpirationService, scope: object) =>
-  (
-    service as unknown as { expireDue: (s: object) => Promise<number> }
-  ).expireDue(scope);
+// n reservas debidas, cada una con su mesa, a partir de `first`.
+const dueRecords = (n: number, first = 0, restaurantId = RESTAURANT_ID) =>
+  Array.from({ length: n }, (_, i) =>
+    record(`t-${first + i}`, restaurantId, `r-${first + i}`),
+  );
 
 describe('ReservationExpirationService', () => {
   describe('vence una reserva debida', () => {
@@ -361,47 +370,135 @@ describe('ReservationExpirationService', () => {
       expect(params[4]).toBe('t-4');
     });
 
-    it('sin scope vence todas las debidas (lo que usará expireAllDue en la tarea 6)', async () => {
+    it('expireDueForRestaurant filtra por el restaurante y no usa lotes: espera los bloqueos', async () => {
+      const t = setup();
+
+      await t.service.expireDueForRestaurant(RESTAURANT_ID);
+
+      const [{ sql, params }] = t.executed;
+      expect(sql).toContain('AND "restaurant_id" = $5');
+      expect(params[4]).toBe(RESTAURANT_ID);
+      expect(sql).not.toContain('SKIP LOCKED');
+      expect(sql).not.toContain('LIMIT');
+    });
+
+    it('los alcances normales nunca usan lotes', async () => {
+      const t = setup();
+
+      await t.service.expireIfDue(RESERVATION_ID);
+      await t.service.expireDueForDiner(DINER_ID);
+      await t.service.expireDueForTable('t-4');
+
+      for (const { sql } of t.executed) {
+        expect(sql).not.toContain('SKIP LOCKED');
+      }
+    });
+  });
+
+  describe('expireAllDue (el barrido)', () => {
+    it('el lote es de 100', () => {
+      expect(EXPIRY_BATCH_SIZE).toBe(100);
+    });
+
+    it('el UPDATE elige el lote con una subconsulta FOR UPDATE SKIP LOCKED, ordenada y limitada, y RETURNING como texto', async () => {
+      const t = setup({ batches: [dueRecords(1)] });
+
+      await t.service.expireAllDue();
+
+      const [{ sql, params }] = t.executed;
+      expect(sql).toMatch(/^UPDATE "reservations" SET /);
+      expect(sql).toContain(`WHERE "status" = 'active' AND "expires_at" <= $4`);
+      expect(sql).toMatch(
+        /AND "id" IN \(SELECT "id" FROM "reservations" WHERE "status" = 'active' AND "expires_at" <= \$\d+ ORDER BY "expires_at" LIMIT \$\d+ FOR UPDATE SKIP LOCKED\)/,
+      );
+      expect(sql).toMatch(/RETURNING "id", "table_id", "restaurant_id"$/);
+      expect(params).toContain(EXPIRY_BATCH_SIZE);
+      expect(params.filter((param) => param === NOW).length).toBeGreaterThan(1);
+    });
+
+    it('sin reservas debidas: una sola transacción, devuelve 0 y no hace nada más', async () => {
+      const t = setup({ batches: [[]] });
+
+      await expect(t.service.expireAllDue()).resolves.toBe(0);
+
+      expect(t.dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(t.tablesRepo.update).not.toHaveBeenCalled();
+      expect(t.events.emit).not.toHaveBeenCalled();
+    });
+
+    it('un lote incompleto termina: no hace una consulta de más', async () => {
+      const t = setup({ batches: [dueRecords(99)] });
+
+      await expect(t.service.expireAllDue()).resolves.toBe(99);
+
+      expect(t.dataSource.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('varios lotes: una transacción por lote hasta que uno no se llena, y devuelve el total', async () => {
       const t = setup({
-        expiredRows: [
-          record('t-1', RESTAURANT_ID, 'r-1'),
-          record('t-2', OTHER_RESTAURANT_ID, 'r-2'),
-          record('t-3', RESTAURANT_ID, 'r-3'),
+        batches: [dueRecords(100), dueRecords(100, 100), dueRecords(30, 200)],
+      });
+
+      await expect(t.service.expireAllDue()).resolves.toBe(230);
+
+      expect(t.dataSource.transaction).toHaveBeenCalledTimes(3);
+      expect(t.tablesRepo.update).toHaveBeenCalledTimes(230);
+      expect(t.statusLog.record).toHaveBeenCalledTimes(230);
+    });
+
+    it('con lotes exactos sigue hasta encontrar uno vacío', async () => {
+      const t = setup({ batches: [dueRecords(100), []] });
+
+      await expect(t.service.expireAllDue()).resolves.toBe(100);
+
+      expect(t.dataSource.transaction).toHaveBeenCalledTimes(2);
+    });
+
+    it('una sola vez por reserva: cada mesa se libera y registra una vez', async () => {
+      const t = setup({ batches: [dueRecords(100), dueRecords(5, 100)] });
+
+      await t.service.expireAllDue();
+
+      const tables = t.tablesRepo.update.mock.calls.map(
+        ([criteria]) => criteria.id,
+      );
+      expect(new Set(tables).size).toBe(105);
+    });
+
+    it('un evento por restaurante, y cada uno solo después del commit de su lote', async () => {
+      const t = setup({
+        batches: [
+          [...dueRecords(99), record('t-99', OTHER_RESTAURANT_ID, 'r-99')],
+          [record('t-100', OTHER_RESTAURANT_ID, 'r-100')],
         ],
       });
 
-      const expired = await expireDue(t.service, {});
+      await t.service.expireAllDue();
 
-      expect(expired).toBe(3);
-      const [{ sql, params }] = t.executed;
-      // Solo los parámetros del SET (3) y de la condición de vencimiento (1).
-      expect(sql).not.toContain('$5');
-      expect(params).toHaveLength(4);
-      expect(sql).toContain(`WHERE "status" = 'active' AND "expires_at" <= $4`);
-      expect(t.statusLog.record).toHaveBeenCalledTimes(3);
-      // Un solo commit y un evento por restaurante afectado, no por mesa.
-      expect(t.dataSource.transaction).toHaveBeenCalledTimes(1);
-      expect(t.events.emit).toHaveBeenCalledTimes(2);
-      expect(t.events.emit).toHaveBeenCalledWith(
-        RESTAURANT_AVAILABILITY_AFFECTED,
+      const milestones = t.log.filter(
+        (entry) => entry === 'commit' || entry === 'emit',
+      );
+      expect(milestones).toEqual(['commit', 'emit', 'emit', 'commit', 'emit']);
+      const emitted = t.events.emit.mock.calls as unknown as unknown[][];
+      expect(emitted.map((call) => call[1])).toEqual([
         { restaurantId: RESTAURANT_ID },
-      );
-      expect(t.events.emit).toHaveBeenCalledWith(
-        RESTAURANT_AVAILABILITY_AFFECTED,
         { restaurantId: OTHER_RESTAURANT_ID },
-      );
+        { restaurantId: OTHER_RESTAURANT_ID },
+      ]);
     });
 
-    it('sin scope, el restaurante solo se notifica si alguna de sus mesas cambió', async () => {
+    it('una mesa que ya no está reserved no se pisa: sin bitácora y su restaurante no se notifica, pero la reserva cuenta', async () => {
       const t = setup({
-        expiredRows: [
-          record('t-1', RESTAURANT_ID, 'r-1'),
-          record('t-2', OTHER_RESTAURANT_ID, 'r-2'),
+        batches: [
+          [
+            record('t-1', RESTAURANT_ID, 'r-1'),
+            record('t-2', OTHER_RESTAURANT_ID, 'r-2'),
+          ],
         ],
         stillReserved: (tableId) => tableId === 't-1',
       });
 
-      await expireDue(t.service, {});
+      await expect(t.service.expireAllDue()).resolves.toBe(2);
 
       expect(t.statusLog.record).toHaveBeenCalledTimes(1);
       expect(t.events.emit).toHaveBeenCalledTimes(1);
@@ -409,6 +506,32 @@ describe('ReservationExpirationService', () => {
         RESTAURANT_AVAILABILITY_AFFECTED,
         { restaurantId: RESTAURANT_ID },
       );
+    });
+
+    it('la bitácora es automática: source system y sin usuario', async () => {
+      const t = setup({ batches: [dueRecords(1)] });
+
+      await t.service.expireAllDue();
+
+      expect(t.statusLog.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableId: 't-0',
+          previousStatus: 'reserved',
+          newStatus: 'available',
+          userId: null,
+          source: 'system',
+        }),
+        t.manager,
+      );
+    });
+
+    it('si un lote falla, se revierte, no emite nada de ese lote y el error sube a quien llama', async () => {
+      const t = setup({ batches: [dueRecords(1)], logFails: true });
+
+      await expect(t.service.expireAllDue()).rejects.toThrow('log roto');
+
+      expect(t.log).toContain('rollback');
+      expect(t.events.emit).not.toHaveBeenCalled();
     });
   });
 });

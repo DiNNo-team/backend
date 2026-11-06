@@ -20,6 +20,7 @@ import {
 import { IdentityAccessModule } from './modules/identity-access/identity-access.module.js';
 import { RequireTableReservationsPort } from './modules/restaurant-operations/index.js';
 import { RestaurantOperationsModule } from './modules/restaurant-operations/restaurant-operations.module.js';
+import { ReservationExpiryModule } from './modules/reservations-checkin/index.js';
 import { ReservationsCheckinModule } from './modules/reservations-checkin/reservations-checkin.module.js';
 import { SearchAvailabilityModule } from './modules/search-availability/search-availability.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
@@ -58,6 +59,8 @@ const logger = new Logger('Database');
     IdentityAccessModule,
     RestaurantOperationsModule,
     ReservationsCheckinModule,
+    // El proceso que vence reservas cada 15 s: solo en la aplicación real.
+    ReservationExpiryModule,
     SearchAvailabilityModule,
     NotificationsModule,
   ],

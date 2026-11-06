@@ -182,6 +182,10 @@ function setup(options: Options = {}) {
       staleExpired = true;
       return Promise.resolve(options.staleActiveReservation ? 1 : 0);
     }),
+    expireDueForRestaurant: vi.fn(() => {
+      log.push('expire-restaurant');
+      return Promise.resolve(0);
+    }),
   };
   const generator = { generate: vi.fn(() => codes.shift() ?? 'ZZZZZZ') };
   const service = new CreateReservationService(
@@ -273,7 +277,14 @@ describe('CreateReservationService', () => {
 
       await create(t.service);
 
-      expect(t.log).toEqual(['expire', 'lock:t-4', 'log', 'commit', 'emit']);
+      expect(t.log).toEqual([
+        'expire',
+        'expire-restaurant',
+        'lock:t-4',
+        'log',
+        'commit',
+        'emit',
+      ]);
       expect(t.events.emit).toHaveBeenCalledWith(
         RESTAURANT_AVAILABILITY_AFFECTED,
         { restaurantId: RESTAURANT_ID },
@@ -392,6 +403,49 @@ describe('CreateReservationService', () => {
       await create(t.service).catch(() => undefined);
 
       expect(t.expiration.expireDueForDiner).not.toHaveBeenCalled();
+      expect(t.expiration.expireDueForRestaurant).not.toHaveBeenCalled();
+    });
+
+    it('vence también las del restaurante, después de las del comensal y antes de abrir la transacción', async () => {
+      const t = setup();
+      let transactionsWhenExpiring = -1;
+      t.expiration.expireDueForRestaurant.mockImplementationOnce(() => {
+        transactionsWhenExpiring = t.dataSource.transaction.mock.calls.length;
+        t.log.push('expire-restaurant');
+        return Promise.resolve(0);
+      });
+
+      await create(t.service);
+
+      expect(t.expiration.expireDueForRestaurant).toHaveBeenCalledWith(
+        RESTAURANT_ID,
+      );
+      expect(t.log.slice(0, 2)).toEqual(['expire', 'expire-restaurant']);
+      expect(transactionsWhenExpiring).toBe(0);
+    });
+
+    it('restaurante lleno solo por reservas vencidas ajenas: al vencerlas, el comensal recibe mesa', async () => {
+      const freed = row('t-9', '09', 4);
+      const t = setup({ candidates: [] });
+      t.expiration.expireDueForRestaurant.mockImplementationOnce(() => {
+        t.tablesRepo.find.mockResolvedValueOnce([freed]);
+        t.tablesRepo.findOne.mockResolvedValueOnce(freed);
+        return Promise.resolve(1);
+      });
+
+      const response = await create(t.service);
+
+      expect(response.table.identifier).toBe('09');
+      expect(t.reservationsRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('sin mesas tampoco después de vencer: sigue siendo NO_TABLE_AVAILABLE', async () => {
+      const t = setup({ candidates: [] });
+
+      const error = await create(t.service).catch((e: unknown) => e);
+
+      expect(errorCodeOf(error)).toBe('NO_TABLE_AVAILABLE');
+      expect(t.expiration.expireDueForRestaurant).toHaveBeenCalledTimes(1);
     });
 
     it('la reserva activa se revisa antes que las mesas (orden c antes que d)', async () => {

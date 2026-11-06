@@ -45,5 +45,7 @@ import { ReservationsForTables } from './reservations/reservations-for-tables.js
     // Valida RESERVATION_TTL_MINUTES al crear el módulo: si es inválida, la app no arranca.
     reservationConfigProvider,
   ],
+  // Para ReservationExpiryModule, el proceso periódico.
+  exports: [ReservationExpirationService],
 })
 export class ReservationsCheckinModule {}

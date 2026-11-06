@@ -209,7 +209,10 @@ describe('POST /v1/reservations (e2e)', () => {
       .overrideProvider(getRepositoryToken(CheckIn))
       .useValue({})
       .overrideProvider(ReservationExpirationService)
-      .useValue({ expireDueForDiner: vi.fn().mockResolvedValue(0) })
+      .useValue({
+        expireDueForDiner: vi.fn().mockResolvedValue(0),
+        expireDueForRestaurant: vi.fn().mockResolvedValue(0),
+      })
       .overrideProvider(TableStatusLog)
       .useValue(statusLog)
       .overrideProvider(Clock)

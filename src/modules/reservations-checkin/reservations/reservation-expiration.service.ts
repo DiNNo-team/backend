@@ -10,12 +10,16 @@ import { Clock } from '../../search-availability/index.js';
 import { releaseReservedTable } from './release-reserved-table.js';
 import { Reservation } from './reservation.entity.js';
 
-// Qué reservas vencer. Vacío = todas las debidas (lo usará el proceso de cada
-// 15 s de la tarea 6, §12.5); con reservationId o dinerId, solo esas.
+// Tamaño de cada lote del barrido: acota cuántas filas bloquea una transacción.
+export const EXPIRY_BATCH_SIZE = 100;
+
+// Qué reservas vencer. Vacío = todas las debidas (el barrido, §12.5); con algún
+// campo, solo esas.
 interface ExpirationScope {
   reservationId?: string;
   dinerId?: string;
   tableId?: string;
+  restaurantId?: string;
 }
 
 // Fila que devuelve el UPDATE ... RETURNING: columnas de la base.
@@ -28,10 +32,9 @@ interface ExpiredRow {
 // Vencimiento de las microreservas (§12.5, §12.3). La fuente de verdad es
 // expires_at en PostgreSQL; no hay temporizadores en memoria.
 //
-// Hoy se usa "al leer" (GET /reservations/...) y "al crear" (antes de comprobar
-// la reserva activa). La tarea 6 agrega expireAllDue() llamando a expireDue({}),
-// la misma lógica, para el proceso periódico. No conoce el WebSocket: solo emite
-// el evento interno de disponibilidad.
+// Se usa "al leer" (GET /reservations/...), "al crear" y "al operar", con un
+// alcance, y en el barrido periódico (expireAllDue), por lotes: siempre la misma
+// lógica. No conoce el WebSocket: solo emite el evento interno de disponibilidad.
 @Injectable()
 export class ReservationExpirationService {
   constructor(
@@ -59,6 +62,26 @@ export class ReservationExpirationService {
     return this.expireDue({ tableId });
   }
 
+  // Vence las reservas debidas de todo el restaurante. Lo usa la creación: si el
+  // restaurante está lleno solo por reservas ya vencidas, el comensal recibe mesa.
+  expireDueForRestaurant(restaurantId: string): Promise<number> {
+    return this.expireDue({ restaurantId });
+  }
+
+  // El barrido (§12.5): vence todas las debidas, por lotes y con una transacción
+  // por lote. Termina cuando un lote no se llena: lo que otra instancia tenga
+  // bloqueado es de esa instancia, y lo que quede lo recoge el siguiente barrido.
+  // Devuelve cuántas venció en total.
+  async expireAllDue(): Promise<number> {
+    let total = 0;
+    let expired: number;
+    do {
+      expired = await this.expireDue({}, EXPIRY_BATCH_SIZE);
+      total += expired;
+    } while (expired >= EXPIRY_BATCH_SIZE);
+    return total;
+  }
+
   // Núcleo: una transacción por llamada.
   //   1. Un solo UPDATE ... RETURNING con la condición dentro del UPDATE
   //      (status = 'active' y expires_at <= ahora): es idempotente y no pisa una
@@ -69,11 +92,14 @@ export class ReservationExpirationService {
   //      reserved: nunca se pisa un estado que el restaurante cambió después. Y
   //      la bitácora solo se escribe si la mesa realmente cambió.
   // El evento sale después del commit, una vez por restaurante cuya mesa cambió.
-  private async expireDue(scope: ExpirationScope): Promise<number> {
+  private async expireDue(
+    scope: ExpirationScope,
+    batchSize?: number,
+  ): Promise<number> {
     const now = this.clock.now();
     const { expired, restaurantsToNotify } = await this.dataSource.transaction(
       async (manager) => {
-        const rows = await this.markExpired(manager, scope, now);
+        const rows = await this.markExpired(manager, scope, now, batchSize);
         const restaurants = new Set<string>();
         for (const row of rows) {
           if (await this.releaseTable(manager, row, now)) {
@@ -96,6 +122,7 @@ export class ReservationExpirationService {
     manager: EntityManager,
     scope: ExpirationScope,
     now: Date,
+    batchSize?: number,
   ): Promise<ExpiredRow[]> {
     const query = manager
       .createQueryBuilder()
@@ -112,6 +139,19 @@ export class ReservationExpirationService {
     }
     if (scope.tableId !== undefined) {
       query.andWhere(`"table_id" = :tableId`, { tableId: scope.tableId });
+    }
+    if (scope.restaurantId !== undefined) {
+      query.andWhere(`"restaurant_id" = :restaurantId`, {
+        restaurantId: scope.restaurantId,
+      });
+    }
+    // Lote: SKIP LOCKED salta lo que otra transacción tiene bloqueado, en vez de
+    // esperarla. Dos barridos a la vez (varias instancias) toman lotes distintos.
+    if (batchSize !== undefined) {
+      query.andWhere(
+        `"id" IN (SELECT "id" FROM "reservations" WHERE "status" = 'active' AND "expires_at" <= :now ORDER BY "expires_at" LIMIT :batchSize FOR UPDATE SKIP LOCKED)`,
+        { batchSize },
+      );
     }
     // RETURNING como texto, no como arreglo: en un arreglo TypeORM interpreta
     // cada elemento como NOMBRE DE PROPIEDAD de la entidad (tableId) y descarta
