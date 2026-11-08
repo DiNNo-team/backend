@@ -128,6 +128,14 @@ export class PublicRestaurantResponseDto {
   })
   availability: Availability;
 
+  @ApiProperty({
+    description: 'Vigencia en minutos de una microreserva en este momento.',
+    minimum: 2,
+    maximum: 15,
+    example: 15,
+  })
+  reservationTtlMinutes: number;
+
   @ApiPropertyOptional({
     description:
       'Distancia en km desde lat y lng, con 2 decimales. Solo aparece si se envían lat y lng.',

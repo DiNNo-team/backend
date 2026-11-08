@@ -250,6 +250,7 @@ describe('Public restaurant detail (e2e)', () => {
         ],
         isOpenNow: true,
         availability: 'available',
+        reservationTtlMinutes: 15,
       });
     });
 
@@ -270,6 +271,7 @@ describe('Public restaurant detail (e2e)', () => {
 
       expect(res.body.isOpenNow).toBe(false);
       expect(res.body.availability).toBe('closed');
+      expect(res.body.reservationTtlMinutes).toBe(15);
     });
 
     it('a restaurant without category nor address answers null in both', async () => {
@@ -464,9 +466,14 @@ describe('Public restaurant detail (e2e)', () => {
       'schedules',
       'isOpenNow',
       'availability',
+      'reservationTtlMinutes',
       'distanceKm',
     ]);
     expect(schema.required).not.toContain('distanceKm');
+    expect(schema.required).toContain('reservationTtlMinutes');
+    expect(schema.properties.reservationTtlMinutes.description).toBe(
+      'Vigencia en minutos de una microreserva en este momento.',
+    );
     expect(schema.properties.availability.enum).toEqual([
       'available',
       'few',

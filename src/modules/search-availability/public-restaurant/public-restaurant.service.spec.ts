@@ -1,5 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import type { AvailabilityService } from '../availability/availability.service.js';
+import type { ReservationConfig } from '../reservation-ttl/reservation-ttl.config.js';
 import type { AvailabilityResult } from '../availability/availability.types.js';
 import type {
   PublicRestaurantProfile,
@@ -36,6 +37,7 @@ const OPEN_FEW: AvailabilityResult = {
 function setup(
   profile: PublicRestaurantProfile | null,
   availability: AvailabilityResult | null = OPEN_FEW,
+  ttlMinutes = 15,
 ) {
   const reader = { findProfile: vi.fn().mockResolvedValue(profile) };
   const availabilityService = {
@@ -44,6 +46,7 @@ function setup(
   const service = new PublicRestaurantService(
     reader as unknown as PublicRestaurantReader,
     availabilityService as unknown as AvailabilityService,
+    { ttlMinutes } as ReservationConfig,
   );
   return { service, reader, availabilityService };
 }
@@ -78,12 +81,38 @@ describe('PublicRestaurantService', () => {
       schedules: SCHEDULES,
       isOpenNow: true,
       availability: 'few',
+      reservationTtlMinutes: 15,
     });
     expect(result).not.toHaveProperty('distanceKm');
     expect(result).not.toHaveProperty('isSearchable');
     expect(reader.findProfile).toHaveBeenCalledWith(ID);
     expect(availabilityService.getForRestaurant).toHaveBeenCalledTimes(1);
     expect(availabilityService.getForRestaurant).toHaveBeenCalledWith(ID);
+  });
+
+  it.each([15, 3])(
+    'answers reservationTtlMinutes from the configured TTL (%i)',
+    async (ttl) => {
+      const { service } = setup(PROFILE, OPEN_FEW, ttl);
+
+      await expect(service.getById(ID)).resolves.toHaveProperty(
+        'reservationTtlMinutes',
+        ttl,
+      );
+    },
+  );
+
+  it('answers reservationTtlMinutes even when the restaurant is closed', async () => {
+    const { service } = setup(
+      PROFILE,
+      { isOpenNow: false, availability: 'closed', isSearchable: false },
+      3,
+    );
+
+    await expect(service.getById(ID)).resolves.toHaveProperty(
+      'reservationTtlMinutes',
+      3,
+    );
   });
 
   it('adds distanceKm with 2 decimals when the location arrives', async () => {
