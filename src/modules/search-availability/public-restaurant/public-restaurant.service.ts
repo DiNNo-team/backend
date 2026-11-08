@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AvailabilityService } from '../availability/availability.service.js';
+import { ReservationConfig } from '../reservation-ttl/reservation-ttl.config.js';
 import { haversineKm, roundKm, type GeoPoint } from '../search/geo.js';
 import type { PublicRestaurantResponseDto } from './dto/public-restaurant.dto.js';
 import { PublicRestaurantReader } from './public-restaurant.reader.js';
@@ -13,6 +14,7 @@ export class PublicRestaurantService {
   constructor(
     private readonly reader: PublicRestaurantReader,
     private readonly availability: AvailabilityService,
+    private readonly reservationConfig: ReservationConfig,
   ) {}
 
   // id: a valid UUID. origin: the diner's location, when sent.
@@ -40,6 +42,7 @@ export class PublicRestaurantService {
       schedules: profile.schedules,
       isOpenNow: availability.isOpenNow,
       availability: availability.availability,
+      reservationTtlMinutes: this.reservationConfig.ttlMinutes,
       ...(origin && { distanceKm: roundKm(haversineKm(origin, location)) }),
     };
   }

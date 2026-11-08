@@ -16,7 +16,6 @@ import {
   CodeGenerator,
   RandomCodeGenerator,
 } from './reservations/reservation-code.js';
-import { reservationConfigProvider } from './reservations/reservation.config.js';
 import { ReservationCancellationService } from './reservations/reservation-cancellation.service.js';
 import { ReservationExpirationService } from './reservations/reservation-expiration.service.js';
 import { ReservationQueryService } from './reservations/reservation-query.service.js';
@@ -27,7 +26,8 @@ import { ReservationsForTables } from './reservations/reservations-for-tables.js
 
 // Microreservas y check-in (Sprint 3). Depende de search-availability
 // (AvailabilityService y Clock) y de restaurant-operations (el puerto de la
-// bitácora); ninguno depende de este módulo.
+// bitácora); ninguno depende de este módulo. ReservationConfig (el TTL) llega
+// exportada por SearchAvailabilityModule, que la valida al arrancar.
 @Module({
   imports: [
     TypeOrmModule.forFeature([Reservation, CheckIn]),
@@ -49,8 +49,6 @@ import { ReservationsForTables } from './reservations/reservations-for-tables.js
     // reserva activa (§12.2); se encuentra por su token sin importar este módulo.
     { provide: TableReservations, useClass: ReservationsForTables },
     { provide: CodeGenerator, useClass: RandomCodeGenerator },
-    // Valida RESERVATION_TTL_MINUTES al crear el módulo: si es inválida, la app no arranca.
-    reservationConfigProvider,
   ],
   // Para ReservationExpiryModule, el proceso periódico.
   exports: [ReservationExpirationService],

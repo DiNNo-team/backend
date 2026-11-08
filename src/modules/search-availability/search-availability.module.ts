@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { IdentityAccessModule } from '../identity-access/index.js';
 import { AvailabilityService } from './availability/availability.service.js';
 import { Clock, SystemClock } from './availability/clock.js';
+import {
+  ReservationConfig,
+  reservationConfigProvider,
+} from './reservation-ttl/reservation-ttl.config.js';
 import { PublicRestaurantController } from './public-restaurant/public-restaurant.controller.js';
 import { PublicRestaurantReader } from './public-restaurant/public-restaurant.reader.js';
 import { PublicRestaurantService } from './public-restaurant/public-restaurant.service.js';
@@ -17,6 +21,8 @@ import { SearchController } from './search/search.controller.js';
   controllers: [SearchController, PublicRestaurantController],
   providers: [
     { provide: Clock, useClass: SystemClock },
+    // TTL de la microreserva: lo valida al crear el módulo (la app no arranca si es inválido).
+    reservationConfigProvider,
     AvailabilityService,
     RestaurantCandidatesReader,
     RestaurantSearchService,
@@ -29,6 +35,7 @@ import { SearchController } from './search/search.controller.js';
     ReservationEventsListener,
   ],
   // Clock: reservations-checkin uses the same source of time (and the tests fix it once).
-  exports: [AvailabilityService, Clock],
+  // ReservationConfig: reservations-checkin usa el mismo valor para crear reservas.
+  exports: [AvailabilityService, Clock, ReservationConfig],
 })
 export class SearchAvailabilityModule {}

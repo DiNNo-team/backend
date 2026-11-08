@@ -7,8 +7,16 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (8 nov 2026 · Elizabeth): `reservationTtlMinutes` en el detalle público** (`feat/public-reservation-ttl`).
+  - **Qué es:** `GET /v1/restaurants/:id/public` incluye ahora `reservationTtlMinutes`: un entero entre 2 y 15 con la vigencia, en minutos, que tiene una microreserva en este momento. Es el mismo valor de `RESERVATION_TTL_MINUTES` con el que el backend crea las reservas (15 por defecto).
+  - **Es aditivo:** ningún campo existente cambia ni se quita, y no hay rutas, variables ni tablas nuevas. El campo viene siempre, también si el restaurante está cerrado o sin mesas: la app decide cuándo mostrarlo.
+  - **App:** puede mostrar la vigencia **antes** de reservar (el texto lo define la app). No la guardes fija en 15: en la demo de expiración el backend corre con `RESERVATION_TTL_MINUTES=3` y el valor cambia a 3.
+  - **El temporizador no cambia:** la cuenta regresiva de la reserva sigue calculándose con `expiresAt` y `serverTime` de la respuesta de la reserva; `reservationTtlMinutes` es solo informativo.
+  - **Interno:** `ReservationConfig` (el TTL y su validación de arranque) pasó de `reservations-checkin` a `search-availability/reservation-ttl/` para que el detalle público lo lea sin importar `reservations-checkin` (que ya depende de `search-availability`). `reservations/reservation.config.ts` quedó como re-export. Un `RESERVATION_TTL_MINUTES` inválido sigue impidiendo que la app arranque, con el mismo mensaje.
+  - **Despliegue:** el backend del Sprint 3 **sí** está desplegado en Render (commit `15be6cf`, PR #49); eso reemplaza el «NO está desplegado aún» de las entradas de cierre del 6 nov. El campo nuevo llega a Render cuando se fusione su PR (`feat/public-reservation-ttl`).
+
 - **Nuevo (6 nov 2026 · Elizabeth): Sprint 3 backend: cierre y plan de merge** (`feat/sprint3-backend`). Reemplaza la lista de «Pendiente» de las entradas anteriores del 6 nov: el WebSocket y los scripts de datos ya están hechos.
-  - **Estado:** tareas 1 a 10 del backend hechas en `feat/sprint3-backend`; el PR a `develop` está en proceso. **NO está desplegado aún:** ni `develop` ni Render lo tienen.
+  - **Estado:** tareas 1 a 10 del backend hechas en `feat/sprint3-backend`; el PR a `develop` está en proceso. ~~**NO está desplegado aún:** ni `develop` ni Render lo tienen.~~ **Ya está desplegado en Render** (commit `15be6cf`, PR #49); ver la entrada del 8 nov («`reservationTtlMinutes` en el detalle público»).
   - **Orden de merge (decidido; reemplaza cualquier orden anterior):**
     1. PR del backend a `develop` (Render despliega solo). Hasta que Sebastián termine la web, nadie usa ni prueba la web.
     2. PR de la web de Sebastián a `develop`: 409 de mesas por `errorCode`, bitácora por `source`, panel de reservas, check-in y cliente Socket.IO.
