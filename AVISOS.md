@@ -7,6 +7,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-08 · Jacobo): revisión de servicios de Azure** (Sprint 3, PBI 7.1; tareas 7.1.3 y 7.1.4). `docs/azure-revision-servicios.md` compara PostgreSQL Flexible Server, Redis y Container Apps, sin crear recursos. **Azure Cache for Redis se está retirando; el plan considera Azure Managed Redis.** Lo marcado «Por confirmar» se resuelve antes de crear nada. La cuenta gratuita de Azure del equipo está pendiente: Microsoft no me dio elegibilidad y el equipo decide la alternativa. **Sin cambios de código, base de datos, variables de entorno ni dependencias.**
+
 - **Nuevo (8 nov 2026 · Elizabeth): `reservationTtlMinutes` en el detalle público** (`feat/public-reservation-ttl`).
   - **Qué es:** `GET /v1/restaurants/:id/public` incluye ahora `reservationTtlMinutes`: un entero entre 2 y 15 con la vigencia, en minutos, que tiene una microreserva en este momento. Es el mismo valor de `RESERVATION_TTL_MINUTES` con el que el backend crea las reservas (15 por defecto).
   - **Es aditivo:** ningún campo existente cambia ni se quita, y no hay rutas, variables ni tablas nuevas. El campo viene siempre, también si el restaurante está cerrado o sin mesas: la app decide cuándo mostrarlo.
