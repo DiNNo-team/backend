@@ -1,0 +1,19 @@
+# Entorno virtual y cachés de Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Datos: nunca se suben, ni reales ni sintéticos (los sintéticos se regeneran)
+*.csv
+exports/
+datos-*/
+
+# Salidas del informe
+informes/
+informe-*.txt
+metricas.json
+
+# Llaves
+.env
+.env.*

@@ -7,6 +7,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-09 · Santiago y Sergio): diseño de la IA** en `docs/ia-diseno.md` (PBI 6.1). **Elizabeth:** revisar la sección 6.1 y los puntos 4 y 5 de la sección 15. **Sin cambios de código, base de datos, variables ni dependencias.**
+
 - **Nuevo (2026-11-08 · Jacobo): revisión de servicios de Azure** (Sprint 3, PBI 7.1; tareas 7.1.3 y 7.1.4). `docs/azure-revision-servicios.md` compara PostgreSQL Flexible Server, Redis y Container Apps, sin crear recursos. **Azure Cache for Redis se está retirando; el plan considera Azure Managed Redis.** Lo marcado «Por confirmar» se resuelve antes de crear nada. La cuenta gratuita de Azure del equipo está pendiente: Microsoft no me dio elegibilidad y el equipo decide la alternativa. **Sin cambios de código, base de datos, variables de entorno ni dependencias.**
 
 - **Nuevo (8 nov 2026 · Elizabeth): `reservationTtlMinutes` en el detalle público** (`feat/public-reservation-ttl`).
