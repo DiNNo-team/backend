@@ -3,6 +3,7 @@ import { User } from './../../src/modules/identity-access/users/user.entity.js';
 import { CheckIn } from './../../src/modules/reservations-checkin/check-ins/check-in.entity.js';
 import { Reservation } from './../../src/modules/reservations-checkin/reservations/reservation.entity.js';
 import { Restaurant } from './../../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
+import { TableArea } from './../../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { Table } from './../../src/modules/restaurant-operations/tables/table.entity.js';
 
 // DataSource de TypeORM con los metadatos reales de las entidades pero SIN
@@ -12,7 +13,7 @@ import { Table } from './../../src/modules/restaurant-operations/tables/table.en
 export async function createMetadataOnlyDataSource(): Promise<DataSource> {
   const dataSource = new DataSource({
     type: 'postgres',
-    entities: [Reservation, CheckIn, User, Restaurant, Table],
+    entities: [Reservation, CheckIn, User, Restaurant, Table, TableArea],
   });
   // Protegido en la API pública; es lo que initialize() hace antes de conectar.
   await (

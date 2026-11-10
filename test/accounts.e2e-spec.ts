@@ -26,6 +26,7 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
@@ -227,6 +228,8 @@ describe('Accounts and roles (e2e)', () => {
       .useValue(tables)
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue(logs)
+      .overrideProvider(getRepositoryToken(TableArea))
+      .useValue({})
       .overrideProvider(TableStatusLog)
       .useValue({ record: vi.fn() })
       .compile();

@@ -34,6 +34,7 @@ function row(overrides: Partial<Table>): Table {
   return {
     id: TABLE_ID,
     restaurantId: RESTAURANT_ID,
+    areaId: null,
     identifier: 'Mesa 4',
     capacity: 4,
     status: 'available',

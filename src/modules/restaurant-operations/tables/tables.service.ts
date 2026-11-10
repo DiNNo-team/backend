@@ -24,6 +24,8 @@ import {
   normalizeTableIdentifier,
 } from './table-identifier.js';
 import { Table, type TableStatus } from './table.entity.js';
+import { TableArea } from '../table-areas/table-area.entity.js';
+import { AREA_NOT_FOUND_MESSAGE } from '../table-areas/table-area-rules.js';
 import {
   tableHasActiveReservation,
   tableNotAvailableToDeactivate,
@@ -44,7 +46,7 @@ export const TABLE_ALREADY_INACTIVE_MESSAGE =
 export const TABLE_ALREADY_ACTIVE_MESSAGE =
   'Esta mesa ya está activa. Actualiza la lista de mesas.';
 export const NO_TABLE_CHANGES_MESSAGE =
-  'No hay cambios para guardar. Cambia el identificador o la capacidad de la mesa.';
+  'No hay cambios para guardar. Cambia el identificador, la capacidad o la zona de la mesa.';
 export const PLAN_TABLE_REPEATED_MESSAGE =
   'Una mesa aparece dos veces en el plano. Envía cada mesa una sola vez.';
 export const PLAN_PROBLEM_MESSAGES: Record<PlanProblem, string> = {
@@ -70,9 +72,14 @@ export class TablesService {
     const ownerId = requireRestaurant(restaurantId);
     const identifier = dto.identifier.trim();
     await this.assertIdentifierAvailable(ownerId, identifier);
+    const areaId = dto.areaId ?? null;
+    if (areaId !== null) {
+      await this.assertAreaExists(this.tables.manager, ownerId, areaId);
+    }
     // Explicit fields: nothing else from the request reaches the entity.
     const table = this.tables.create({
       restaurantId: ownerId,
+      areaId,
       identifier,
       capacity: dto.capacity,
       status: 'available',
@@ -162,7 +169,7 @@ export class TablesService {
     return table;
   }
 
-  // Edit: identifier and/or capacity. Works on inactive tables too and never
+  // Edit: identifier, capacity and/or zone. Works on inactive tables too and never
   // changes the status, so nothing goes to the log.
   async update(
     restaurantId: string | null,
@@ -171,7 +178,11 @@ export class TablesService {
   ): Promise<Table> {
     const ownerId = requireRestaurant(restaurantId);
     const identifier = dto.identifier?.trim();
-    if (identifier === undefined && dto.capacity === undefined) {
+    if (
+      identifier === undefined &&
+      dto.capacity === undefined &&
+      dto.areaId === undefined
+    ) {
       // A list, like the other validation 400s.
       throw new BadRequestException([NO_TABLE_CHANGES_MESSAGE]);
     }
@@ -204,7 +215,26 @@ export class TablesService {
 
       // Only the edited columns: save() would also write back any stale
       // column of the loaded row, such as status or isActive.
-      const changes: Partial<Pick<Table, 'identifier' | 'capacity'>> = {};
+      const changes: Partial<
+        Pick<
+          Table,
+          'identifier' | 'capacity' | 'areaId' | 'planX' | 'planY' | 'planShape'
+        >
+      > = {};
+      const areaId = dto.areaId;
+      if (areaId !== undefined && areaId !== (table.areaId ?? null)) {
+        if (areaId !== null) {
+          await this.assertAreaExists(manager, ownerId, areaId);
+        }
+        // Another zone is another plan: the old cell could land on top of a
+        // table there, so the table goes back to the unplaced ones.
+        Object.assign(changes, {
+          areaId,
+          planX: null,
+          planY: null,
+          planShape: null,
+        });
+      }
       if (identifier !== undefined) {
         await this.assertIdentifierAvailable(ownerId, identifier, table.id);
         changes.identifier = identifier;
@@ -255,9 +285,17 @@ export class TablesService {
         }
         return { ...item, shape: item.shape ?? null, capacity: table.capacity };
       });
-      const problem = findPlanProblem(placed);
-      if (problem) {
-        throw new BadRequestException([PLAN_PROBLEM_MESSAGES[problem]]);
+      // Each zone has its own plan: tables of different zones may share cells.
+      const byArea = new Map<string | null, typeof placed>();
+      for (const item of placed) {
+        const area = byId.get(item.id)?.areaId ?? null;
+        byArea.set(area, [...(byArea.get(area) ?? []), item]);
+      }
+      for (const zone of byArea.values()) {
+        const problem = findPlanProblem(zone);
+        if (problem) {
+          throw new BadRequestException([PLAN_PROBLEM_MESSAGES[problem]]);
+        }
       }
 
       const plan = new Map(placed.map((item) => [item.id, item]));
@@ -377,6 +415,20 @@ export class TablesService {
     );
     if (reservation) {
       throw tableHasActiveReservation();
+    }
+  }
+
+  // Same 404 for a missing zone and another restaurant's zone.
+  private async assertAreaExists(
+    manager: EntityManager,
+    restaurantId: string,
+    areaId: string,
+  ): Promise<void> {
+    const found = await manager.count(TableArea, {
+      where: { id: areaId, restaurantId },
+    });
+    if (found === 0) {
+      throw new NotFoundException(AREA_NOT_FOUND_MESSAGE);
     }
   }
 

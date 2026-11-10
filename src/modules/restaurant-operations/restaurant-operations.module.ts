@@ -17,6 +17,9 @@ import { TableLog } from './table-logs/table-log.entity.js';
 import { TableLogsController } from './table-logs/table-logs.controller.js';
 import { DbTableStatusLog } from './table-logs/table-logs.recorder.js';
 import { TableLogsService } from './table-logs/table-logs.service.js';
+import { TableArea } from './table-areas/table-area.entity.js';
+import { TableAreasController } from './table-areas/table-areas.controller.js';
+import { TableAreasService } from './table-areas/table-areas.service.js';
 import { Table } from './tables/table.entity.js';
 import { TableStatusLog } from './tables/table-status-log.js';
 import { TablesController } from './tables/tables.controller.js';
@@ -24,11 +27,18 @@ import { TablesService } from './tables/tables.service.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Restaurant, RestaurantSchedule, Table, TableLog]),
+    TypeOrmModule.forFeature([
+      Restaurant,
+      RestaurantSchedule,
+      Table,
+      TableArea,
+      TableLog,
+    ]),
     IdentityAccessModule,
   ],
   controllers: [
     TablesController,
+    TableAreasController,
     RestaurantEditController,
     RestaurantRegistrationController,
     RestaurantStatusController,
@@ -37,6 +47,7 @@ import { TablesService } from './tables/tables.service.js';
   ],
   providers: [
     TablesService,
+    TableAreasService,
     // Puerto de las reservas, visto desde las mesas (lo implementa reservations-checkin).
     TableReservationsAccess,
     RestaurantEditService,

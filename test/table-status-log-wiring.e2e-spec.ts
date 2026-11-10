@@ -9,6 +9,7 @@ import { RestaurantSchedule } from './../src/modules/restaurant-operations/resta
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { DbTableStatusLog } from './../src/modules/restaurant-operations/table-logs/table-logs.recorder.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 
 // Mounts the module like the other e2e tests, without PostgreSQL, but keeps
@@ -43,6 +44,8 @@ describe('TableStatusLog wiring (e2e)', () => {
       .overrideProvider(getRepositoryToken(Table))
       .useValue({})
       .overrideProvider(getRepositoryToken(TableLog))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
       .useValue({})
       .compile();
   });

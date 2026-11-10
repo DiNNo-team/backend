@@ -55,6 +55,7 @@ import {
   TABLE_NOT_AVAILABLE_TO_DEACTIVATE_CODE,
   TABLE_NOT_AVAILABLE_TO_DEACTIVATE_MESSAGE,
 } from './table-reservation-errors.js';
+import { AREA_NOT_FOUND_MESSAGE } from '../table-areas/table-area-rules.js';
 import {
   NO_TABLE_CHANGES_MESSAGE,
   TABLE_ALREADY_ACTIVE_MESSAGE,
@@ -127,7 +128,7 @@ export class TablesController {
   @ApiOperation({
     summary: 'Crear una mesa en el restaurante del usuario',
     description:
-      'Solo acepta identifier (identificador corto, por ejemplo "04"; se muestra "Mesa 04") y capacity; cualquier otro campo (status, isActive, restaurantId…) se rechaza con 400. La mesa nace Disponible (available) y activa. El restaurante sale de la sesión.',
+      'Solo acepta identifier (identificador corto, por ejemplo "04"; se muestra "Mesa 04"), capacity y, si quieres, areaId (la zona, de GET /v1/table-areas; sin ella la mesa queda sin zona); cualquier otro campo (status, isActive, restaurantId…) se rechaza con 400. La mesa nace Disponible (available) y activa. El restaurante sale de la sesión.',
   })
   @ApiCreatedResponse({ description: 'Mesa creada.', type: TableResponseDto })
   @ApiBadRequestResponse({
@@ -138,6 +139,16 @@ export class TablesController {
       statusCode: 400,
       message: [CAPACITY_RANGE],
       error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse({
+    description:
+      'areaId es una zona que no existe o es de otro restaurante (mismo mensaje en los dos casos).',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: AREA_NOT_FOUND_MESSAGE,
+      error: 'Not Found',
     },
   })
   @ApiConflictResponse(IDENTIFIER_TAKEN_RESPONSE)
@@ -171,7 +182,7 @@ export class TablesController {
   @ApiOperation({
     summary: 'Guardar el plano de mesas del restaurante',
     description:
-      'Reemplaza el plano completo: cada mesa ubicada con su celda (x, y) y, si se quiere, su forma. Las mesas del restaurante que no vengan en la lista quedan sin ubicar (planX, planY y planShape en null). Gana el último que guarda. El tamaño de cada mesa sale de su forma y su capacidad (tables/table-plan.ts): ninguna puede salirse de la grilla de 20 × 30 celdas ni quedar encima de otra. No cambia el estado, no se registra en la bitácora y no afecta la disponibilidad. Responde la lista completa, igual que GET /v1/tables.',
+      'Reemplaza el plano completo: cada mesa ubicada con su celda (x, y) y, si se quiere, su forma. Las mesas del restaurante que no vengan en la lista quedan sin ubicar (planX, planY y planShape en null). Gana el último que guarda. El tamaño de cada mesa sale de su forma y su capacidad (tables/table-plan.ts): ninguna puede salirse de la grilla de 20 × 30 celdas ni quedar encima de otra de su misma zona: cada zona (areaId, y las mesas sin zona) tiene su propio plano, así que mesas de zonas distintas pueden compartir celdas. No cambia el estado, no se registra en la bitácora y no afecta la disponibilidad. Responde la lista completa, igual que GET /v1/tables.',
   })
   @ApiOkResponse({
     description: 'Todas las mesas del restaurante, con su posición nueva.',
@@ -271,9 +282,9 @@ export class TablesController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Editar el identificador o la capacidad de una mesa',
+    summary: 'Editar el identificador, la capacidad o la zona de una mesa',
     description:
-      'Edita una mesa del restaurante del usuario, activa o inactiva, con las mismas reglas que al crearla. Solo se envían los campos que cambian, pero al menos uno. No cambia el estado ni se registra en la bitácora.',
+      'Edita una mesa del restaurante del usuario, activa o inactiva, con las mismas reglas que al crearla. Solo se envían los campos que cambian, pero al menos uno. areaId en null saca la mesa de su zona; cambiar de zona también la saca del plano (planX, planY y planShape en null), porque cada zona tiene su propio plano. No cambia el estado ni se registra en la bitácora.',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'Id de la mesa.' })
   @ApiOkResponse({ description: 'Mesa editada.', type: TableResponseDto })
@@ -287,7 +298,10 @@ export class TablesController {
       error: 'Bad Request',
     },
   })
-  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  @ApiNotFoundResponse({
+    ...NOT_FOUND_RESPONSE,
+    description: `${NOT_FOUND_RESPONSE.description} También si areaId es una zona que no existe o de otro restaurante ("${AREA_NOT_FOUND_MESSAGE}").`,
+  })
   @ApiConflictResponse({
     description:
       'Ya existe una mesa con ese identificador en el restaurante (sin errorCode), o la mesa tiene una reserva de DiNNo activa y la nueva capacidad queda por debajo de las personas de la reserva (errorCode TABLE_HAS_ACTIVE_RESERVATION). Cambiar solo el identificador siempre se permite.',
