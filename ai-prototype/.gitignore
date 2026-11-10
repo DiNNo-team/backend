@@ -3,14 +3,18 @@
 venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Datos: nunca se suben, ni reales ni sintéticos (los sintéticos se regeneran)
 *.csv
+# Excepción: los fixtures de las pruebas son sintéticos y escritos a mano
+!tests/fixtures/export/*.csv
 exports/
 datos-*/
 
 # Salidas del informe
 informes/
+informes-*/
 informe-*.txt
 metricas.json
 

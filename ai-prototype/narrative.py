@@ -19,8 +19,9 @@ from metrics import RestaurantMetrics
 
 API_KEY_VARIABLE = "INSIGHTS_LLM_API_KEY"
 MODEL_VARIABLE = "INSIGHTS_LLM_MODEL"
-DEFAULT_MODEL = "claude-opus-5-5"
+DEFAULT_MODEL = "claude-haiku-5-5"
 # Modelos que aceptan el respaldo del servidor ante una negativa (fallbacks: "default").
+# Claude Haiku 5.5 no lo tiene: con él no se envían ni `fallbacks` ni la cabecera beta.
 SERVER_FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 MAX_TEXT_LENGTH = 600
 MAX_RECOMMENDATIONS = 3
@@ -141,6 +142,9 @@ def validation_problem(text: str, payload: dict) -> str | None:
 def llm_narrative(metrics: RestaurantMetrics, api_key: str, model: str) -> Narrative:
     """Pide el texto al modelo. Cualquier falla devuelve la plantilla con el motivo."""
     fallback = template_narrative(metrics)
+    if metrics.data_sufficiency == "insufficient":
+        # Sin tasas no hay nada que redactar: nunca se llama al modelo.
+        return fallback
     try:
         import anthropic
     except ImportError:
@@ -151,7 +155,7 @@ def llm_narrative(metrics: RestaurantMetrics, api_key: str, model: str) -> Narra
     extra = {}
     if model in SERVER_FALLBACK_MODELS:
         # Si el modelo se niega, el servidor reintenta con el modelo de respaldo recomendado.
-        extra = {"betas": ["server-side-fallback-2026-07-01"], "extra_body": {"fallbacks": "default"}}
+        extra = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
     client = anthropic.Anthropic(api_key=api_key, timeout=60.0, max_retries=1)
     try:
         response = client.beta.messages.create(

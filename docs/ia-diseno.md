@@ -234,7 +234,14 @@ Van en `.env.example` con comentario y en Render o Azure, nunca en el repo (`CLA
 
 ## 10. Costos, privacidad y sesgos
 
-**Costos.** Cada informe es una llamada al modelo, con una entrada pequeña (el objeto de métricas y la instrucción) y una salida de 2 o 3 párrafos. Con la caché de 24 horas, el máximo es **una llamada por restaurante al día**: con 15 restaurantes, unas 450 llamadas al mes. **El precio por llamada queda Por confirmar** al elegir el proveedor. Sin llave, el costo es cero.
+**Costos.** Cada informe es una llamada al modelo, con una entrada pequeña (el objeto de métricas y la instrucción) y una salida de 2 o 3 párrafos. Con la caché de 24 horas, el máximo es **una llamada por restaurante al día**: con 15 restaurantes, unas 450 llamadas al mes. Sin llave, el costo es cero.
+
+- **Proveedor:** Claude (Anthropic).
+- **Precios por millón de tokens:**
+  - **Claude Haiku 5.5** (modelo por defecto): US$0,10 de entrada y US$0,50 de salida, para prompts de hasta 100.000 tokens.
+  - **Claude Sonnet 5.5** (alternativa si la calidad del texto no alcanza): US$2 de entrada y US$10 de salida.
+- **Fuente:** https://platform.claude.com/docs/en/about-claude/pricing (consultada el 9 nov 2026).
+- **Estimado:** con 450 informes al mes y unos 1.000 tokens de entrada y 1.000 de salida por informe (**supuesto**), menos de US$0,30 al mes con Haiku y unos US$5,40 con Sonnet.
 
 **Privacidad.**
 - Al proveedor solo sale el objeto de métricas de un restaurante: ningún dato de comensales, ni nombres, ni correos, ni códigos, ni el nombre o la dirección del restaurante.
@@ -301,7 +308,7 @@ Si se exige un modelo entrenado, el diseño se mantiene y se agrega una pieza: u
 | # | Punto | Preguntar a |
 |---|---|---|
 | 1 | ¿El curso acepta un modelo de lenguaje por API como la IA del proyecto? (sección 14) | Profesor |
-| 2 | Proveedor del modelo, precio por llamada y condiciones de privacidad | Equipo |
+| 2 | ~~Proveedor del modelo y precio por llamada~~ **Resuelto:** Claude (Anthropic), Claude Haiku 5.5 por defecto y Claude Sonnet 5.5 como alternativa; precios en la sección 10. **Pendiente:** probar la calidad del texto con la API real (el prototipo solo se probó con la API simulada) y revisar las condiciones de privacidad del proveedor | Equipo |
 | 3 | Umbrales de datos suficientes y del indicador (secciones 4.3 y 5) | Santiago y Sergio, con datos del piloto |
 | 4 | Consultas SQL de solo lectura en `insights` o lectores exportados por otros módulos (sección 6.1) | Elizabeth |
 | 5 | Cómo excluir los datos de prueba y de la demo (sección 4.3) | Elizabeth |

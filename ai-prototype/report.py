@@ -3,8 +3,9 @@
 Uso:
     python report.py --input datos-sinteticos --output informes
 
-Escribe en --output un `informe-<restaurant_id>.txt` por restaurante y
-`metricas.json` con todas las métricas. Si existe la variable de entorno
+Escribe en --output un `informe-NN.txt` por restaurante (numerados, sin el id
+del restaurante) y `metricas.json` con todas las métricas y qué número
+corresponde a cada restaurant_id. Si existe la variable de entorno
 INSIGHTS_LLM_API_KEY, el texto de recomendaciones lo redacta un modelo de
 lenguaje con las métricas agregadas; si no, sale de plantillas.
 """
@@ -40,10 +41,11 @@ def count_of(part: int, total: int, value: float | None) -> str:
     return f"{part} de {total} ({es_pct(value)})" if value is not None else f"{part}"
 
 
-def render(metrics: RestaurantMetrics, narrative: Narrative, generated_at: datetime) -> str:
+def render(metrics: RestaurantMetrics, narrative: Narrative, generated_at: datetime, label: str) -> str:
+    """El informe en texto. `label` reemplaza el restaurant_id, que nunca va en el informe."""
     category = CATEGORY_LABELS.get(metrics.category, "sin categoría") if metrics.category else "sin categoría"
     lines = [
-        f"Informe de DiNNo · restaurante {metrics.restaurant_id} ({category})",
+        f"Informe de DiNNo · {label} ({category})",
         f"Periodo: {es_date(metrics.period_start)} a {es_date(metrics.period_end)} "
         f"({metrics.days_in_period} días, hora de Bogotá)",
         f"Generado: {generated_at.strftime('%Y-%m-%d %H:%M')} UTC",
@@ -125,11 +127,18 @@ def main() -> int:
     generated_at = datetime.now(timezone.utc)
     args.output.mkdir(parents=True, exist_ok=True)
     summary = []
-    for metrics in all_metrics:
+    for number, metrics in enumerate(all_metrics, start=1):
         narrative = write_narrative(metrics, use_llm=not args.no_llm)
-        path = args.output / f"informe-{metrics.restaurant_id}.txt"
-        path.write_text(render(metrics, narrative, generated_at), encoding="utf-8")
-        summary.append({**metrics.to_json(), "narrative": {"text": narrative.text, "source": narrative.source}})
+        label = f"restaurante {number} de {len(all_metrics)}"
+        path = args.output / f"informe-{number:02d}.txt"
+        path.write_text(render(metrics, narrative, generated_at, label), encoding="utf-8")
+        summary.append(
+            {
+                "reportFile": path.name,
+                **metrics.to_json(),
+                "narrative": {"text": narrative.text, "source": narrative.source},
+            }
+        )
         note = f" ({narrative.note})" if narrative.note else ""
         print(f"{path}: confiabilidad {metrics.reliability_level or 'sin datos'}, texto {narrative.source}{note}")
 

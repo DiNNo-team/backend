@@ -167,7 +167,8 @@ def restaurant_metrics(
     completed, cancelled, expired = (int(by_status.get(status, 0)) for status in RESOLVED_STATUSES)
     resolved_rows = reservations[reservations["status"].isin(RESOLVED_STATUSES)]
     resolved = len(resolved_rows)
-    seconds = resolved_rows["seconds_to_expire_or_resolve"]
+    enough = resolved >= min_resolved
+    seconds =resolved_rows["seconds_to_expire_or_resolve"]
 
     categories = [value for value in reservations["restaurant_category"].unique() if value]
     manual_days = set(bogota_dates(manual["changed_at"]))
@@ -180,7 +181,7 @@ def restaurant_metrics(
         period_end=period[-1],
         days_in_period=len(period),
         min_resolved=min_resolved,
-        data_sufficiency="enough" if resolved >= min_resolved else "insufficient",
+        data_sufficiency="enough" if enough else "insufficient",
         reservations_created=len(reservations),
         active=int(by_status.get("active", 0)),
         resolved=resolved,
@@ -188,9 +189,10 @@ def restaurant_metrics(
         cancelled=cancelled,
         expired=expired,
         check_ins=len(check_ins),
-        check_in_rate=rate(completed, resolved),
-        no_show_rate=rate(expired, resolved),
-        cancellation_rate=rate(cancelled, resolved),
+        # Con datos insuficientes no hay tasas (sección 7 del diseño: llegan en null).
+        check_in_rate=rate(completed, resolved) if enough else None,
+        no_show_rate=rate(expired, resolved) if enough else None,
+        cancellation_rate=rate(cancelled, resolved) if enough else None,
         avg_minutes_to_resolve=minutes(seconds),
         avg_minutes_by_status={
             status: minutes(seconds[resolved_rows["status"] == status])
