@@ -5,7 +5,7 @@ Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md
 
 Última migración aplicada en Neon: `1793840000003-AddTableLogSource` (2026-11-05). Todas las migraciones del repositorio están aplicadas en la base de desarrollo y en la de pruebas (verificado con `migration:run` y `migration:show`).
 
-> Migraciones aplicadas en Neon, en orden: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15), `1793084146913-AddTablePlan` (plano de mesas, manual de identidad v2.0; agrega `tables.plan_x`, `plan_y` y `plan_shape`; aplicada el 2026-10-27) y las tres del Sprint 3, todas de Elizabeth y aplicadas el 2026-11-05: `1793840000001-CreateReservations` (crea `reservations`), `1793840000002-CreateCheckIns` (crea `check_ins`) y `1793840000003-AddTableLogSource` (agrega `table_logs.source` y deja `table_logs.user_id` nullable). Todo lo que se documenta abajo existe en Neon.
+> Migraciones aplicadas en Neon, en orden: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15), `1793084146913-AddTablePlan` (plano de mesas, manual de identidad v2.0; agrega `tables.plan_x`, `plan_y` y `plan_shape`; aplicada el 2026-10-27) y las tres del Sprint 3, todas de Elizabeth y aplicadas el 2026-11-05: `1793840000001-CreateReservations` (crea `reservations`), `1793840000002-CreateCheckIns` (crea `check_ins`) y `1793840000003-AddTableLogSource` (agrega `table_logs.source` y deja `table_logs.user_id` nullable). Todo lo que se documenta abajo existe en Neon, **salvo** `1794300000000-CreateTableAreas` (zonas de mesas, Sebastián; crea `table_areas` y agrega `tables.area_id`), que **todavía no está aplicada en Neon**: hay que correrla antes de fusionar el PR que la trae, o todas las rutas de `/v1/tables` responden 500 en Render.
 
 ## Tablas
 
@@ -65,6 +65,7 @@ Horario de atención: una fila por cada día que el restaurante **abre**. Un dí
 | Columna | Tipo | Reglas |
 |---|---|---|
 | `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` |
+| `area_id` | `uuid` | NULL, FK → `table_areas.id` (`FK_tables_area_id`, `ON DELETE SET NULL`), con índice `IDX_tables_area_id`. NULL = la mesa no tiene zona |
 | `identifier` | `varchar(50)` | NOT NULL. Único por restaurante sin importar mayúsculas ni espacios (`UQ_tables_restaurant_id_identifier`). La API acepta máximo 10 caracteres y además trata "4", "04" y "Mesa 4" como la misma mesa (`tables/table-identifier.ts`) |
 | `capacity` | `smallint` | NOT NULL, entre 1 y 20 (`CHK_tables_capacity`) |
 | `status` | `varchar(20)` | NOT NULL, por defecto `'available'`; solo `'available'`, `'reserved'` u `'occupied'` (`CHK_tables_status`) |
@@ -81,6 +82,21 @@ Estados en la interfaz: `available` = Disponible, `reserved` = Reservada, `occup
 - Que ninguna mesa se salga de la grilla ni quede encima de otra lo valida `PUT /v1/tables/plan` (depende del tamaño, así que no es un check de la base).
 - Editar la capacidad no mueve la mesa: si crece y queda encima de otra, la web la marca en el modo edición y no deja guardar hasta moverla.
 - La posición no es estado: no se registra en la bitácora ni cambia la disponibilidad.
+- **Cada zona tiene su propio plano** (desde `CreateTableAreas`): la regla de "ninguna encima de otra" se revisa entre las mesas de la misma zona (las mesas sin zona forman un plano más), así que mesas de zonas distintas pueden tener las mismas celdas. Cambiar una mesa de zona la saca del plano (las tres columnas en NULL).
+
+### `table_areas` · entidad `TableArea` (zonas de mesas)
+
+Las zonas organizan las mesas de un restaurante grande: pisos, salones o áreas ("Piso 1", "Terraza", "Bar"). Cada zona tiene su propio plano y la web filtra las mesas por zona.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `id` | `uuid` | PK (`PK_table_areas_id`) |
+| `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` (`FK_table_areas_restaurant_id`, `ON DELETE CASCADE`) |
+| `name` | `varchar(30)` | NOT NULL. Único por restaurante sin importar mayúsculas ni espacios (`UQ_table_areas_restaurant_id_name`, sobre `(restaurant_id, lower(trim(name)))`, escrito a mano en la migración igual que el de los identificadores de mesa) |
+
+- Máximo 20 zonas por restaurante (lo valida la API, no la base). Se ordenan por `created_at`.
+- **Borrar una zona no borra sus mesas:** el servicio las deja sin zona y fuera del plano en la misma transacción (`ON DELETE SET NULL` es solo la defensa final; no limpia el plano).
+- Una zona no es estado: crear, renombrar o borrar zonas, o cambiar una mesa de zona, no se registra en la bitácora ni cambia la disponibilidad.
 
 ### `table_logs` · entidad `TableLog`
 
@@ -149,6 +165,7 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
 | `table_logs` | Sergio | Tabla nueva para la bitácora de cambios de mesas (`CreateTableLogs`). Elizabeth, Sprint 3: `source` y `user_id` nullable (`AddTableLogSource`) |
 | `reservations`, `check_ins` | Elizabeth | Sprint 3 (`CreateReservations`, `CreateCheckIns`) |
+| `table_areas` y `tables.area_id` | Sebastián | Zonas de mesas (`CreateTableAreas`) |
 
 Nadie recrea una tabla ni toca columnas de otra persona.
 

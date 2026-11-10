@@ -21,6 +21,7 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { FakeDatabaseModule } from './support/fake-database.js';
 import { fakeFirebaseAuth } from './support/test-accounts.js';
 
@@ -60,6 +61,8 @@ function baseModule(...modules: unknown[]): TestingModuleBuilder {
     .overrideProvider(getRepositoryToken(Table))
     .useValue({})
     .overrideProvider(getRepositoryToken(TableLog))
+    .useValue({})
+    .overrideProvider(getRepositoryToken(TableArea))
     .useValue({})
     .overrideProvider(getRepositoryToken(Reservation))
     .useValue({})
@@ -149,6 +152,8 @@ describe('Reservas de las mesas: composición real (e2e)', () => {
         .overrideProvider(getRepositoryToken(Table))
         .useValue({})
         .overrideProvider(getRepositoryToken(TableLog))
+        .useValue({})
+        .overrideProvider(getRepositoryToken(TableArea))
         .useValue({})
         .compile();
       const app = module.createNestApplication();

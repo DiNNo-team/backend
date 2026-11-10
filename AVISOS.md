@@ -7,6 +7,15 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-10 · Sebastián): zonas de mesas** (`feat/sprint3-zonas-mesas`). Para restaurantes grandes, con muchas mesas o varios pisos.
+  - **Qué es:** un restaurante crea zonas con nombre libre ("Piso 1", "Terraza", "Bar") y asigna cada mesa a una. Cada zona tiene su propio plano y la web filtra y busca las mesas por zona.
+  - **Rutas nuevas** (`restaurant_admin`, Swagger tag `table-areas`): `GET /v1/table-areas` → `[{ id, name }]` en orden de creación · `POST /v1/table-areas` `{ name }` → 201 · `PATCH /v1/table-areas/:id` `{ name }` → 200 · `DELETE /v1/table-areas/:id` → 204. El nombre tiene de 1 a 30 caracteres y es único por restaurante sin importar mayúsculas (409). Máximo 20 zonas (409). Una zona de otro restaurante da el mismo 404 que una inexistente.
+  - **Mesas (aditivo):** `GET /v1/tables` y las demás respuestas de mesas traen `areaId` (`uuid | null`). `POST /v1/tables` y `PATCH /v1/tables/:id` aceptan `areaId` opcional (`null` = sin zona); una zona ajena o inexistente da 404. **Cambiar una mesa de zona la saca del plano.** Borrar una zona deja sus mesas sin zona y fuera del plano; nunca borra mesas.
+  - **Plano:** `PUT /v1/tables/plan` no cambia de forma, pero la regla de "ninguna encima de otra" ahora se revisa por zona: mesas de zonas distintas pueden tener las mismas celdas. El máximo de la lista pasa de 100 a 500 mesas.
+  - **Sin efecto en la disponibilidad, la bitácora ni el WebSocket.** La app del comensal no cambia.
+  - **Base de datos — acción de Elizabeth:** migración `1794300000000-CreateTableAreas` (crea `table_areas`, agrega `tables.area_id` nullable con FK `ON DELETE SET NULL`). **Hay que aplicarla en Neon antes de fusionar el PR:** sin ella, toda ruta de `/v1/tables` responde 500 en Render. La verifiqué en un Postgres 17 desechable (subir, bajar, volver a subir; `migration:generate` no encuentra diferencias con las entidades). Es aditiva: las mesas existentes quedan sin zona y conservan su lugar en el plano. `docs/database.md` actualizado.
+  - **Pruebas e2e:** toda prueba que monte `RestaurantOperationsModule` necesita además `.overrideProvider(getRepositoryToken(TableArea)).useValue({})` (ya agregado en las existentes).
+
 - **Nuevo (2026-11-09 · Santiago y Sergio): diseño de la IA** en `docs/ia-diseno.md` (PBI 6.1). **Elizabeth:** revisar la sección 6.1 y los puntos 4 y 5 de la sección 15. **Sin cambios de código, base de datos, variables ni dependencias.**
 
 - **Nuevo (2026-11-08 · Jacobo): revisión de servicios de Azure** (Sprint 3, PBI 7.1; tareas 7.1.3 y 7.1.4). `docs/azure-revision-servicios.md` compara PostgreSQL Flexible Server, Redis y Container Apps, sin crear recursos. **Azure Cache for Redis se está retirando; el plan considera Azure Managed Redis.** Lo marcado «Por confirmar» se resuelve antes de crear nada. La cuenta gratuita de Azure del equipo está pendiente: Microsoft no me dio elegibilidad y el equipo decide la alternativa. **Sin cambios de código, base de datos, variables de entorno ni dependencias.**

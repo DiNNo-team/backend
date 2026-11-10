@@ -13,6 +13,7 @@ import { RestaurantSchedule } from './../src/modules/restaurant-operations/resta
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import type {
   TableLogSource,
   TableLogStatus,
@@ -238,6 +239,8 @@ describe('Table logs (e2e)', () => {
       .useValue({})
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue(logs.repository)
+      .overrideProvider(getRepositoryToken(TableArea))
+      .useValue({})
       .compile();
 
     app = moduleFixture.createNestApplication();

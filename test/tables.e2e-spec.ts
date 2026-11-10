@@ -13,6 +13,7 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 import { UserRole } from './../src/modules/identity-access/index.js';
 
@@ -48,6 +49,7 @@ function storedTable(overrides: Partial<Table>): Table {
   return {
     id: TABLE_ID,
     restaurantId: RESTAURANT_ID,
+    areaId: null,
     identifier: 'Mesa 1',
     capacity: 4,
     status: 'available',
@@ -121,6 +123,8 @@ describe('Tables (e2e)', () => {
       .useValue(tables)
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
+      .useValue({})
       .overrideProvider(TableStatusLog)
       .useValue(statusLog)
       .compile();
@@ -159,6 +163,7 @@ describe('Tables (e2e)', () => {
 
       expect(res.body).toEqual({
         id: TABLE_ID,
+        areaId: null,
         identifier: 'Mesa 4',
         capacity: 4,
         status: 'available',
@@ -254,6 +259,7 @@ describe('Tables (e2e)', () => {
       tables.find.mockResolvedValueOnce([
         storedTable({
           id: TABLE_ID,
+          areaId: null,
           identifier: 'Mesa 2',
           planX: 1,
           planY: 2,
@@ -261,6 +267,7 @@ describe('Tables (e2e)', () => {
         }),
         storedTable({
           id: '4a3b2c1d-0e9f-4a8b-9c7d-6e5f4a3b2c1d',
+          areaId: null,
           identifier: 'Mesa 10',
           capacity: 6,
           isActive: false,
@@ -274,6 +281,7 @@ describe('Tables (e2e)', () => {
       expect(res.body).toEqual([
         {
           id: TABLE_ID,
+          areaId: null,
           identifier: 'Mesa 2',
           capacity: 4,
           status: 'available',
@@ -284,6 +292,7 @@ describe('Tables (e2e)', () => {
         },
         {
           id: '4a3b2c1d-0e9f-4a8b-9c7d-6e5f4a3b2c1d',
+          areaId: null,
           identifier: 'Mesa 10',
           capacity: 6,
           status: 'available',
@@ -321,6 +330,7 @@ describe('Tables (e2e)', () => {
 
       expect(res.body).toEqual({
         id: TABLE_ID,
+        areaId: null,
         identifier: 'Mesa 1',
         capacity: 4,
         status: 'occupied',
@@ -490,6 +500,7 @@ describe('Tables (e2e)', () => {
       '400',
       '401',
       '403',
+      '404',
       '409',
     ]);
     expect(Object.keys(route.get.responses).sort()).toEqual([
@@ -511,7 +522,7 @@ describe('Tables (e2e)', () => {
     ).toEqual(['status']);
     expect(
       Object.keys(res.body.components.schemas.CreateTableDto.properties),
-    ).toEqual(['identifier', 'capacity']);
+    ).toEqual(['identifier', 'capacity', 'areaId']);
     for (const operation of [route.post, route.get]) {
       const forbidden = operation.responses['403'].content['application/json'];
       expect(forbidden.examples.restaurantRequired.value).toEqual(

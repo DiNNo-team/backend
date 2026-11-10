@@ -14,6 +14,7 @@ import { RestaurantSchedule } from './../src/modules/restaurant-operations/resta
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
@@ -47,6 +48,7 @@ function storedTable(overrides: Partial<Table> = {}): Table {
   return {
     id: TABLE_ID,
     restaurantId: RESTAURANT_ID,
+    areaId: null,
     identifier: '04',
     capacity: 4,
     status: 'available',
@@ -148,6 +150,8 @@ describe('Tables · protección con reserva activa (e2e)', () => {
       .overrideProvider(getRepositoryToken(Table))
       .useValue(tables)
       .overrideProvider(getRepositoryToken(TableLog))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
       .useValue({})
       .overrideProvider(TableStatusLog)
       .useValue(statusLog)
