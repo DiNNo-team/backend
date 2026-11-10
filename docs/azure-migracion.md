@@ -1,7 +1,7 @@
 # Plan de migración a Azure: de Render + Neon + Upstash a Azure
 
 **Sprint 3 · PBI 7.1 · Tarea 7.1.5** · Autor: Jacobo · 8 nov 2026
-**Alcance:** solo el plan. **No se creó ningún recurso, no se corrió ningún comando contra Neon, Upstash, Render ni Azure y no cambia código.**
+**Alcance:** solo el plan. No se corrió ningún comando contra Neon, Upstash ni Render y no cambia código. **En Azure solo existe un Container App de prueba con la imagen «Hello World»** (9 nov 2026, sección 10): sin el backend, sin PostgreSQL y sin Redis.
 **Fuentes:** `CLAUDE.md` (§10, §11 «Migración a Azure», §12), `AVISOS.md`, [`docs/azure-revision-servicios.md`](azure-revision-servicios.md) (los datos de Azure), `package.json`, `.env.example`, `src/data-source.ts`, `src/migrations/` y el código citado en cada sección.
 **Regla del documento:** lo que no está en el repo ni en la revisión de servicios está marcado **«Por confirmar»**.
 
@@ -23,7 +23,7 @@
 | Geocodificación | Google Geocoding con llave sin restricción de IP («Render no tiene IP fija») | Sin cambios: la misma llave funciona desde Azure | `AVISOS.md`, «Equipo de Google Cloud» |
 | CI | GitHub Actions: `checks` y `verify-deployment` (espera a que Render sirva el commit del push) | `checks` igual; `verify-deployment` apunta a Azure | `.github/workflows/ci-cd.yml` |
 
-**Requisito previo:** la cuenta de Azure del equipo está pendiente (Microsoft no dio elegibilidad para la cuenta gratuita; ver `AVISOS.md`, entrada del 8 nov). Nada de este plan empieza sin esa cuenta.
+**Requisito previo:** la cuenta de Azure del equipo está pendiente (Microsoft no dio elegibilidad para la cuenta gratuita; ver `AVISOS.md`, entrada del 8 nov). Nada de este plan empieza sin esa cuenta. **Actualización (9 nov):** ya hay una suscripción de Azure en uso para el Container App de prueba (sección 10); **por confirmar** de qué tipo es y si es la cuenta definitiva del equipo.
 
 ---
 
@@ -243,11 +243,52 @@ Solo nombres y para qué sirven. **Los valores nunca van en el repo:** los secre
 2. **Cómo se publica el commit** en `GET /v1/health`: reutilizar `RENDER_GIT_COMMIT` o una variable nueva (y su nombre).
 3. **Cómo se despliega** en Azure: pipeline, registro de imágenes, rama de origen y si se crea un `Dockerfile`.
 4. **Modo de red de PostgreSQL:** acceso privado, IP de salida permitida o la casilla «cualquier servicio de Azure».
-5. **Escala a cero** o una réplica siempre encendida.
+5. **Escala a cero** o una réplica siempre encendida. (El Container App de prueba usa mínimo 0 y máximo 1, sección 10; eso no decide el del backend.)
 6. **Si Redis se migra ahora o se queda Upstash** hasta el Sprint 4, ya que el backend todavía no lo usa (este plan sigue el orden pedido: PostgreSQL → Redis → backend).
 7. **El adaptador de Redis para Socket.IO** y la afinidad de sesión (Sprint 4), y si funciona con el modo clúster.
 8. **Dominio propio** para el backend.
 9. **Fecha y responsable del corte**, y cuánto tiempo se mantiene Render como respaldo.
 10. **Qué pasa con los datos escritos en Azure** si hay que volver a Render.
 11. **Si la base de pruebas** se mueve a Azure.
-12. **Región de Azure** para todos los recursos (la revisión cita precios de terceros en East US; no hay decisión).
+12. **Región de Azure** para todos los recursos (la revisión cita precios de terceros en East US; el Container App de prueba quedó en West US 2; no hay decisión).
+
+---
+
+## 10. Avance: Container App de prueba (9 nov 2026)
+
+Se creó un Container App de prueba para comprobar que la suscripción permite crear el servicio y ver cómo se configura el escalado. **Corre la imagen de ejemplo «Hello World» de Azure, no el backend de DiNNo:** no tiene variables, secretos, base de datos ni Redis, y no recibe tráfico de la web ni de la app.
+
+| Dato | Valor | Captura |
+|---|---|---|
+| Nombre | `ca-dinno-prueba` (Container App) | Overview |
+| Grupo de recursos | `rg-dinno` | Overview |
+| Estado | Running | Overview |
+| Región | West US 2 | Overview |
+| Tipo de ambiente | Workload profiles | Overview |
+| Revisión | `ca-dinno-prueba--0000001` | Scale |
+| Réplicas | **mínimo 0, máximo 1**; en el momento de la captura, 1 réplica activa | Scale |
+| Regla de escalado | `http-scaler` (HTTP scaling); periodo de enfriamiento 300, intervalo de sondeo 30 | Scale |
+| URL pública | La que Azure asigna por defecto (`*.azurecontainerapps.io`), con la página de bienvenida de Azure | WebSite |
+
+### Capturas
+
+**Overview:** vista general del Container App (grupo de recursos, estado, región, URL y ambiente).
+
+![Vista general del Container App ca-dinno-prueba](azure/img/Overview.png)
+
+**Scale:** se estableció un mínimo de 0 réplicas y un máximo de 1.
+
+![Escalado del Container App: mínimo 0 y máximo 1 réplica](azure/img/Scale.png)
+
+**WebSite:** la página que Azure publica por defecto con la imagen «Hello World».
+
+![Página por defecto de Azure Container Apps](azure/img/WebSite.png)
+
+### Qué confirma y qué no
+
+- **Máximo 1 réplica** es lo que pide este plan para el backend mientras las salas de Socket.IO vivan en la memoria del proceso (sección 4, fila 3).
+- **Mínimo 0** es escala a cero: sin tráfico no hay réplicas. Para el backend sigue **sin decidir** (sección 9, punto 5). Con 0 réplicas no corre el barrido de reservas cada 15 s, y la primera petición o conexión del WebSocket espera el arranque (sección 8).
+- **Región West US 2:** se usó para la prueba; la región definitiva sigue **sin decidir** (sección 9, punto 12).
+- **Workload profiles:** **por confirmar** si este tipo de ambiente usa el plan Consumption, cuya cuota gratuita mensual es la que cita la revisión de servicios (§3).
+- **No prueba nada del backend:** ni el WebSocket, ni `NODE_ENV`, ni el commit en `/v1/health`, ni la conexión a PostgreSQL o Redis. Las pruebas de la sección 6 siguen pendientes.
+- **Por confirmar:** si el Container App de prueba se conserva para el backend o se borra, y quién lo administra.
