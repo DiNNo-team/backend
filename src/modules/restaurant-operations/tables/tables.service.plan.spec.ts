@@ -26,6 +26,7 @@ function row(overrides: Partial<Table>): Table {
   return {
     id: SMALL_ID,
     restaurantId: RESTAURANT_ID,
+    areaId: null,
     identifier: '01',
     capacity: 2,
     status: 'occupied',
@@ -42,7 +43,7 @@ function row(overrides: Partial<Table>): Table {
 // Three tables of the restaurant (one already on the plan) and one of another
 // restaurant. Writes go to a copy that is committed only if the transaction
 // resolves, like a real rollback.
-function createStore() {
+function createStore(areaOf: Record<string, string> = {}) {
   let committed = [
     row({}),
     row({ id: BIG_ID, identifier: '02', capacity: 12, isActive: false }),
@@ -55,7 +56,7 @@ function createStore() {
       planShape: 'square',
     }),
     row({ id: FOREIGN_ID, restaurantId: OTHER_RESTAURANT_ID, identifier: '9' }),
-  ];
+  ].map((table) => ({ ...table, areaId: areaOf[table.id] ?? null }));
   const finds: unknown[] = [];
   const updates: { id: string; changes: Partial<Table> }[] = [];
 
@@ -249,5 +250,43 @@ describe('TablesService.savePlan', () => {
       ForbiddenException,
     );
     expect(store.finds).toHaveLength(0);
+  });
+
+  describe('zones', () => {
+    const TERRACE = '0b1c2d3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e';
+
+    function serviceWith(areaOf: Record<string, string>) {
+      store = createStore(areaOf);
+      return new TablesService(
+        store.repository,
+        statusLog as unknown as TableStatusLog,
+        events as unknown as EventEmitter2,
+        fakeTableReservations(),
+      );
+    }
+
+    it('still rejects two tables of the same zone on top of each other', async () => {
+      const zoned = serviceWith({ [SMALL_ID]: TERRACE, [PLACED_ID]: TERRACE });
+
+      await expect(
+        zoned.savePlan(RESTAURANT_ID, [
+          { id: SMALL_ID, x: 10, y: 4 },
+          { id: PLACED_ID, x: 10, y: 4, shape: 'square' },
+        ]),
+      ).rejects.toThrow(
+        new BadRequestException([PLAN_PROBLEM_MESSAGES.overlap]),
+      );
+    });
+
+    it('lets tables of different zones take the same cells: each zone has its own plan', async () => {
+      const zoned = serviceWith({ [SMALL_ID]: TERRACE });
+
+      await zoned.savePlan(RESTAURANT_ID, [
+        { id: SMALL_ID, x: 10, y: 4 },
+        { id: PLACED_ID, x: 10, y: 4, shape: 'square' },
+      ]);
+
+      expect(store.stored(SMALL_ID)).toMatchObject({ planX: 10, planY: 4 });
+    });
   });
 });

@@ -14,6 +14,7 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { UserRole } from './../src/modules/identity-access/index.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
@@ -97,6 +98,8 @@ describe('Restaurant status (e2e)', () => {
       .overrideProvider(getRepositoryToken(Table))
       .useValue({})
       .overrideProvider(getRepositoryToken(TableLog))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
       .useValue({})
       .overrideProvider(TableReservationsAccess)
       .useValue(reservations)

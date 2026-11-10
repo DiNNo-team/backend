@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Restaurant } from '../restaurants/restaurant.entity.js';
+import { TableArea } from '../table-areas/table-area.entity.js';
 import type { TableShape } from './table-plan.js';
 
 export const TABLE_STATUSES = ['available', 'reserved', 'occupied'] as const;
@@ -36,6 +37,15 @@ export class Table {
   @Column({ name: 'restaurant_id', type: 'uuid' })
   @ForeignKey(() => Restaurant)
   restaurantId: string;
+
+  /** Zone of the restaurant ("Piso 1", "Terraza"); null = no zone. Each zone has its own plan. */
+  @Column({ name: 'area_id', type: 'uuid', nullable: true })
+  @ForeignKey(() => TableArea, {
+    name: 'FK_tables_area_id',
+    onDelete: 'SET NULL',
+  })
+  @Index('IDX_tables_area_id')
+  areaId: string | null;
 
   @Column({ type: 'varchar', length: 50 })
   identifier: string;

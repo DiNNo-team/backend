@@ -12,6 +12,7 @@ import { RestaurantSchedule } from './../src/modules/restaurant-operations/resta
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 import { UserRole } from './../src/modules/identity-access/index.js';
 
@@ -36,6 +37,7 @@ function storedTable(overrides: Partial<Table>): Table {
   return {
     id: TABLE_ID,
     restaurantId: RESTAURANT_ID,
+    areaId: null,
     identifier: '04',
     capacity: 4,
     status: 'reserved',
@@ -65,6 +67,7 @@ describe('Tables · floor plan (e2e)', () => {
       storedTable({}),
       storedTable({
         id: OTHER_TABLE_ID,
+        areaId: null,
         identifier: 'T1',
         capacity: 8,
         planX: 10,
@@ -132,6 +135,8 @@ describe('Tables · floor plan (e2e)', () => {
       })
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
+      .useValue({})
       .overrideProvider(TableStatusLog)
       .useValue(statusLog)
       .compile();
@@ -158,6 +163,7 @@ describe('Tables · floor plan (e2e)', () => {
     expect(res.body).toEqual([
       {
         id: TABLE_ID,
+        areaId: null,
         identifier: '04',
         capacity: 4,
         status: 'reserved',
@@ -168,6 +174,7 @@ describe('Tables · floor plan (e2e)', () => {
       },
       {
         id: OTHER_TABLE_ID,
+        areaId: null,
         identifier: 'T1',
         capacity: 8,
         status: 'reserved',

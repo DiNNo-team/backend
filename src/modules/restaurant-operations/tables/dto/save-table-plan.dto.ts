@@ -19,8 +19,9 @@ import {
   type TableShape,
 } from '../table-plan.js';
 
-// The grid fits at most 6 × 15 of the smallest tables (3 × 2 cells).
-export const PLAN_MAX_TABLES = 100;
+// Each zone's grid fits at most 6 × 15 of the smallest tables (3 × 2 cells),
+// and a restaurant has at most 20 zones plus the tables without zone.
+export const PLAN_MAX_TABLES = 500;
 
 export const PLAN_X_RANGE = `La columna de la mesa va de 0 a ${PLAN_COLUMNS - 1}.`;
 export const PLAN_Y_RANGE = `La fila de la mesa va de 0 a ${PLAN_ROWS - 1}.`;

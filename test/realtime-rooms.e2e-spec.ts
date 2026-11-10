@@ -28,6 +28,7 @@ import { Restaurant } from './../src/modules/restaurant-operations/restaurants/r
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import {
   Clock,
   SearchAvailabilityModule,
@@ -346,6 +347,8 @@ describe('Tiempo real: salas y eventos de reserva (e2e)', () => {
       .overrideProvider(getRepositoryToken(Table))
       .useValue({ manager: { transaction } })
       .overrideProvider(getRepositoryToken(TableLog))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
       .useValue({})
       .overrideProvider(getRepositoryToken(Reservation))
       .useValue({})

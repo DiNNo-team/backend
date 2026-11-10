@@ -12,6 +12,7 @@ import { RestaurantSchedule } from './../src/modules/restaurant-operations/resta
 import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
 import { UserRole } from './../src/modules/identity-access/index.js';
 
@@ -41,6 +42,7 @@ function storedTable(overrides: Partial<Table>): Table {
   return {
     id: TABLE_ID,
     restaurantId: RESTAURANT_ID,
+    areaId: null,
     identifier: 'Mesa 4',
     capacity: 4,
     status: 'occupied',
@@ -131,6 +133,8 @@ describe('Tables · edit and deactivate (e2e)', () => {
       .useValue(tables)
       .overrideProvider(getRepositoryToken(TableLog))
       .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
+      .useValue({})
       .overrideProvider(TableStatusLog)
       .useValue(statusLog)
       .compile();
@@ -158,6 +162,7 @@ describe('Tables · edit and deactivate (e2e)', () => {
 
       expect(res.body).toEqual({
         id: TABLE_ID,
+        areaId: null,
         identifier: '12',
         capacity: 6,
         status: 'occupied',
@@ -175,7 +180,7 @@ describe('Tables · edit and deactivate (e2e)', () => {
       [
         'an empty body',
         {},
-        'No hay cambios para guardar. Cambia el identificador o la capacidad de la mesa.',
+        'No hay cambios para guardar. Cambia el identificador, la capacidad o la zona de la mesa.',
       ],
       [
         'an identifier of 11 characters',
@@ -423,6 +428,6 @@ describe('Tables · edit and deactivate (e2e)', () => {
     }
     expect(
       Object.keys(res.body.components.schemas.UpdateTableDto.properties),
-    ).toEqual(['identifier', 'capacity']);
+    ).toEqual(['identifier', 'capacity', 'areaId']);
   });
 });

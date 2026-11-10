@@ -54,6 +54,7 @@ describe('TablesService', () => {
 
       expect(tables.save).toHaveBeenCalledWith({
         restaurantId: RESTAURANT_ID,
+        areaId: null,
         identifier: 'Mesa 4',
         capacity: 4,
         status: 'available',
@@ -94,6 +95,7 @@ describe('TablesService', () => {
 
       expect(tables.save).toHaveBeenCalledWith({
         restaurantId: RESTAURANT_ID,
+        areaId: null,
         identifier: 'Mesa 1',
         capacity: 2,
         status: 'available',

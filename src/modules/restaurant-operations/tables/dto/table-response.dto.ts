@@ -18,6 +18,15 @@ export class TableResponseDto {
   })
   id: string;
 
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    example: null,
+    description:
+      'Zona de la mesa (GET /v1/table-areas). null = sin zona. Cada zona tiene su propio plano.',
+  })
+  areaId: string | null;
+
   @ApiProperty({ example: '04' })
   identifier: string;
 
@@ -73,6 +82,7 @@ export class TableResponseDto {
   static fromEntity(table: Table): TableResponseDto {
     return {
       id: table.id,
+      areaId: table.areaId ?? null,
       identifier: table.identifier,
       capacity: table.capacity,
       status: table.status,

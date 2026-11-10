@@ -1,6 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 import { MaxCodePoints } from '../../../../common/validation/max-code-points.js';
 import { NoInvisibleCharacters } from '../../../../common/validation/no-invisible-characters.js';
@@ -10,6 +18,7 @@ import {
   IDENTIFIER_TOO_LONG,
   TABLE_IDENTIFIER_MAX_LENGTH,
 } from '../table-identifier.js';
+import { AREA_ID_INVALID } from '../../table-areas/table-area-rules.js';
 
 export { TABLE_IDENTIFIER_MAX_LENGTH };
 export const TABLE_CAPACITY_MIN = 1;
@@ -61,4 +70,16 @@ export class CreateTableDto {
   @Min(TABLE_CAPACITY_MIN, { message: CAPACITY_RANGE })
   @Max(TABLE_CAPACITY_MAX, { message: CAPACITY_RANGE })
   capacity: number;
+
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    required: false,
+    description:
+      'Zona de la mesa (GET /v1/table-areas). Sin areaId, o con null, la mesa queda sin zona. Al editar, cambiar de zona saca la mesa del plano.',
+  })
+  // IsOptional also lets null through: null means "no zone".
+  @IsOptional()
+  @IsUUID('all', { message: AREA_ID_INVALID })
+  areaId?: string | null;
 }
