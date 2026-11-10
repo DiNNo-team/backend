@@ -111,9 +111,12 @@ unset INSIGHTS_LLM_API_KEY
 ```
 
 - **Nunca** escribas la llave en un archivo del repo, en un commit, en el grupo ni en una captura.
-- **Proveedor:** el diseño lo deja **por confirmar** (sección 15, punto 2). El prototipo usa Claude (Anthropic) con el SDK oficial `anthropic` como propuesta.
-- **Modelo:** `claude-opus-5-5` por defecto; se cambia con `INSIGHTS_LLM_MODEL`. Pide un esfuerzo bajo (`effort: low`), porque el texto es corto.
-- **Respaldo ante negativas:** con los modelos que lo aceptan, la petición pide al servidor reintentar con su modelo de respaldo si el modelo se niega a responder (`fallbacks: "default"`).
+- **Proveedor (decisión del equipo):** Claude (Anthropic), con el SDK oficial `anthropic`.
+- **Modelo:**
+  - Por defecto, **Claude Haiku 5.5** (`claude-haiku-5-5`).
+  - Alternativa si la calidad del texto no alcanza, **Claude Sonnet 5.5**: `export INSIGHTS_LLM_MODEL=claude-sonnet-5-5` (o `INSIGHTS_LLM_MODEL=claude-sonnet-5-5 python report.py …` para una sola corrida).
+  - Los dos se piden con esfuerzo bajo (`effort: low`), porque el texto es corto, y `max_tokens` de 16 000.
+- **Respaldo ante negativas (`fallbacks: "default"`):** solo para los modelos que lo soportan, como Claude Sonnet 5.5. **Claude Haiku 5.5 no tiene respaldo del servidor:** con él no se envían ni `fallbacks` ni la cabecera `server-side-fallback`. Si el modelo se niega a responder (`stop_reason: refusal`), se usa la plantilla.
 - **Qué se envía:** solo el objeto de métricas agregadas (conteos, porcentajes, franjas, días y el nivel de confiabilidad). Nunca el id, el nombre o la dirección del restaurante, ni datos de comensales.
 - **Validación (sección 6.3 del diseño).** El texto del modelo se descarta y se usa la plantilla si:
   - llega vacío;
@@ -123,6 +126,24 @@ unset INSIGHTS_LLM_API_KEY
 
   El motivo queda escrito en el informe («Nota: se usó la plantilla porque…»).
 - **Fallas del modelo:** un error de red, un 429 o un 5xx también llevan a la plantilla. El informe nunca falla por la IA.
+
+### Comparar Haiku y Sonnet con los mismos datos
+
+La misma semilla genera los mismos datos sintéticos, así que la única diferencia entre las dos carpetas es el modelo:
+
+```bash
+python generate_synthetic.py --output datos-sinteticos
+read -s INSIGHTS_LLM_API_KEY && export INSIGHTS_LLM_API_KEY
+python report.py --input datos-sinteticos --output informes-haiku
+INSIGHTS_LLM_MODEL=claude-sonnet-5-5 python report.py --input datos-sinteticos --output informes-sonnet
+unset INSIGHTS_LLM_API_KEY
+diff informes-haiku informes-sonnet
+```
+
+- Compara solo la sección «Recomendaciones» de cada informe: las métricas son iguales en las dos carpetas.
+- Revisa si dice «(generado automáticamente por un modelo de lenguaje)» o «(plantilla)» con su «Nota»: una nota indica que el texto del modelo se descartó y por qué.
+- **Cada corrida hace llamadas reales y cuesta dinero:** una llamada por restaurante con datos suficientes (2 con los datos sintéticos). Los precios están en la sección 10 de `docs/ia-diseno.md`.
+- `informes-haiku/` e `informes-sonnet/` están en el `.gitignore`.
 
 ## Ejemplo
 
