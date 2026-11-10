@@ -7,6 +7,13 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-09 · Sergio): script de QA para la cancelación de reserva** (Sprint 3, PBI 3.1, tarea 3.1.5 "Probar cancelación de reserva"; casos M5 y M6 de la matriz). `scripts/qa-cancel-reservation.mjs` + `scripts/qa-cancel-reservation.md`, rama `test/sprint3-qa-cancellation`. Node con `fetch`, mismo estilo que `scripts/listen-availability.mjs`: sin dependencias nuevas.
+  - **Qué hace:** crea y cancela reservas reales contra la API (`POST /reservations`, `POST /reservations/:id/cancel`, `GET /reservations/:id`) y revisa sus efectos en las mesas (`GET /tables`, `PATCH /tables/:id/status`), la disponibilidad pública (`GET /restaurants/:id/public`) y la bitácora (`GET /table-logs`). Reporta una tabla `ID · Variante · Pasa/Falla/Omitida · Detalle` con los mismos IDs de la matriz, y exit code distinto de 0 si algo falla.
+  - **Local y Render escriben en la misma base:** el backend local usa `DATABASE_URL` de Neon, no una base aparte. El script pide confirmación explícita (`--confirm-shared-db`) en los dos ambientes antes de crear nada, y revierte todo lo que toca en `try/finally` (reservas que queden activas, mesas que ocupe con `--force-threshold`, el restaurante si lo cierra para M6.4). Al terminar imprime un resumen de limpieza con el estado final de cada cosa que tocó.
+  - **El restaurante que se usa es Casa 72, el de la demo.** Avisa en el grupo antes de correrlo. **No lo corras durante la prueba completa del Día 6 ni el día de la demo.** Al terminar, revisa el resumen de limpieza; si algo no volvió a su estado, avísale a Elizabeth para que corra `demo:reset`.
+  - **Credenciales:** nunca en archivos, código ni salida. Se leen de variables de entorno al correr (`DINNO_DEV_*_ID` en local, `DINNO_*_TOKEN` en Render). Cómo conseguir cada una, en `scripts/qa-cancel-reservation.md`.
+  - **Sin cambios de API, base de datos, variables de entorno de la app ni dependencias.** Solo el script, su README y esta entrada.
+
 - **Nuevo (2026-11-08 · Jacobo): revisión de servicios de Azure** (Sprint 3, PBI 7.1; tareas 7.1.3 y 7.1.4). `docs/azure-revision-servicios.md` compara PostgreSQL Flexible Server, Redis y Container Apps, sin crear recursos. **Azure Cache for Redis se está retirando; el plan considera Azure Managed Redis.** Lo marcado «Por confirmar» se resuelve antes de crear nada. La cuenta gratuita de Azure del equipo está pendiente: Microsoft no me dio elegibilidad y el equipo decide la alternativa. **Sin cambios de código, base de datos, variables de entorno ni dependencias.**
 
 - **Nuevo (8 nov 2026 · Elizabeth): `reservationTtlMinutes` en el detalle público** (`feat/public-reservation-ttl`).
