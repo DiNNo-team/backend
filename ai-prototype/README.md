@@ -24,9 +24,9 @@ La IA del producto se construye en el Sprint 4. Esto es solo para validar las m�
 3. **Texto de recomendaciones** (`narrative.py`):
    - **Por defecto, plantillas y reglas simples** (el respaldo sin IA, sección 9 del diseño).
    - **Opcional:** si existe `INSIGHTS_LLM_API_KEY`, un modelo de lenguaje redacta el texto con **solo las métricas agregadas**.
-4. **Salida:** en la carpeta `--output`, un `informe-<restaurant_id>.txt` por restaurante y `metricas.json` con todas las métricas.
+4. **Salida:** en la carpeta `--output`, un `informe-NN.txt` por restaurante (`informe-01.txt`, `informe-02.txt`…) y `metricas.json` con todas las métricas. **Los informes no llevan el id del restaurante:** cada uno dice «restaurante N de M», y `metricas.json` (campo `reportFile`) dice qué `restaurant_id` corresponde a cada número. Las dos cosas quedan en tu computador: están en el `.gitignore`.
 
-Con menos de 10 reservas resueltas (`--min-resolved`, umbral **por confirmar** con el piloto), el informe no calcula tasas ni el indicador: muestra solo conteos y el aviso de datos insuficientes.
+Con menos de 10 reservas resueltas (`--min-resolved`, umbral **por confirmar** con el piloto), el informe no calcula tasas ni el indicador: muestra solo conteos y el aviso de datos insuficientes, y en `metricas.json` las tasas y el nivel llegan en `null` (sección 7 del diseño).
 
 ## Archivos
 
@@ -38,6 +38,8 @@ Con menos de 10 reservas resueltas (`--min-resolved`, umbral **por confirmar** c
 | `narrative.py` | Plantillas y llamada opcional al modelo, con validación del texto |
 | `export_columns.py` | Columnas de los CSV (copia de `src/scripts/export-data/columns.ts`), categorías y días |
 | `requirements.txt` | Dependencias con versión fija |
+| `tests/` | Pruebas con pytest y fixtures escritos a mano (ver «Pruebas») |
+| `pytest.ini` | Le dice a pytest que las pruebas están en `tests/` |
 
 ## Requisitos
 
@@ -100,7 +102,7 @@ Los datos del piloto de la demo se exportan después de la demo. El seudónimo d
 
 Sin llave, todo funciona igual con plantillas.
 
-> **Estado de las pruebas:** esta ruta solo se probó con un servidor simulado que imita la API (respuesta válida, texto con un número inventado y error 500), nunca con el modelo real. Queda pendiente probarla con el proveedor que se elija en el Sprint 4: que la API acepte la petición, la calidad del texto, el costo por informe y cuántas veces la validación lo descarta.
+> **Estado de las pruebas:** esta ruta solo se probó con la API simulada (las pruebas de `tests/` reemplazan el transporte HTTP del SDK), nunca con el modelo real. Queda pendiente probarla con la API real: la calidad del texto, el costo por informe y cuántas veces la validación lo descarta.
 
 Para probar el texto redactado por un modelo:
 
@@ -155,10 +157,10 @@ d4ea120a-5e65-4654-8e90-58b609a0a0f6,1a2a73ed562b0f79,eb7607c9-b08a-4895-94ff-a6
 80599b93-79c2-42e4-9ae1-a991524f93ff,47229389571aa876,eb7607c9-b08a-4895-94ff-a66675c8e90d,italian,2,2,expired,2026-10-26T17:28:58.829Z,2026-10-26T17:43:58.829Z,2026-10-26T17:44:01.829Z,,,true,1,12,903
 ```
 
-**Salida** (`informes/informe-eb7607c9-….txt`, restaurante italiano, sin llave; se omiten las fechas):
+**Salida** (`informes/informe-03.txt`, restaurante italiano, sin llave; se omiten las fechas):
 
 ```text
-Informe de DiNNo · restaurante eb7607c9-b08a-4895-94ff-a66675c8e90d (Italiana)
+Informe de DiNNo · restaurante 3 de 3 (Italiana)
 Periodo: 26 oct 2026 a 8 nov 2026 (14 días, hora de Bogotá)
 
 Métricas
@@ -186,6 +188,39 @@ Recomendaciones
   (plantilla)
   El 49 % de tus reservas resueltas venció sin check-in (25 de 51). Revisa si validas el código cuando llega el comensal: si no lo validas, la reserva cuenta como vencida. No actualizaste tus mesas a mano en 12 de 14 días. Márcalas como Ocupada o Disponible cuando cambien, para que los comensales vean tu disponibilidad real. El 25 % de tus reservas resueltas se canceló (13 de 51). Revisa en la bitácora a qué horas pasa.
 ```
+
+## Pruebas
+
+Desde `ai-prototype/`, con el entorno virtual activo:
+
+```bash
+python -m pytest
+```
+
+No necesitan llave, internet, la base ni el backend: **ninguna prueba llama a la API real**. Las que prueban el modelo usan el cliente real del SDK con un transporte HTTP simulado, y todas corren sin `INSIGHTS_LLM_API_KEY` en el entorno.
+
+| Archivo | Qué prueba |
+|---|---|
+| `tests/test_metrics.py` | Los fixtures dan exactamente `tests/fixtures/expected.json`; exportación sin filas; datos insuficientes (sin tasas ni indicador); solo cancelaciones; reservas activas (no cuentan como resueltas); límite del día en hora de Bogotá |
+| `tests/test_columns.py` | Un CSV con una columna faltante o sobrante, o un archivo faltante, falla con un mensaje que la nombra |
+| `tests/test_reliability.py` | Alta, Media, Baja y sin datos, justo en los umbrales de 70 % y 40 % |
+| `tests/test_narrative.py` | Sin llave sale la plantilla; un texto válido se acepta; uno con un número inventado, vacío o de más de 600 caracteres se descarta con su nota; 429, 5xx, error de conexión y `stop_reason` distinto de `end_turn` usan la plantilla; sin `INSIGHTS_LLM_MODEL` se pide `claude-haiku-5-5` sin `fallbacks` ni cabecera beta, y con `claude-sonnet-5-5` sí se envían |
+| `tests/test_privacy.py` | Lo que se envía al modelo y los informes no contienen ids de restaurante, de reserva o de mesa, seudónimos, correos ni códigos de reserva |
+
+**Fixtures:** `tests/fixtures/export/` es una exportación pequeña escrita a mano (2 restaurantes, 14 reservas) y `tests/fixtures/expected.json` tiene el valor esperado de cada métrica. `tests/fixtures/README.md` explica cómo se calculó cada valor. Si cambia la definición de una métrica, se actualizan juntos el código, `expected.json` y esa explicación.
+
+## Para el Sprint 4
+
+Cada pieza del diseño (sección 6.1 de `docs/ia-diseno.md`) ya tiene su versión en el prototipo. Al construirla en el backend (TypeScript), esta es la referencia:
+
+| Pieza del diseño | Función del prototipo | Qué cambia en el Sprint 4 |
+|---|---|---|
+| `InsightsMetricsReader` | `metrics.load_export` + `metrics.restaurant_metrics` (y `compute_all`) | Lee con consultas de solo lectura en vez de CSV; cada métrica se define igual |
+| `ReliabilityScorer` | `metrics.reliability` | Misma regla pura, con los umbrales `HIGH_CHECK_IN_RATE` (0,70) y `LOW_CHECK_IN_RATE` (0,40) |
+| `TemplateNarrativeWriter` | `narrative.template_narrative` | Mismas reglas y textos |
+| `LlmNarrativeWriter` | `narrative.llm_narrative`, con `llm_payload`, `SYSTEM_PROMPT` y `validation_problem` | Mismo modelo por defecto, mismo payload y misma validación del texto |
+
+**Los fixtures y `expected.json` se deben reutilizar en las pruebas de TypeScript:** cargar `tests/fixtures/export/` como datos de prueba y comparar el resultado con `expected.json`. Así el prototipo y el backend calculan lo mismo con los mismos datos. Ojo: `expected.json` usa los nombres en `snake_case` del prototipo, y el contrato del endpoint (sección 7 del diseño) usa `camelCase`.
 
 ## Limitaciones conocidas (frente al diseño)
 

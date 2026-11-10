@@ -142,6 +142,9 @@ def validation_problem(text: str, payload: dict) -> str | None:
 def llm_narrative(metrics: RestaurantMetrics, api_key: str, model: str) -> Narrative:
     """Pide el texto al modelo. Cualquier falla devuelve la plantilla con el motivo."""
     fallback = template_narrative(metrics)
+    if metrics.data_sufficiency == "insufficient":
+        # Sin tasas no hay nada que redactar: nunca se llama al modelo.
+        return fallback
     try:
         import anthropic
     except ImportError:
