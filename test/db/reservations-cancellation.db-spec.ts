@@ -91,6 +91,7 @@ const asDiner = (userId: string) => ({
   userId,
   restaurantId: null,
   role: UserRole.DINER,
+  restaurantApproval: null,
 });
 
 const errorCodeOf = (error: unknown) =>

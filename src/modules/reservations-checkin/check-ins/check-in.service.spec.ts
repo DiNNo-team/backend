@@ -26,6 +26,7 @@ const admin: CurrentUserData = {
   userId: ADMIN_ID,
   restaurantId: RESTAURANT_ID,
   role: 'restaurant_admin' as CurrentUserData['role'],
+  restaurantApproval: 'approved',
 };
 
 const reservation = (overrides: Partial<Reservation> = {}): Reservation =>

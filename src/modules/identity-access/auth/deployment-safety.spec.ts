@@ -1,3 +1,4 @@
+import { RestaurantApprovalReader } from '../approval/restaurant-approval.reader.js';
 import { ConfigModule, type ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -87,6 +88,8 @@ describe('IdentityAccessModule startup', () => {
         IdentityAccessModule,
       ],
     })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue({})
       .overrideProvider(getRepositoryToken(User))
       .useValue({})
       .compile();

@@ -18,6 +18,7 @@ import { DinersController } from './diners/diners.controller.js';
 import { DinersService } from './diners/diners.service.js';
 import { MeController } from './users/me.controller.js';
 import { SocketAuthenticator } from './realtime/socket-authenticator.js';
+import { RestaurantApprovalReader } from './approval/restaurant-approval.reader.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
@@ -40,6 +41,8 @@ import { SocketAuthenticator } from './realtime/socket-authenticator.js';
     UsersService,
     DinersService,
     SocketAuthenticator,
+    // Estado de aprobación del restaurante de la sesión (§11).
+    RestaurantApprovalReader,
   ],
   exports: [
     CurrentUserResolver,

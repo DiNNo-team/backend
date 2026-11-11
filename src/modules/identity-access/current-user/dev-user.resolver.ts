@@ -9,12 +9,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { sessionExpired } from '../auth/auth-errors.js';
 import { isDeployedEnvironment } from '../auth/deployed-environment.js';
+import { RestaurantApprovalReader } from '../approval/restaurant-approval.reader.js';
 import { User } from '../users/user.entity.js';
 import type { RequestIdentity } from './current-user-data.js';
 import {
   CurrentUserResolver,
   type IdentityRequest,
 } from './current-user.resolver.js';
+import { registeredIdentity } from './registered-identity.js';
 
 export const DEV_USER_HEADER = 'x-dev-user-id';
 
@@ -38,6 +40,7 @@ export class DevUserResolver
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
     config: ConfigService,
+    private readonly approvals: RestaurantApprovalReader,
   ) {
     super();
     this.requested = config.get<string>('DEV_USER_ENABLED') === 'true';
@@ -61,7 +64,8 @@ export class DevUserResolver
     }
   }
 
-  // Always a registered user, with the role of its row (restaurant_admin or diner).
+  // Always a registered user, with the role of its row and, for a restaurant
+  // admin with a restaurant, its approval status.
   async resolve(request: IdentityRequest): Promise<RequestIdentity> {
     if (!this.enabled) {
       throw sessionExpired();
@@ -77,14 +81,7 @@ export class DevUserResolver
       );
     }
 
-    return {
-      kind: 'registered',
-      user: {
-        userId: user.id,
-        restaurantId: user.restaurantId,
-        role: user.role,
-      },
-    };
+    return registeredIdentity(user, this.approvals);
   }
 
   // Validated before querying: Postgres rejects a malformed uuid with a 500.

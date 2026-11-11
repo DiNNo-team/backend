@@ -27,7 +27,9 @@ import {
   fakeFirebaseAuth,
   testUsers,
   usersRepository,
+  approvalReader,
 } from './support/test-accounts.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 // Friday 2026-10-16 13:00 in Bogotá (the restaurant opens 24 hours anyway).
 const FRIDAY_13H = new Date('2026-10-16T18:00:00Z');
@@ -53,6 +55,7 @@ function createDatabase() {
     id: CASA_72,
     name: 'Casa 72',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.655671,
     longitude: -74.057006,
   };
@@ -163,6 +166,8 @@ describe('Real time: availability.changed (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => fakeFirebaseAuth)
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue(usersRepository(testUsers(CASA_72)))
       .overrideProvider(getRepositoryToken(Restaurant))

@@ -61,6 +61,8 @@ describe('RestaurantCandidatesReader', () => {
     expect(find).toHaveBeenCalledTimes(1);
     expect(find).toHaveBeenCalledWith({
       where: {
+        // Only restaurants visible to the diners (approved, §11).
+        approvalStatus: 'approved',
         latitude: Between(4.64, 4.67),
         longitude: Between(-74.07, -74.04),
       },
@@ -93,6 +95,7 @@ describe('RestaurantCandidatesReader', () => {
 
       expect(find).toHaveBeenCalledTimes(1);
       expect(find.mock.calls[0][0].where).toEqual({
+        approvalStatus: 'approved',
         latitude: Between(4.64, 4.67),
         longitude: Between(-74.07, -74.04),
         category: 'colombian',

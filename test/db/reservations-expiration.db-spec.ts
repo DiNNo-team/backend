@@ -84,6 +84,7 @@ const asDiner = (userId: string) => ({
   userId,
   restaurantId: null,
   role: UserRole.DINER,
+  restaurantApproval: null,
 });
 
 // ----------------------------------------------------------------- datos ----

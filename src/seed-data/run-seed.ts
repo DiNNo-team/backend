@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
+import { APPROVED } from '../modules/identity-access/index.js';
 import { UserRole } from '../modules/identity-access/roles/user-role.js';
 import type { User } from '../modules/identity-access/users/user.entity.js';
 import type { Restaurant } from '../modules/restaurant-operations/restaurants/restaurant.entity.js';
@@ -160,7 +161,11 @@ async function ensureRestaurant(
     return owner.restaurantId;
   }
   const restaurants = manager.getRepository<Restaurant>('Restaurant');
-  const restaurant = await restaurants.save(restaurants.create({ name }));
+  // Explicit on purpose: approval_status has no default (§11). The seed's
+  // restaurants are DiNNo's own, already approved.
+  const restaurant = await restaurants.save(
+    restaurants.create({ name, approvalStatus: APPROVED }),
+  );
   await manager
     .getRepository<User>('User')
     .update(owner.id, { restaurantId: restaurant.id });

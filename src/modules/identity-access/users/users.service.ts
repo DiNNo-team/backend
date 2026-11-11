@@ -142,16 +142,21 @@ export class UsersService {
     }
   }
 
-  // Only POST /v1/diners/me creates users (Sprint 2); restaurant accounts are
-  // enabled by hand (docs/database.md, "Restaurantes habilitados").
-  create(input: CreateUserInput): Promise<User> {
-    const user = this.usersRepository.create({
+  // Only POST /v1/diners/me and POST /v1/restaurants/signup create users;
+  // restaurant accounts can also be enabled by hand (docs/database.md,
+  // "Restaurantes habilitados"). With a manager, the row is created inside that
+  // transaction (the sign-up creates the user and its restaurant together).
+  create(input: CreateUserInput, manager?: EntityManager): Promise<User> {
+    const repository = manager
+      ? manager.getRepository(User)
+      : this.usersRepository;
+    const user = repository.create({
       email: normalizeEmail(input.email),
       firebaseUid: input.firebaseUid,
       role: input.role,
       restaurantId: input.restaurantId,
       displayName: input.displayName,
     });
-    return this.usersRepository.save(user);
+    return repository.save(user);
   }
 }

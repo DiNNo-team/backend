@@ -7,6 +7,22 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-10 · Elizabeth): aprobación de restaurantes, tarea 1 de 5: modelo, identidad y filtros** (`feat/admin-approval`; corrección pedida por el profesor). Todavía **no** está en `develop`. Detalle en CLAUDE.md §11, «Aprobación de restaurantes».
+  - **Qué es:** un restaurante tiene `approvalStatus` (`pending`, `approved`, `rejected`). Solo uno `approved` aparece para el comensal (búsqueda, detalle, reservas, `availability.changed`) y opera. **Todos los restaurantes existentes quedan `approved`**, y los que registra un usuario habilitado por el equipo (`POST /v1/restaurants`) nacen `approved`: para lo que ya existe no cambia nada.
+  - **Rutas y respuestas (aditivas):**
+    - `POST /v1/restaurants/signup` (nueva): registro público de un restaurante desde una cuenta de Firebase sin perfil con el correo verificado; crea el usuario `restaurant_admin` y el restaurante `pending`. Body: lo de `POST /v1/restaurants` más `contactPhone` obligatorio. Swagger, tag `restaurants`.
+    - `GET`/`PATCH /v1/restaurants/me` y `POST /v1/restaurants` agregan `approvalStatus`, `rejectionReason` y `contactPhone`. `POST /v1/restaurants` acepta `contactPhone` opcional.
+    - `GET /v1/me` acepta el rol nuevo `platform_admin` (administrador de DiNNo; solo por seed o SQL).
+    - **`GET /v1/geocode` ya no exige perfil:** responde `200` a una cuenta sin perfil (antes `403 PROFILE_REQUIRED`) y a un restaurante pendiente o rechazado. **El rate limiting sigue como deuda del Sprint 4**: hoy el único límite es la cuota de Google.
+  - **Códigos nuevos (403):** `ACCOUNT_PENDING_APPROVAL` y `ACCOUNT_REJECTED` (restaurante no aprobado en cualquier ruta de restaurante salvo `GET /v1/me`, `GET /v1/restaurants/me` y `GET /v1/geocode`) y `ADMIN_ACCOUNT` (`platform_admin` en una ruta de restaurante o de comensal). También son `connect_error` del WebSocket. Un rol que no corresponde ahora recibe su propio código (`ADMIN_ACCOUNT` incluido), no siempre `RESTAURANT_ACCOUNT`.
+  - **Web (Sebastián, Jacobo, Santiago): la web actual NO conoce los códigos nuevos.** En cuanto esto llegue a `develop`, **Render lo despliega solo**. Hasta que la web los maneje (tarea 3), un restaurante pendiente vería un error genérico. Para los restaurantes que ya existen no pasa nada: todos quedan `approved`.
+  - **Base de datos, acción de Elizabeth.** Dos migraciones escritas a mano: `1794400000000-AddRestaurantApproval` (columnas de aprobación en `restaurants`; la columna `approval_status` **no tiene valor por defecto**, así que todo `INSERT` a mano debe fijarla) y `1794400000001-AddPlatformAdminRole` (recrea `CHK_users_role`; su `down` se niega si hay usuarios `platform_admin`).
+    1. Migrar la **rama de pruebas** de Neon y correr `npm run test:db`.
+    2. Migrar la **base de desarrollo** antes de fusionar. Sin las migraciones, la búsqueda y toda petición de un restaurante responden 500 en Render.
+    `docs/database.md` está actualizado.
+  - **Pruebas e2e:** toda prueba que monte `IdentityAccessModule` reemplaza `RestaurantApprovalReader` con `approvalReader(...)` de `test/support/test-accounts.ts` (ya agregado en las existentes).
+  - **Lo que queda desactualizado en §10 y §12** (iguales en los tres repos; se corrigen en la tarea 5): la lista de roles, «no hay registro público», «el único endpoint que crea un usuario es `POST /v1/diners/me`», la tabla de códigos de cuenta y su precedencia, `GET /v1/geocode` (ya no exige perfil), las respuestas de `/restaurants*`, quién acepta el socket y sus códigos, «Aparece en la búsqueda» y los 404 del detalle y de la reserva (falta «aprobado»).
+
 - **Nuevo (2026-11-10 · Sebastián): zonas de mesas** (`feat/sprint3-zonas-mesas`). Para restaurantes grandes, con muchas mesas o varios pisos.
   - **Qué es:** un restaurante crea zonas con nombre libre ("Piso 1", "Terraza", "Bar") y asigna cada mesa a una. Cada zona tiene su propio plano y la web filtra y busca las mesas por zona.
   - **Rutas nuevas** (`restaurant_admin`, Swagger tag `table-areas`): `GET /v1/table-areas` → `[{ id, name }]` en orden de creación · `POST /v1/table-areas` `{ name }` → 201 · `PATCH /v1/table-areas/:id` `{ name }` → 200 · `DELETE /v1/table-areas/:id` → 204. El nombre tiene de 1 a 30 caracteres y es único por restaurante sin importar mayúsculas (409). Máximo 20 zonas (409). Una zona de otro restaurante da el mismo 404 que una inexistente.

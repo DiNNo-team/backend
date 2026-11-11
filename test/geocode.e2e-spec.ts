@@ -17,10 +17,14 @@ import { TableLog } from './../src/modules/restaurant-operations/table-logs/tabl
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import {
+  approvalReader,
+  approvalTestUsers,
   fakeFirebaseAuth,
+  TEST_APPROVALS,
   testUsers,
   usersRepository,
 } from './support/test-accounts.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const ADDRESS = 'Cra. 11 #72-30';
@@ -35,9 +39,15 @@ const FOUND = {
 // Users of the test accounts; the owner's restaurant is set per app, so the
 // same token covers a restaurant with and without a registered restaurant.
 function usersWithOwnerRestaurant(restaurantId: string | null): User[] {
-  return testUsers(RESTAURANT_ID).map((user) =>
-    user.role === UserRole.RESTAURANT_ADMIN ? { ...user, restaurantId } : user,
-  );
+  return [
+    ...testUsers(RESTAURANT_ID).map((user) =>
+      user.role === UserRole.RESTAURANT_ADMIN
+        ? { ...user, restaurantId }
+        : user,
+    ),
+    // Owners of a pending and a rejected restaurant, and a DiNNo admin (§11).
+    ...approvalTestUsers(),
+  ];
 }
 
 // Prueba el contrato HTTP de GET /v1/geocode con un Geocoder falso: sin Google,
@@ -65,6 +75,10 @@ describe('Geocode (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => fakeFirebaseAuth)
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(
+        approvalReader({ [RESTAURANT_ID]: 'approved', ...TEST_APPROVALS }),
+      )
       .overrideProvider(getRepositoryToken(User))
       .useValue(usersRepository(usersWithOwnerRestaurant(ownerRestaurantId)))
       .overrideProvider(getRepositoryToken(Restaurant))
@@ -222,14 +236,54 @@ describe('Geocode (e2e)', () => {
     expect(res.body.errorCode).toBe('ADDRESS_NOT_FOUND');
   });
 
-  it('returns 403 PROFILE_REQUIRED for an account without profile, without geocoding', async () => {
-    const res = await geocode({ address: ADDRESS }, 'noProfile').expect(403);
+  // §11 "Aprobación de restaurantes": the public sign-up form geocodes before
+  // the account exists, so /geocode no longer requires a profile.
+  it('returns 200 to an account without profile (the restaurant sign-up form)', async () => {
+    const res = await geocode({ address: ADDRESS }, 'noProfile').expect(200);
+
+    expect(res.body).toEqual({
+      latitude: 4.655671,
+      longitude: -74.057006,
+      formattedAddress: 'Cra. 11 #72-30, Bogotá, Colombia',
+    });
+    expect(geocoder.geocode).toHaveBeenCalledWith(ADDRESS);
+  });
+
+  it('keeps the validations for an account without profile, without geocoding', async () => {
+    const res = await geocode({ address: 'ab' }, 'noProfile').expect(400);
+
+    expect(res.body.statusCode).toBe(400);
+    expect(geocoder.geocode).not.toHaveBeenCalled();
+  });
+
+  it('keeps the 503 of the quota for an account without profile', async () => {
+    geocoder.geocode.mockResolvedValue({ kind: 'unavailable' });
+
+    const res = await geocode({ address: ADDRESS }, 'noProfile').expect(503);
+
+    expect(res.body.errorCode).toBe('GEOCODING_UNAVAILABLE');
+  });
+
+  it.each([
+    ['a pending restaurant', 'pendingOwner'],
+    ['a rejected restaurant', 'rejectedOwner'],
+  ])('returns 200 to %s (it corrects its address)', async (_case, token) => {
+    await geocode({ address: ADDRESS }, token).expect(200);
+
+    expect(geocoder.geocode).toHaveBeenCalledWith(ADDRESS);
+  });
+
+  it('returns 403 ADMIN_ACCOUNT to a DiNNo admin, without geocoding', async () => {
+    const res = await geocode({ address: ADDRESS }, 'platformAdmin').expect(
+      403,
+    );
 
     expect(res.body).toEqual({
       statusCode: 403,
       error: 'Forbidden',
-      message: 'Completa tu perfil para continuar.',
-      errorCode: 'PROFILE_REQUIRED',
+      message:
+        'Esta es una cuenta de administrador de DiNNo. Usa el panel de administración en la web.',
+      errorCode: 'ADMIN_ACCOUNT',
     });
     expect(geocoder.geocode).not.toHaveBeenCalled();
   });
@@ -264,7 +318,8 @@ describe('Geocode (e2e)', () => {
       '503',
     ]);
     expect(route.get.security).toBeDefined();
-    // Both roles pass: the only account 403 is the account without profile.
+    // Both roles and the accounts without profile pass: the only account 403
+    // is the DiNNo admin (§11).
     expect(
       Object.values(
         route.get.responses['403'].content['application/json'].examples,
@@ -272,7 +327,7 @@ describe('Geocode (e2e)', () => {
         (example) =>
           (example as { value: { errorCode: string } }).value.errorCode,
       ),
-    ).toEqual(['PROFILE_REQUIRED']);
+    ).toEqual(['ADMIN_ACCOUNT']);
     expect(route.get.parameters).toEqual([
       expect.objectContaining({ name: 'address', in: 'query', required: true }),
     ]);

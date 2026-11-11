@@ -28,7 +28,12 @@ function firebase(
 function registered(role: UserRole): RequestIdentity {
   return {
     kind: 'registered',
-    user: { userId: USER_ID, restaurantId: null, role },
+    user: {
+      userId: USER_ID,
+      restaurantId: null,
+      role,
+      restaurantApproval: null,
+    },
   };
 }
 

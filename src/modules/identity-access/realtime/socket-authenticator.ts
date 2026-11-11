@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { unapprovedCode } from '../approval/unapproved-code.js';
 import { EMAIL_NOT_VERIFIED_CODE } from '../auth/auth-errors.js';
 import type { CurrentUserData } from '../current-user/current-user-data.js';
 import {
@@ -8,15 +9,20 @@ import {
 import { DEV_USER_HEADER } from '../current-user/dev-user.resolver.js';
 import { UserRole } from '../roles/user-role.js';
 
-// Codes of the WebSocket connect_error (CLAUDE.md §10 and §12.7): the client
-// reads them in error.message. UNAUTHORIZED only exists here; in HTTP it is the
-// 401 without errorCode. RESTAURANT_REQUIRED is the same code as the HTTP 403 of
-// restaurant-operations (this module cannot import it; a test keeps them equal).
+// Codes of the WebSocket connect_error (CLAUDE.md §10, §11 and §12.7): the
+// client reads them in error.message. UNAUTHORIZED only exists here; in HTTP it
+// is the 401 without errorCode. RESTAURANT_REQUIRED is the same code as the HTTP
+// 403 of restaurant-operations (this module cannot import it); ADMIN_ACCOUNT,
+// ACCOUNT_PENDING_APPROVAL and ACCOUNT_REJECTED are the same as the HTTP 403s of
+// RolesGuard. A test keeps them equal.
 export const SOCKET_REJECTION_CODES = [
   'UNAUTHORIZED',
   'EMAIL_NOT_VERIFIED',
   'PROFILE_REQUIRED',
   'RESTAURANT_REQUIRED',
+  'ADMIN_ACCOUNT',
+  'ACCOUNT_PENDING_APPROVAL',
+  'ACCOUNT_REJECTED',
 ] as const;
 export type SocketRejectionCode = (typeof SOCKET_REJECTION_CODES)[number];
 
@@ -36,8 +42,9 @@ interface HandshakeAuth {
   devUserId?: unknown;
 }
 
-// Who connects to the WebSocket: a diner or a restaurant_admin with a restaurant
-// (§12.7), with the same resolution as HTTP (Firebase, link by email, development
+// Who connects to the WebSocket: a diner or a restaurant_admin with an approved
+// restaurant (§12.7 and §11 "Aprobación de restaurantes"; a platform_admin has
+// no events yet), with the same resolution as HTTP (Firebase, link by email, development
 // user). It only translates the auth payload into headers and the outcome into a
 // connect_error code. Errors that are not about the session (the database is
 // down) propagate unchanged.
@@ -62,13 +69,18 @@ export class SocketAuthenticator {
     if (identity.kind === 'unregistered') {
       throw new SocketRejection('PROFILE_REQUIRED');
     }
-    if (
-      identity.user.role === UserRole.RESTAURANT_ADMIN &&
-      identity.user.restaurantId === null
-    ) {
+    const { user } = identity;
+    if (user.role === UserRole.PLATFORM_ADMIN) {
+      throw new SocketRejection('ADMIN_ACCOUNT');
+    }
+    if (user.role === UserRole.RESTAURANT_ADMIN && user.restaurantId === null) {
       throw new SocketRejection('RESTAURANT_REQUIRED');
     }
-    return identity.user;
+    const approvalCode = unapprovedCode(user);
+    if (approvalCode !== null) {
+      throw new SocketRejection(approvalCode);
+    }
+    return user;
   }
 }
 

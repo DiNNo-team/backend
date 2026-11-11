@@ -22,6 +22,8 @@ import {
 } from './../src/modules/restaurant-operations/table-areas/table-area-rules.js';
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
@@ -129,6 +131,8 @@ describe('Table areas (e2e)', () => {
         RestaurantOperationsModule,
       ],
     })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         findOneBy: ({ id }: { id: string }) =>

@@ -2,6 +2,7 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
+  APPROVED,
   type CurrentUserData,
   UsersService,
 } from '../../identity-access/index.js';
@@ -52,6 +53,11 @@ export class RestaurantRegistrationService {
           // Optional (Sprint 2): both or neither, already validated.
           latitude: dto.latitude ?? null,
           longitude: dto.longitude ?? null,
+          contactPhone: dto.contactPhone ?? null,
+          // The user was enabled by hand by the team: the restaurant is born
+          // approved, without a review (reviewed_by and reviewed_at stay null).
+          // Only POST /v1/restaurants/signup creates pending restaurants.
+          approvalStatus: APPROVED,
         }),
       );
       const schedules = await manager.save(

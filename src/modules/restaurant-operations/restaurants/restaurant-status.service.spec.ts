@@ -21,6 +21,11 @@ function createService() {
     isOpen: true,
     latitude: null,
     longitude: null,
+    approvalStatus: 'approved',
+    rejectionReason: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    contactPhone: null,
     createdAt: new Date('2026-10-04T12:00:00Z'),
     updatedAt: new Date('2026-10-04T12:00:00Z'),
   };

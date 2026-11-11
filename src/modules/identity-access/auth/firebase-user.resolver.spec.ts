@@ -1,6 +1,7 @@
 import { Logger, UnauthorizedException } from '@nestjs/common';
 import type { Request } from 'express';
 import type { DecodedIdToken } from 'firebase-admin/auth';
+import type { RestaurantApprovalReader } from '../approval/restaurant-approval.reader.js';
 import type { User } from '../users/user.entity.js';
 import type { UsersService } from '../users/users.service.js';
 import type { FirebaseAuthFactory } from './firebase-admin.provider.js';
@@ -39,11 +40,13 @@ function createResolver() {
     linkFirebaseUid: vi.fn(),
     create: vi.fn(),
   };
+  const approvals = { statusOf: vi.fn().mockResolvedValue('approved') };
   const resolver = new FirebaseUserResolver(
     firebaseAuthFactory,
     usersService as unknown as UsersService,
+    approvals as unknown as RestaurantApprovalReader,
   );
-  return { auth, firebaseAuthFactory, resolver, usersService };
+  return { approvals, auth, firebaseAuthFactory, resolver, usersService };
 }
 
 async function expectUnauthorized(
@@ -90,6 +93,7 @@ describe('FirebaseUserResolver', () => {
         userId: USER_ID,
         restaurantId: null,
         role: UserRole.RESTAURANT_ADMIN,
+        restaurantApproval: null,
       },
     });
     expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
@@ -405,6 +409,7 @@ describe('FirebaseUserResolver', () => {
         userId: USER_ID,
         restaurantId: null,
         role: UserRole.RESTAURANT_ADMIN,
+        restaurantApproval: null,
       },
     });
     expect(usersService.findByEmail).not.toHaveBeenCalled();

@@ -11,6 +11,8 @@ import { DbTableStatusLog } from './../src/modules/restaurant-operations/table-l
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 // Mounts the module like the other e2e tests, without PostgreSQL, but keeps
 // the real TableStatusLog provider to check which class the module wires.
@@ -35,6 +37,8 @@ describe('TableStatusLog wiring (e2e)', () => {
         RestaurantOperationsModule,
       ],
     })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({})
       .overrideProvider(getRepositoryToken(Restaurant))

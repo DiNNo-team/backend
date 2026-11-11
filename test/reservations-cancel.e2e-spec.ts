@@ -39,7 +39,9 @@ import {
   fakeFirebaseAuth,
   testUsers,
   usersRepository,
+  approvalReader,
 } from './support/test-accounts.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 // Viernes 2026-10-16 13:00 en Bogotá.
 const NOW = new Date('2026-10-16T18:00:00Z');
@@ -174,6 +176,8 @@ describe('POST /v1/reservations/:id/cancel (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => fakeFirebaseAuth)
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue(usersRepository(testUsers(RESTAURANT_ID)))
       .overrideProvider(getRepositoryToken(Restaurant))

@@ -99,7 +99,8 @@ describe('PublicRestaurantReader', () => {
     expect(getRepository).toHaveBeenCalledWith('Restaurant');
     expect(getRepository).toHaveBeenCalledWith('RestaurantSchedule');
     expect(restaurants.findOne).toHaveBeenCalledWith({
-      where: { id: ID },
+      // Only a restaurant visible to the diners (approved, §11).
+      where: { id: ID, approvalStatus: 'approved' },
       select: {
         id: true,
         name: true,

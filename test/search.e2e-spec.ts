@@ -16,7 +16,9 @@ import {
   fakeFirebaseAuth,
   testUsers,
   usersRepository,
+  approvalReader,
 } from './support/test-accounts.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 // Friday 2026-10-16 13:00 in Bogotá.
 const FRIDAY_13H = new Date('2026-10-16T18:00:00Z');
@@ -40,6 +42,7 @@ const RESTAURANTS = [
     category: 'colombian',
     address: 'Av. Calle 72 con Cra. 9, Chapinero, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.655671,
     longitude: -74.057006,
   },
@@ -49,6 +52,7 @@ const RESTAURANTS = [
     category: 'grill',
     address: 'Cra. 13 # 93-40, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.6766,
     longitude: -74.0486,
   },
@@ -59,6 +63,7 @@ const RESTAURANTS = [
     category: 'cafe',
     address: 'Calle 71 # 9-10, Bogotá',
     isOpen: false,
+    approvalStatus: 'approved',
     latitude: 4.6551,
     longitude: -74.0575,
   },
@@ -69,6 +74,7 @@ const RESTAURANTS = [
     category: 'other',
     address: null,
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: null,
     longitude: null,
   },
@@ -78,6 +84,7 @@ const RESTAURANTS = [
     category: 'mexican',
     address: 'Av. Primero de Mayo # 70-20, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.6285,
     longitude: -74.1525,
   },
@@ -87,6 +94,7 @@ const RESTAURANTS = [
     category: 'italian',
     address: 'Calle 119 # 6-10, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.6995,
     longitude: -74.0305,
   },
@@ -96,6 +104,7 @@ const RESTAURANTS = [
     category: 'colombian',
     address: 'Calle 120 # 6-20, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.7,
     longitude: -74.03,
   },
@@ -105,6 +114,7 @@ const RESTAURANTS = [
     category: 'colombian',
     address: 'Calle 120 # 5-30, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.7005,
     longitude: -74.0295,
   },
@@ -114,6 +124,7 @@ const RESTAURANTS = [
     category: 'colombian',
     address: 'Calle 121 # 5-40, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.701,
     longitude: -74.029,
   },
@@ -230,6 +241,8 @@ describe('Search (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => fakeFirebaseAuth)
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue(usersRepository(USERS))
       .overrideProvider(Clock)

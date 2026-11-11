@@ -15,6 +15,8 @@ import { TableLog } from './../src/modules/restaurant-operations/table-logs/tabl
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { UserRole } from './../src/modules/identity-access/index.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
@@ -90,6 +92,9 @@ describe('Restaurant edit (e2e)', () => {
           storedRestaurant ?? {
             id: options.where.id,
             name: 'Nombre anterior',
+            approvalStatus: 'approved',
+            rejectionReason: null,
+            contactPhone: null,
             createdAt: new Date('2026-10-04T12:00:00Z'),
             updatedAt: new Date('2026-10-04T12:00:00Z'),
           },
@@ -156,6 +161,8 @@ describe('Restaurant edit (e2e)', () => {
         RestaurantOperationsModule,
       ],
     })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         findOneBy: ({ id }: { id: string }) =>
@@ -212,6 +219,9 @@ describe('Restaurant edit (e2e)', () => {
     expect(res.body).toEqual({
       id: RESTAURANT_ID,
       name: 'La Esquina de Ana',
+      approvalStatus: 'approved',
+      rejectionReason: null,
+      contactPhone: null,
       activeReservationsCount: 0,
       schedules: [savedMonday],
     });
@@ -232,6 +242,9 @@ describe('Restaurant edit (e2e)', () => {
       name: 'Nombre anterior',
       category: 'italian',
       address: 'Calle 72 # 10-34, Bogotá',
+      approvalStatus: 'approved',
+      rejectionReason: null,
+      contactPhone: null,
       activeReservationsCount: 0,
       schedules: [savedMonday],
     });
@@ -250,6 +263,9 @@ describe('Restaurant edit (e2e)', () => {
       name: 'Nombre anterior',
       category: 'grill',
       address: 'Carrera 7 # 72-10',
+      approvalStatus: 'approved',
+      rejectionReason: null,
+      contactPhone: null,
       createdAt: new Date('2026-10-04T12:00:00Z'),
       updatedAt: new Date('2026-10-04T12:00:00Z'),
     };
@@ -264,6 +280,9 @@ describe('Restaurant edit (e2e)', () => {
       name: 'La Esquina de Ana',
       category: 'grill',
       address: 'Carrera 7 # 72-10',
+      approvalStatus: 'approved',
+      rejectionReason: null,
+      contactPhone: null,
       activeReservationsCount: 0,
       schedules: [savedMonday],
     });
@@ -294,6 +313,9 @@ describe('Restaurant edit (e2e)', () => {
     expect(res.body).toEqual({
       id: RESTAURANT_ID,
       name: 'Nombre anterior',
+      approvalStatus: 'approved',
+      rejectionReason: null,
+      contactPhone: null,
       activeReservationsCount: 0,
       schedules: [
         { dayOfWeek: 5, isOpen24h: false, opensAt: '18:00', closesAt: '02:00' },

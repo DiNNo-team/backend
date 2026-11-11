@@ -12,6 +12,8 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowUnapprovedRestaurant,
+  AllowUnregisteredAccount,
   CurrentUserGuard,
   DINER_ENDPOINT_ACCOUNT_EXAMPLES,
   Roles,
@@ -30,14 +32,20 @@ import {
   geocodingUnavailable,
 } from './geocoding-errors.js';
 
-// Address → coordinates for both roles: the restaurant location form (web)
-// and the diner's search by address (app: geocode, then search by lat/lng).
-// It does not call requireRestaurant on purpose: the registration form uses
-// it before the restaurant exists, so it never answers RESTAURANT_REQUIRED.
+// Address → coordinates: the restaurant location form (web) and the diner's
+// search by address (app: geocode, then search by lat/lng). It does not call
+// requireRestaurant on purpose: the registration form uses it before the
+// restaurant exists, so it never answers RESTAURANT_REQUIRED. It also accepts
+// (CLAUDE.md §11, "Aprobación de restaurantes") a Firebase account without a
+// profile, for the public sign-up form, and a restaurant pending or rejected,
+// which corrects its address. A platform_admin gets ADMIN_ACCOUNT. Without rate
+// limiting yet (Sprint 4 debt): Google's quota is the only limit.
 @ApiTags('geocode')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
 @Roles(UserRole.RESTAURANT_ADMIN, UserRole.DINER)
+@AllowUnregisteredAccount()
+@AllowUnapprovedRestaurant()
 @UseGuards(CurrentUserGuard)
 @Controller('geocode')
 export class GeocodeController {
@@ -47,7 +55,7 @@ export class GeocodeController {
   @ApiOperation({
     summary: 'Ubicar una dirección de Bogotá',
     description:
-      'Convierte una dirección en coordenadas con Google Geocoding, restringido a Bogotá. Para restaurantes (formulario de ubicación; no exige tener el restaurante registrado) y comensales (búsqueda por dirección: con latitude y longitude, la app llama a GET /v1/search/restaurants). Los mensajes de 404 y 503 son neutros: cada cliente muestra su propio texto según el errorCode.',
+      'Convierte una dirección en coordenadas con Google Geocoding, restringido a Bogotá. No exige perfil: la usan las cuentas de Firebase con el correo verificado que todavía no tienen perfil (formulario de registro público del restaurante), los restaurantes (formulario de ubicación; no exige tener el restaurante registrado y funciona también con el restaurante pendiente o rechazado) y los comensales (búsqueda por dirección: con latitude y longitude, la app llama a GET /v1/search/restaurants). Los mensajes de 404 y 503 son neutros: cada cliente muestra su propio texto según el errorCode.',
   })
   @ApiOkResponse({
     description: 'Coordenadas dentro de Bogotá, con 6 decimales.',
@@ -78,10 +86,10 @@ export class GeocodeController {
   })
   @ApiForbiddenResponse({
     description:
-      'La cuenta de Firebase todavía no tiene perfil (errorCode: PROFILE_REQUIRED): la app crea el perfil de comensal con POST /v1/diners/me y reintenta. Nunca responde RESTAURANT_REQUIRED.',
+      'Es una cuenta de administrador de DiNNo (errorCode: ADMIN_ACCOUNT). Nunca responde PROFILE_REQUIRED, RESTAURANT_REQUIRED ni los códigos de aprobación.',
     type: ErrorResponseDto,
     examples: {
-      profileRequired: DINER_ENDPOINT_ACCOUNT_EXAMPLES.profileRequired,
+      adminAccount: DINER_ENDPOINT_ACCOUNT_EXAMPLES.adminAccount,
     },
   })
   @ApiNotFoundResponse({

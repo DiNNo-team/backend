@@ -3,10 +3,15 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  ForeignKey,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   type ValueTransformer,
 } from 'typeorm';
+import {
+  RESTAURANT_APPROVAL_STATUSES,
+  type RestaurantApprovalStatus,
+} from '../../identity-access/index.js';
 
 // pg returns numeric as a string (it may not fit a JS number); the
 // coordinates, numeric(9,6), always fit, so the entity speaks number | null.
@@ -33,6 +38,13 @@ const CATEGORY_VALUES_SQL = RESTAURANT_CATEGORIES.map(
   (category) => `'${category}'`,
 ).join(', ');
 
+const APPROVAL_VALUES_SQL = RESTAURANT_APPROVAL_STATUSES.map(
+  (status) => `'${status}'`,
+).join(', ');
+
+export const REJECTION_REASON_MAX_LENGTH = 300;
+export const CONTACT_PHONE_MAX_LENGTH = 20;
+
 @Entity({ name: 'restaurants' })
 // TypeORM compares checks by name only: changing RESTAURANT_CATEGORIES needs a
 // hand-written migration that drops and recreates this check.
@@ -47,6 +59,12 @@ const CATEGORY_VALUES_SQL = RESTAURANT_CATEGORIES.map(
 )
 @Check('CHK_restaurants_latitude', `"latitude" BETWEEN -90 AND 90`)
 @Check('CHK_restaurants_longitude', `"longitude" BETWEEN -180 AND 180`)
+// Same as above: changing RESTAURANT_APPROVAL_STATUSES needs a hand-written
+// migration that drops and recreates this check.
+@Check(
+  'CHK_restaurants_approval_status',
+  `"approval_status" IN (${APPROVAL_VALUES_SQL})`,
+)
 export class Restaurant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -88,6 +106,43 @@ export class Restaurant {
     transformer: coordinateTransformer,
   })
   longitude: number | null;
+
+  // Approval by DiNNo (CLAUDE.md §11, "Aprobación de restaurantes"). No default
+  // on purpose: every insert sets it explicitly (the sign-up 'pending', the
+  // registration of an enabled user and the seed 'approved'), so a restaurant
+  // can never be born approved by accident. Only 'approved' is visible to the
+  // diners and operable.
+  @Column({ name: 'approval_status', type: 'varchar', length: 20 })
+  approvalStatus: RestaurantApprovalStatus;
+
+  // Why it was not approved; shown to the restaurant. Set by the review (task 2).
+  @Column({
+    name: 'rejection_reason',
+    type: 'varchar',
+    length: REJECTION_REASON_MAX_LENGTH,
+    nullable: true,
+  })
+  rejectionReason: string | null;
+
+  // The platform_admin who reviewed it, and when. null while nobody reviewed
+  // it: also for the restaurants approved by the migration or registered by a
+  // user enabled by hand.
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  @ForeignKey('User', { name: 'FK_restaurants_reviewed_by' })
+  reviewedBy: string | null;
+
+  @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
+  reviewedAt: Date | null;
+
+  // Contact phone, normalized (digits, with an optional leading +). Required by
+  // the sign-up, optional in the registration of an enabled user.
+  @Column({
+    name: 'contact_phone',
+    type: 'varchar',
+    length: CONTACT_PHONE_MAX_LENGTH,
+    nullable: true,
+  })
+  contactPhone: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

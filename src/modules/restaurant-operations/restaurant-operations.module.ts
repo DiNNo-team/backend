@@ -9,6 +9,8 @@ import { RestaurantEditController } from './restaurants/restaurant-edit.controll
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
 import { RestaurantRegistrationController } from './restaurants/restaurant-registration.controller.js';
 import { RestaurantRegistrationService } from './restaurants/restaurant-registration.service.js';
+import { RestaurantSignupController } from './restaurants/restaurant-signup.controller.js';
+import { RestaurantSignupService } from './restaurants/restaurant-signup.service.js';
 import { Restaurant } from './restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './restaurants/restaurant-schedule.entity.js';
 import { RestaurantStatusController } from './restaurants/restaurant-status.controller.js';
@@ -41,6 +43,8 @@ import { TablesService } from './tables/tables.service.js';
     TableAreasController,
     RestaurantEditController,
     RestaurantRegistrationController,
+    // Registro público con aprobación (§11 "Aprobación de restaurantes").
+    RestaurantSignupController,
     RestaurantStatusController,
     TableLogsController,
     GeocodeController,
@@ -52,6 +56,7 @@ import { TablesService } from './tables/tables.service.js';
     TableReservationsAccess,
     RestaurantEditService,
     RestaurantRegistrationService,
+    RestaurantSignupService,
     RestaurantStatusService,
     // Table log (PBI 9): table-logs/ implements the tables/ port.
     { provide: TableStatusLog, useClass: DbTableStatusLog },

@@ -7,6 +7,8 @@ Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md
 
 > Migraciones aplicadas en Neon, en orden: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15), `1793084146913-AddTablePlan` (plano de mesas, manual de identidad v2.0; agrega `tables.plan_x`, `plan_y` y `plan_shape`; aplicada el 2026-10-27) y las tres del Sprint 3, todas de Elizabeth y aplicadas el 2026-11-05: `1793840000001-CreateReservations` (crea `reservations`), `1793840000002-CreateCheckIns` (crea `check_ins`) y `1793840000003-AddTableLogSource` (agrega `table_logs.source` y deja `table_logs.user_id` nullable). Todo lo que se documenta abajo existe en Neon, **salvo** `1794300000000-CreateTableAreas` (zonas de mesas, Sebastián; crea `table_areas` y agrega `tables.area_id`), que **todavía no está aplicada en Neon**: hay que correrla antes de fusionar el PR que la trae, o todas las rutas de `/v1/tables` responden 500 en Render.
 
+> **Pendientes de aplicar (rama `feat/admin-approval`, aprobación de restaurantes, Elizabeth):** `1794400000000-AddRestaurantApproval` (columnas de aprobación en `restaurants`; deja **todos** los restaurantes existentes en `approved`) y `1794400000001-AddPlatformAdminRole` (agrega `platform_admin` a `CHK_users_role`). Orden: primero la rama de pruebas de Neon, luego la base de desarrollo, **antes** de fusionar: sin ellas, toda petición de un restaurante y toda búsqueda responden 500 en Render. Ver `AVISOS.md`.
+
 ## Tablas
 
 Todas las tablas tienen `id`, `created_at` y `updated_at`:
@@ -27,6 +29,11 @@ Todas las tablas tienen `id`, `created_at` y `updated_at`:
 | `is_open` | `boolean` | NOT NULL, por defecto `true`. Estado Abierto/Cerrado del restaurante (PBI 8); ver "Decisiones" |
 | `latitude` | `numeric(9,6)` | NULL. Entre -90 y 90 (`CHK_restaurants_latitude`). Sprint 2 |
 | `longitude` | `numeric(9,6)` | NULL. Entre -180 y 180 (`CHK_restaurants_longitude`). Sprint 2 |
+| `approval_status` | `varchar(20)` | NOT NULL, **sin valor por defecto**. `'pending'`, `'approved'` o `'rejected'` (`CHK_restaurants_approval_status`; valores de `RESTAURANT_APPROVAL_STATUSES`). Aprobación de restaurantes; ver "Decisiones" |
+| `rejection_reason` | `varchar(300)` | NULL. Motivo del rechazo, que ve el restaurante |
+| `reviewed_by` | `uuid` | NULL. FK → `users.id` (`FK_restaurants_reviewed_by`, sin `ON DELETE`): el `platform_admin` que lo revisó |
+| `reviewed_at` | `timestamptz` | NULL. Cuándo se revisó |
+| `contact_phone` | `varchar(20)` | NULL. Teléfono de contacto normalizado (dígitos y un `+` inicial opcional, de 7 a 15 dígitos; lo valida la API). Obligatorio en el registro público |
 
 - `CHK_restaurants_location_pair`: las dos coordenadas o ninguna. Sin coordenadas, el restaurante no aparece en la búsqueda del comensal.
 - La base solo exige rangos válidos en el planeta; **la restricción a Bogotá la pone la API** (contrato del Sprint 2, `CLAUDE.md` sección 10).
@@ -55,10 +62,10 @@ Horario de atención: una fila por cada día que el restaurante **abre**. Un dí
 | `firebase_uid` | `varchar(128)` | NULL, único (`UQ_users_firebase_uid`); NULL para usuarios de prueba sin UID |
 | `email` | `varchar(255)` | NOT NULL, único (`UQ_users_email`). En minúsculas y sin espacios (`CHK_users_email_normalized`) |
 | `display_name` | `varchar(60)` | NULL. Nombre para mostrar del comensal; NULL en cuentas de restaurante. Sprint 2 |
-| `role` | `varchar(50)` | NOT NULL. `'restaurant_admin'` o `'diner'` (`CHK_users_role`; valores de `UserRole`). Cambiar la lista exige una migración escrita a mano que borre y vuelva a crear el check |
+| `role` | `varchar(50)` | NOT NULL. `'restaurant_admin'`, `'diner'` o `'platform_admin'` (`CHK_users_role`; valores de `UserRole`). Cambiar la lista exige una migración escrita a mano que borre y vuelva a crear el check (la última: `AddPlatformAdminRole`) |
 | `restaurant_id` | `uuid` | NULL = usuario que aún no registra su restaurante (onboarding), o comensal. FK → `restaurants.id` |
 
-- Desde el Sprint 2 el backend no crea usuarios al iniciar sesión. Una fila de `users` existe solo si se habilitó a mano como restaurante ("Restaurantes habilitados") o si la app la creó como comensal con `POST /v1/diners/me`.
+- Desde el Sprint 2 el backend no crea usuarios al iniciar sesión. Una fila de `users` existe solo si se habilitó a mano como restaurante ("Restaurantes habilitados"), si la app la creó como comensal con `POST /v1/diners/me` o si se registró un restaurante con `POST /v1/restaurants/signup` (rol `restaurant_admin`, con su restaurante `pending`). Un `platform_admin` solo se crea por seed o SQL.
 
 ### `tables` · entidad `Table`
 
@@ -159,7 +166,7 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 
 | Tabla | Dueño | Qué agrega (cada uno con su propia migración de `ALTER`) |
 |---|---|---|
-| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: `is_open` (estado abierto/cerrado) |
+| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: `is_open` (estado abierto/cerrado). Elizabeth: aprobación (`approval_status`, `rejection_reason`, `reviewed_by`, `reviewed_at`, `contact_phone`; `AddRestaurantApproval`) |
 | `restaurant_schedules` | Santiago | Tabla nueva para los horarios del restaurante |
 | `users` | Elizabeth (esquema base) | Jacobo: `firebase_uid` (ya aplicada) y lo que más necesite para enlazar con Firebase |
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
@@ -195,6 +202,12 @@ Nadie recrea una tabla ni toca columnas de otra persona.
 - **`category` y `address` son NULL en la base a propósito:** ya hay restaurantes creados solo con nombre, de antes del registro completo. El seed le fija a Casa 72 categoría, dirección, coordenadas y horarios en cada corrida (es la fuente de verdad de ese restaurante de prueba). Que sean obligatorios lo impone el endpoint de registro, no la base. No tienen valor por defecto.
 - **Un día cerrado es un día sin fila** en `restaurant_schedules`; no hay columna de "cerrado".
 - **`restaurants.is_open` es un interruptor manual**, independiente de `restaurant_schedules`: en el Sprint 1 no se calcula a partir de los horarios. Nace en `true` (decisión tomada: el restaurante recién registrado queda Abierto), y los restaurantes que ya existían quedaron en `true` al aplicar la migración.
+- **Aprobación de restaurantes (`approval_status`):** solo un restaurante `approved` aparece en la búsqueda, el detalle público y las reservas, y solo su dueño opera (CLAUDE.md §11, "Aprobación de restaurantes").
+  - **Sin valor por defecto, a propósito:** la migración agrega la columna con `DEFAULT 'approved'` para que **todos** los restaurantes existentes queden aprobados en la misma sentencia, y en seguida quita el default. Así, todo `INSERT` que no fije el estado falla por NOT NULL y ningún restaurante nace aprobado por accidente: el código siempre lo fija. Un `INSERT` a mano o en una prueba debe incluir `approval_status`.
+  - Quién fija qué: `POST /v1/restaurants/signup` → `pending`; `POST /v1/restaurants` (usuario habilitado por el equipo) → `approved`, con `reviewed_by` y `reviewed_at` en NULL porque nadie lo revisó; el seed → `approved`.
+  - Sin tabla de auditoría: la última revisión queda en `reviewed_by` y `reviewed_at`.
+  - Como las categorías, es `varchar` con check: cambiar la lista exige una migración escrita a mano que borre y vuelva a crear `CHK_restaurants_approval_status`.
+- **`platform_admin` (administrador de DiNNo):** solo por seed o SQL, nunca por registro. Revertir `AddPlatformAdminRole` se detiene con un error si quedan usuarios con ese rol: hay que cambiarles el rol o borrarlos a mano antes.
 - **"Abierto 24 horas" es explícito, con `is_open_24h = true`** y sin horas. Una apertura igual al cierre no es válida, para que "24 horas" no tenga dos formas de escribirse.
 - **Un cierre menor que la apertura significa que cierra al día siguiente** (por ejemplo, abre a las 18:00 y cierra a las 02:00). Por eso no hay un check `closes_at > opens_at`.
 

@@ -102,7 +102,7 @@ export async function createScenario(
   dinerCount: number,
 ): Promise<Scenario> {
   const [{ id: restaurantId }] = await dataSource.query<{ id: string }[]>(
-    `INSERT INTO restaurants (name, is_open, latitude, longitude) VALUES ($1, true, 4.655671, -74.057006) RETURNING id`,
+    `INSERT INTO restaurants (name, is_open, latitude, longitude, approval_status) VALUES ($1, true, 4.655671, -74.057006, 'approved') RETURNING id`,
     [`db-test-${randomUUID()}`],
   );
   const scenario: Scenario = {

@@ -122,7 +122,10 @@ describe('AvailabilityService', () => {
       const ids = In([CASA, PAREJAS, UNKNOWN]);
       expect(queries()).toBe(3);
       expect(repositories.Restaurant.find).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: ids } }),
+        // Only restaurants visible to the diners (approved, §11).
+        expect.objectContaining({
+          where: { id: ids, approvalStatus: 'approved' },
+        }),
       );
       expect(repositories.RestaurantSchedule.find).toHaveBeenCalledWith(
         expect.objectContaining({ where: { restaurantId: ids } }),

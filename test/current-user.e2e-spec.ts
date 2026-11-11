@@ -19,6 +19,8 @@ import {
   UserRole,
 } from './../src/modules/identity-access/index.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 @Controller('probe')
 class ProbeController {
@@ -60,6 +62,8 @@ describe('CurrentUser (e2e)', () => {
         ProbeModule,
       ],
     })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         findOneBy: ({ id }: { id: string }) =>
@@ -77,6 +81,7 @@ describe('CurrentUser (e2e)', () => {
       userId: OWNER_ID,
       restaurantId: RESTAURANT_ID,
       role: UserRole.RESTAURANT_ADMIN,
+      restaurantApproval: 'approved',
     });
   });
 
@@ -89,6 +94,7 @@ describe('CurrentUser (e2e)', () => {
         userId: NEWCOMER_ID,
         restaurantId: null,
         role: UserRole.RESTAURANT_ADMIN,
+        restaurantApproval: null,
       });
   });
 

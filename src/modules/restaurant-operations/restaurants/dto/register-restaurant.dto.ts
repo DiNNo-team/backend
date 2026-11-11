@@ -1,4 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ContactPhoneField } from './contact-phone-field.js';
 import { RestaurantFieldsDto } from './restaurant-fields.dto.js';
 import {
   RestaurantScheduleDto,
@@ -18,4 +19,12 @@ export class RegisterRestaurantDto extends RestaurantFieldsDto {
   })
   @SchedulesField()
   schedules: RestaurantScheduleDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Teléfono de contacto, opcional. De 7 a 15 dígitos; se aceptan espacios, guiones, puntos, paréntesis y un + inicial, y se guarda sin separadores. No acepta null.',
+    example: '+57 300 123 4567',
+  })
+  @ContactPhoneField({ required: false })
+  contactPhone?: string;
 }

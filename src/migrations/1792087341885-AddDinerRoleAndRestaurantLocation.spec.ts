@@ -17,7 +17,9 @@ async function queriesOf(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddDinerRoleAndRestaurantLocation migration', () => {
-  it('checks users.role against exactly UserRole', async () => {
+  // Historical: this migration created the check with the two Sprint 2 roles.
+  // The current list (UserRole) is pinned by AddPlatformAdminRole's spec.
+  it('checks users.role against the two Sprint 2 roles, a subset of UserRole', async () => {
     const roleCheck = (await queriesOf('up')).find((sql) =>
       sql.includes('"CHK_users_role"'),
     );
@@ -26,7 +28,8 @@ describe('AddDinerRoleAndRestaurantLocation migration', () => {
       .split(',')
       .map((value) => value.trim().replace(/'/g, ''));
 
-    expect(values).toEqual(USER_ROLES);
+    expect(values).toEqual(['restaurant_admin', 'diner']);
+    expect(USER_ROLES).toEqual(expect.arrayContaining(values ?? []));
   });
 
   it('adds both coordinates as numeric(9,6), nullable', async () => {

@@ -1,3 +1,4 @@
+import type { RestaurantApprovalReader } from '../approval/restaurant-approval.reader.js';
 import type { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
 import { DevUserResolver } from '../current-user/dev-user.resolver.js';
@@ -19,7 +20,11 @@ function createConfig(values: Record<string, string>) {
 }
 
 function createDevResolver(config: ConfigService): DevUserResolver {
-  return new DevUserResolver({} as Repository<User>, config);
+  return new DevUserResolver(
+    {} as Repository<User>,
+    config,
+    {} as RestaurantApprovalReader,
+  );
 }
 
 describe('selectCurrentUserResolver', () => {

@@ -16,6 +16,8 @@ import { TableLog } from './../src/modules/restaurant-operations/table-logs/tabl
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { UserRole } from './../src/modules/identity-access/index.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const OTHER_OWNER_ID = '7c6b5a49-3827-4615-a4b3-c2d1e0f9a8b7';
@@ -86,6 +88,8 @@ describe('Restaurant status (e2e)', () => {
         RestaurantOperationsModule,
       ],
     })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         findOneBy: ({ id }: { id: string }) =>
@@ -119,6 +123,11 @@ describe('Restaurant status (e2e)', () => {
       isOpen: true,
       latitude: null,
       longitude: null,
+      approvalStatus: 'approved',
+      rejectionReason: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      contactPhone: null,
       createdAt: new Date('2026-10-04T12:00:00Z'),
       updatedAt: new Date('2026-10-04T12:00:00Z'),
     });

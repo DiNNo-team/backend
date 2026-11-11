@@ -19,6 +19,7 @@ const owner: CurrentUserData = {
   userId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
   restaurantId: RESTAURANT_ID,
   role: UserRole.RESTAURANT_ADMIN,
+  restaurantApproval: 'approved',
 };
 
 // Every write and commit, and every emit, in the order they happen: the event

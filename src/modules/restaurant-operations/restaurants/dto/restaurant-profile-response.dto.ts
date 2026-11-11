@@ -1,4 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  REJECTED,
+  RESTAURANT_APPROVAL_STATUSES,
+  type RestaurantApprovalStatus,
+} from '../../../identity-access/index.js';
 import type { RestaurantSchedule } from '../restaurant-schedule.entity.js';
 import type { Restaurant } from '../restaurant.entity.js';
 import { RestaurantResponseDto } from './restaurant-response.dto.js';
@@ -46,7 +51,7 @@ export class RestaurantScheduleResponseDto {
 }
 
 // The restaurant with its opening hours: GET /restaurants/me, the
-// registration and PATCH /restaurants/me answer with it.
+// registration, the sign-up and PATCH /restaurants/me answer with it.
 export class RestaurantProfileResponseDto extends RestaurantResponseDto {
   @ApiProperty({
     description:
@@ -64,6 +69,32 @@ export class RestaurantProfileResponseDto extends RestaurantResponseDto {
   })
   activeReservationsCount: number;
 
+  @ApiProperty({
+    description:
+      'Estado de aprobación del restaurante: pending (en revisión), approved (aprobado: visible para los comensales y operable) o rejected (no aprobado). Los restaurantes registrados por un usuario habilitado por el equipo nacen approved; los del registro público (POST /v1/restaurants/signup), pending.',
+    enum: RESTAURANT_APPROVAL_STATUSES,
+    example: 'approved',
+  })
+  approvalStatus: RestaurantApprovalStatus;
+
+  @ApiProperty({
+    description:
+      'Motivo por el que no se aprobó. null si no aplica (pendiente, aprobado o sin motivo).',
+    type: String,
+    nullable: true,
+    example: null,
+  })
+  rejectionReason: string | null;
+
+  @ApiProperty({
+    description:
+      'Teléfono de contacto, sin separadores (dígitos y un + inicial opcional). null si el restaurante no lo registró.',
+    type: String,
+    nullable: true,
+    example: '+573001234567',
+  })
+  contactPhone: string | null;
+
   static fromEntities(
     restaurant: Restaurant,
     schedules: RestaurantSchedule[],
@@ -75,6 +106,13 @@ export class RestaurantProfileResponseDto extends RestaurantResponseDto {
         .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
         .map((schedule) => RestaurantScheduleResponseDto.fromEntity(schedule)),
       activeReservationsCount,
+      approvalStatus: restaurant.approvalStatus,
+      // Only a rejected restaurant has a reason to show.
+      rejectionReason:
+        restaurant.approvalStatus === REJECTED
+          ? restaurant.rejectionReason
+          : null,
+      contactPhone: restaurant.contactPhone,
     };
   }
 }

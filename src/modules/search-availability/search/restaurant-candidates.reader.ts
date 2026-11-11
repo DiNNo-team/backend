@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Between, DataSource } from 'typeorm';
 import type { RestaurantCategory } from '../../restaurant-operations/index.js';
+import {
+  DINER_VISIBLE_RESTAURANT,
+  type VisibilityColumns,
+} from '../visibility/restaurant-visibility.js';
 import type { BoundingBox, GeoPoint } from './geo.js';
 
 // A restaurant inside the search rectangle, before the exact distance and the
@@ -45,7 +49,7 @@ export interface CandidateFilters {
 }
 
 // The SQL side of the search: one read-only query with the cheap rectangle
-// prefilter and the category. A restaurant without coordinates never matches
+// prefilter, the category and the diner visibility (approved only). A restaurant without coordinates never matches
 // BETWEEN (NULL), and one without category never matches a category filter
 // (NULL = 'x' is not true), so both are left out here. The exact distance is
 // not its job (geo.ts).
@@ -58,9 +62,10 @@ export class RestaurantCandidatesReader {
     filters: CandidateFilters = {},
   ): Promise<RestaurantCandidate[]> {
     const rows = await this.dataSource
-      .getRepository<CandidateRow>('Restaurant')
+      .getRepository<CandidateRow & VisibilityColumns>('Restaurant')
       .find({
         where: {
+          ...DINER_VISIBLE_RESTAURANT,
           latitude: Between(box.minLat, box.maxLat),
           longitude: Between(box.minLng, box.maxLng),
           ...(filters.category !== undefined && { category: filters.category }),
