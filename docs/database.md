@@ -155,6 +155,18 @@ El evento facturable (§12.6): un registro por check-in válido.
 
 Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaurante que tenga mesas o usuarios, ni una mesa o un usuario que tenga registros en la bitácora.
 
+### `push_devices` · entidad `PushDevice` (Sprint 4, notificaciones)
+
+Los teléfonos de cada comensal que reciben las notificaciones de su reserva: el token de Firebase Cloud Messaging que la app obtiene del sistema. Migración `1794500000000-CreatePushDevices`.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `user_id` | `uuid` | NOT NULL, FK → `users.id` **con `ON DELETE CASCADE`** (`FK_push_devices_user_id`): los teléfonos se van con su usuario. Índice `IDX_push_devices_user_id` |
+| `token` | `varchar(4096)` | NOT NULL, **único** (`UQ_push_devices_token`): un teléfono pertenece a una sola cuenta a la vez. Registrarlo con otra cuenta mueve la fila |
+| `platform` | `varchar(10)` | NOT NULL, `android` o `ios` (`CHK_push_devices_platform`) |
+
+No guarda nada de la reserva ni del contenido de las notificaciones. Los tokens que FCM dice que ya no existen se borran solos al enviar.
+
 ## Quién es dueño de qué
 
 | Tabla | Dueño | Qué agrega (cada uno con su propia migración de `ALTER`) |
@@ -166,6 +178,7 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 | `table_logs` | Sergio | Tabla nueva para la bitácora de cambios de mesas (`CreateTableLogs`). Elizabeth, Sprint 3: `source` y `user_id` nullable (`AddTableLogSource`) |
 | `reservations`, `check_ins` | Elizabeth | Sprint 3 (`CreateReservations`, `CreateCheckIns`) |
 | `table_areas` y `tables.area_id` | Sebastián | Zonas de mesas (`CreateTableAreas`) |
+| `push_devices` | Sebastián | Notificaciones del Sprint 4 (`CreatePushDevices`) |
 
 Nadie recrea una tabla ni toca columnas de otra persona.
 

@@ -37,3 +37,5 @@ export {
   TABLE_STATUS_CHANGED,
   type TableStatusChangedEvent,
 } from './shared/table-status-changed.event.js';
+// "4" → "Mesa 04": the table name the diner reads (notifications, Sprint 4).
+export { formatTableName } from './tables/table-identifier.js';
