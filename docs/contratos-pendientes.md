@@ -1,5 +1,7 @@
 # Contratos pendientes de sincronizar (§8, §10 y §12)
 
+> **APLICADO el 15 nov 2026** en los `CLAUDE.md` de backend, frontend y mobile (§1, §8, §10 y §12). Este archivo queda solo como referencia y se puede borrar.
+
 > Para Elizabeth. Las secciones 1 a 10 y 12 del `CLAUDE.md` son **iguales en los tres repositorios** (backend, frontend, mobile). Este archivo trae el texto **exacto** propuesto para §10 y §12 por la aprobación de restaurantes, el panel del administrador, el cobro por check-in y el resumen del restaurante (rama `feat/admin-approval`). Se copia a los tres `CLAUDE.md` en el mismo día y se anuncia en `AVISOS.md`; después se borra este archivo.
 >
 > **§8 ya está editado en el `CLAUDE.md` de este repo** (cuatro líneas nuevas: «Revisión de restaurantes», «Pendiente y rechazado editan», «Cobro por check-in» y «Reportes del restaurante»). Como §8 también es común, hay que copiarlas a los otros dos repos.
