@@ -7,6 +7,13 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (15 nov 2026 · Elizabeth · Administrador, cobro y KPIs: backend desplegado y contratos):** contratos sincronizados en los tres repos.
+  - **Qué quedó listo y desplegado (backend):** aprobación de restaurantes (`pending`, `approved`, `rejected`), rol `platform_admin` con su panel de API (`/v1/admin/restaurants*`), registro público (`POST /v1/restaurants/signup`), reenvío (`POST /v1/restaurants/me/resubmit`), cobro por check-in (`GET /v1/restaurants/me/billing/check-ins`, tarifa fija de COP 2.000) y resumen con KPIs (`GET /v1/restaurants/me/summary`).
+  - **`errorCode` nuevos:** `ACCOUNT_PENDING_APPROVAL`, `ACCOUNT_REJECTED` y `ADMIN_ACCOUNT` (403), `RESTAURANT_NOT_PENDING` y `RESTAURANT_NOT_REJECTED` (409). También son `connect_error` del WebSocket (no reintentar).
+  - **Contratos:** §1, §8, §10 y §12 (nueva §12.12) quedan idénticos en los tres `CLAUDE.md` desde este día. El texto salió de `backend/docs/contratos-pendientes.md`, que queda marcado como aplicado.
+  - **Web (en construcción en la rama `feat/admin-resumen-front`):** registro de restaurantes, pantalla de solicitud, panel `/admin` y «Resumen» con cobro y KPIs. Todavía no está en `develop`.
+  - **Mobile, PENDIENTE de ajuste (sin cambios de código en este trabajo):** `ErrorCode` y `UserRole` de la app no tienen los valores nuevos. Hoy `platform_admin` (`ADMIN_ACCOUNT`) y un restaurante pendiente o rechazado (`RESTAURANT_ACCOUNT`) caen en «cuenta de restaurante». Hay que agregar `ADMIN_ACCOUNT` y el rol `platform_admin` con su propio texto.
+
 - **Nuevo (2026-11-15 · Elizabeth): PR de notificaciones push listo para fusionar** (`feat/sprint4-notificaciones`, trabajo de Sebastián; ya incluye `develop`).
   - **Migración renombrada a `1794600000003-CreatePushDevices`** (antes `1794500000000`, más antigua que las de aprobación, cobro y KPIs ya aplicadas en desarrollo). **Hay que correr `migration:run` en la base de desarrollo antes de fusionar;** sin la tabla `push_devices`, las rutas nuevas responden 500 (el resto de la API sigue bien).
   - **Variables opcionales (secretos):** `FIREBASE_SERVICE_ACCOUNT_FILE` o `FIREBASE_SERVICE_ACCOUNT_JSON`. Sin ellas la API arranca igual y las notificaciones quedan desactivadas (un aviso en el log). Nunca van al repositorio ni al log.
