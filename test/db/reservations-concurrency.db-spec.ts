@@ -91,7 +91,12 @@ async function attempt(
 ): Promise<Outcome> {
   try {
     const response = await service.create(
-      { userId: dinerId, restaurantId: null, role: UserRole.DINER },
+      {
+        userId: dinerId,
+        restaurantId: null,
+        role: UserRole.DINER,
+        restaurantApproval: null,
+      },
       { restaurantId, partySize },
     );
     return { ok: true, table: response.table.identifier };

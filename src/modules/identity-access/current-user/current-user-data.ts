@@ -1,3 +1,4 @@
+import type { RestaurantApprovalStatus } from '../approval/restaurant-approval-status.js';
 import type { UserRole } from '../roles/user-role.js';
 
 // A registered account: a users row. What @CurrentUser() hands to controllers.
@@ -6,6 +7,10 @@ export interface CurrentUserData {
   // null: the user has not registered a restaurant yet (onboarding).
   restaurantId: string | null;
   role: UserRole;
+  // Approval of the user's restaurant (restaurants.approval_status). null when
+  // the account is not a restaurant_admin or has no restaurant yet. RolesGuard
+  // and the WebSocket handshake decide with it.
+  restaurantApproval: RestaurantApprovalStatus | null;
 }
 
 // What a verified Firebase ID token says about the account.

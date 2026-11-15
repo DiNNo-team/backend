@@ -10,6 +10,8 @@ import {
 import {
   CASA72_NAME,
   CASA72_OWNER_EMAIL,
+  PLATFORM_ADMIN_EMAIL_INVALID,
+  platformAdminRoleConflict,
   PREVIOUS_CASA72_OWNER_EMAIL,
   TEAM_RESTAURANT_EMAIL,
   runSeed,
@@ -406,5 +408,80 @@ describe('runSeed', () => {
       first.ownerEmail,
     );
     expect(db.Restaurant.rows.some((r) => r.name === first.name)).toBe(false);
+  });
+
+  describe('administrador de DiNNo (PLATFORM_ADMIN_EMAIL)', () => {
+    const ADMIN_EMAIL = 'admin@dinno.test';
+
+    it('without the variable, creates no platform_admin', async () => {
+      const db = inMemoryDatabase();
+
+      const summary = await runSeed(db.manager, realRestaurants);
+
+      expect(summary.platformAdmin).toBeNull();
+      expect(db.User.rows.some((u) => u.role === 'platform_admin')).toBe(false);
+    });
+
+    it('creates it once, normalized and without firebase_uid; the second run changes nothing', async () => {
+      const db = inMemoryDatabase();
+
+      const first = await runSeed(db.manager, realRestaurants, {
+        platformAdminEmail: '  Admin@DiNNo.test ',
+      });
+      const afterFirst = db.snapshot();
+      const second = await runSeed(db.manager, realRestaurants, {
+        platformAdminEmail: ADMIN_EMAIL,
+      });
+
+      expect(first.platformAdmin?.created).toBe(true);
+      expect(second.platformAdmin).toEqual({
+        user: expect.objectContaining({ id: first.platformAdmin?.user.id }),
+        created: false,
+      });
+      expect(db.User.rows.filter((u) => u.role === 'platform_admin')).toEqual([
+        expect.objectContaining({
+          email: ADMIN_EMAIL,
+          firebaseUid: null,
+          restaurantId: null,
+        }),
+      ]);
+      expect(db.snapshot()).toEqual(afterFirst);
+    });
+
+    it.each(['diner', 'restaurant_admin'])(
+      'refuses an existing %s account with that email and never changes its role',
+      async (role) => {
+        const db = inMemoryDatabase();
+        db.User.rows.push({
+          id: randomUUID(),
+          email: ADMIN_EMAIL,
+          role,
+          restaurantId: null,
+        });
+
+        await expect(
+          runSeed(db.manager, realRestaurants, {
+            platformAdminEmail: ADMIN_EMAIL,
+          }),
+        ).rejects.toThrow(platformAdminRoleConflict(ADMIN_EMAIL, role));
+        expect(db.User.rows).toEqual([
+          expect.objectContaining({ email: ADMIN_EMAIL, role }),
+        ]);
+        // It stops before anything else: no restaurant was created.
+        expect(db.Restaurant.rows).toEqual([]);
+      },
+    );
+
+    it.each(['sin-arroba', 'con espacio@dinno.test', ''])(
+      'refuses %j as email',
+      async (email) => {
+        const db = inMemoryDatabase();
+
+        await expect(
+          runSeed(db.manager, realRestaurants, { platformAdminEmail: email }),
+        ).rejects.toThrow(PLATFORM_ADMIN_EMAIL_INVALID);
+        expect(db.User.rows).toEqual([]);
+      },
+    );
   });
 });

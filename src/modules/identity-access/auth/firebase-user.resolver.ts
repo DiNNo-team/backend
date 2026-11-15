@@ -1,28 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { DecodedIdToken } from 'firebase-admin/auth';
+import { RestaurantApprovalReader } from '../approval/restaurant-approval.reader.js';
 import type { RequestIdentity } from '../current-user/current-user-data.js';
 import {
   CurrentUserResolver,
   type IdentityRequest,
 } from '../current-user/current-user.resolver.js';
-import type { User } from '../users/user.entity.js';
+import { registeredIdentity } from '../current-user/registered-identity.js';
 import { UsersService } from '../users/users.service.js';
 import { emailNotVerified, sessionExpired } from './auth-errors.js';
 import {
   FIREBASE_AUTH,
   type FirebaseAuthFactory,
 } from './firebase-admin.provider.js';
-
-function registered(user: User): RequestIdentity {
-  return {
-    kind: 'registered',
-    user: {
-      userId: user.id,
-      restaurantId: user.restaurantId,
-      role: user.role,
-    },
-  };
-}
 
 function bearerToken(request: IdentityRequest): string | null {
   const authorization = request.headers.authorization;
@@ -52,12 +42,14 @@ export class FirebaseUserResolver extends CurrentUserResolver {
     @Inject(FIREBASE_AUTH)
     private readonly getFirebaseAuth: FirebaseAuthFactory,
     private readonly usersService: UsersService,
+    private readonly approvals: RestaurantApprovalReader,
   ) {
     super();
   }
 
-  // Never creates a user (Sprint 2): an account without a users row resolves
-  // to an unregistered identity. Only POST /v1/diners/me creates users.
+  // Never creates a user: an account without a users row resolves to an
+  // unregistered identity. Users are created only by POST /v1/diners/me and
+  // POST /v1/restaurants/signup.
   async resolve(request: IdentityRequest): Promise<RequestIdentity> {
     const token = bearerToken(request);
     if (!token) {
@@ -83,7 +75,7 @@ export class FirebaseUserResolver extends CurrentUserResolver {
       decodedToken.uid,
     );
     if (userByUid) {
-      return registered(userByUid);
+      return registeredIdentity(userByUid, this.approvals);
     }
 
     if (decodedToken.email_verified !== true) {
@@ -100,8 +92,9 @@ export class FirebaseUserResolver extends CurrentUserResolver {
         );
         throw sessionExpired();
       }
-      return registered(
+      return registeredIdentity(
         await this.usersService.linkFirebaseUid(userByEmail, decodedToken.uid),
+        this.approvals,
       );
     }
 

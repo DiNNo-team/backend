@@ -6,6 +6,8 @@ import {
   TableReservations,
 } from '../restaurant-operations/index.js';
 import { SearchAvailabilityModule } from '../search-availability/index.js';
+import { BillingStatementService } from './billing/billing-statement.service.js';
+import { checkInFeeConfigProvider } from './billing/checkin-fee.config.js';
 import { CheckIn } from './check-ins/check-in.entity.js';
 import { CheckInService } from './check-ins/check-in.service.js';
 import { CheckInsController } from './check-ins/check-ins.controller.js';
@@ -23,6 +25,9 @@ import { Reservation } from './reservations/reservation.entity.js';
 import { ReservationViewReader } from './reservations/reservation-view.reader.js';
 import { ReservationsController } from './reservations/reservations.controller.js';
 import { ReservationsForTables } from './reservations/reservations-for-tables.js';
+import { RestaurantReportsController } from './reports/restaurant-reports.controller.js';
+import { RestaurantMetricsService } from './reports/restaurant-metrics.service.js';
+import { RestaurantReportsService } from './reports/restaurant-reports.service.js';
 
 // Microreservas y check-in (Sprint 3). Depende de search-availability
 // (AvailabilityService y Clock) y de restaurant-operations (el puerto de la
@@ -35,8 +40,17 @@ import { ReservationsForTables } from './reservations/reservations-for-tables.js
     SearchAvailabilityModule,
     RestaurantOperationsModule,
   ],
-  controllers: [ReservationsController, CheckInsController],
+  controllers: [
+    ReservationsController,
+    CheckInsController,
+    RestaurantReportsController,
+  ],
   providers: [
+    // Tarifa por check-in (CHECKIN_FEE_COP): la valida al crear el módulo.
+    checkInFeeConfigProvider,
+    BillingStatementService,
+    RestaurantMetricsService,
+    RestaurantReportsService,
     CheckInService,
     RestaurantReservationsService,
     ReservationLabelsReader,
@@ -51,6 +65,8 @@ import { ReservationsForTables } from './reservations/reservations-for-tables.js
     { provide: CodeGenerator, useClass: RandomCodeGenerator },
   ],
   // Para ReservationExpiryModule, el proceso periódico.
-  exports: [ReservationExpirationService],
+  // RestaurantMetricsService: las agregaciones del resumen, para el informe de
+  // IA del Sprint 4.
+  exports: [ReservationExpirationService, RestaurantMetricsService],
 })
 export class ReservationsCheckinModule {}

@@ -81,6 +81,21 @@ const REQUIRED_SCHEMA = [
     column: 'source',
     migration: '1793840000003-AddTableLogSource',
   },
+  {
+    table: 'restaurants',
+    column: 'approval_status',
+    migration: '1794400000000-AddRestaurantApproval',
+  },
+  {
+    table: 'restaurants',
+    column: 'submitted_at',
+    migration: '1794600000000-AddRestaurantSubmittedAt',
+  },
+  {
+    table: 'check_ins',
+    column: 'fee_cop',
+    migration: '1794600000001-AddCheckInFee',
+  },
 ] as const;
 
 export async function assertMigrationsApplied(client: Client): Promise<void> {
@@ -157,7 +172,7 @@ export async function insertUser(client: Client): Promise<string> {
 
 export async function insertRestaurant(client: Client): Promise<string> {
   const { rows } = await client.query<{ id: string }>(
-    `INSERT INTO restaurants (name) VALUES ($1) RETURNING id`,
+    `INSERT INTO restaurants (name, approval_status) VALUES ($1, 'approved') RETURNING id`,
     [`db-test-${randomUUID()}`],
   );
   return rows[0].id;

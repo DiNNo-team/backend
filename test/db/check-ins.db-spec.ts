@@ -80,6 +80,7 @@ function buildServices(clock: Clock = CLOCK, source: DataSource = dataSource) {
       labels,
       clock,
       events,
+      { feeCop: 2000 },
     ),
     list: new RestaurantReservationsService(
       dataSource,
@@ -171,6 +172,7 @@ async function adminOf(s: Scenario) {
     userId,
     restaurantId: s.restaurantId,
     role: UserRole.RESTAURANT_ADMIN,
+    restaurantApproval: 'approved' as const,
   };
 }
 
@@ -387,7 +389,12 @@ describe('check-in: Postgres real', () => {
             const [checkIn, cancel] = await Promise.allSettled([
               buildServices(CLOCK, checkInSource).checkIns.checkIn(admin, code),
               buildServices(CLOCK, cancelSource).cancellation.cancel(
-                { userId: diner, restaurantId: null, role: UserRole.DINER },
+                {
+                  userId: diner,
+                  restaurantId: null,
+                  role: UserRole.DINER,
+                  restaurantApproval: null,
+                },
                 id,
               ),
             ]);

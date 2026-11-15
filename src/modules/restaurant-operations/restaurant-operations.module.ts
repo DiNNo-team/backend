@@ -4,11 +4,18 @@ import { IdentityAccessModule } from '../identity-access/index.js';
 import { GeocodeController } from './geocoding/geocode.controller.js';
 import { Geocoder } from './geocoding/geocoder.js';
 import { GoogleGeocoder } from './geocoding/google-geocoder.js';
+import { Clock, SystemClock } from '../../common/time/clock.js';
+import { AdminRestaurantsController } from './restaurant-review/admin-restaurants.controller.js';
+import { RestaurantReviewQueries } from './restaurant-review/restaurant-review.queries.js';
+import { RestaurantReviewService } from './restaurant-review/restaurant-review.service.js';
 import { TableReservationsAccess } from './shared/table-reservations.js';
 import { RestaurantEditController } from './restaurants/restaurant-edit.controller.js';
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
 import { RestaurantRegistrationController } from './restaurants/restaurant-registration.controller.js';
 import { RestaurantRegistrationService } from './restaurants/restaurant-registration.service.js';
+import { RestaurantResubmitService } from './restaurants/restaurant-resubmit.service.js';
+import { RestaurantSignupController } from './restaurants/restaurant-signup.controller.js';
+import { RestaurantSignupService } from './restaurants/restaurant-signup.service.js';
 import { Restaurant } from './restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from './restaurants/restaurant-schedule.entity.js';
 import { RestaurantStatusController } from './restaurants/restaurant-status.controller.js';
@@ -41,17 +48,27 @@ import { TablesService } from './tables/tables.service.js';
     TableAreasController,
     RestaurantEditController,
     RestaurantRegistrationController,
+    // Registro público con aprobación (§11 "Aprobación de restaurantes").
+    RestaurantSignupController,
     RestaurantStatusController,
     TableLogsController,
     GeocodeController,
+    // Panel del administrador de DiNNo (§11 "Administrador").
+    AdminRestaurantsController,
   ],
   providers: [
+    // Hora de la revisión y del reenvío; las pruebas la fijan con overrideProvider(Clock).
+    { provide: Clock, useClass: SystemClock },
+    RestaurantReviewQueries,
+    RestaurantReviewService,
     TablesService,
     TableAreasService,
     // Puerto de las reservas, visto desde las mesas (lo implementa reservations-checkin).
     TableReservationsAccess,
     RestaurantEditService,
     RestaurantRegistrationService,
+    RestaurantResubmitService,
+    RestaurantSignupService,
     RestaurantStatusService,
     // Table log (PBI 9): table-logs/ implements the tables/ port.
     { provide: TableStatusLog, useClass: DbTableStatusLog },

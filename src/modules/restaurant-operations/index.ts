@@ -27,6 +27,14 @@ export {
   RESTAURANT_REQUIRED_MESSAGE,
   requireRestaurant,
 } from './shared/restaurant-required.js';
+// The 404 of a restaurant that does not exist or cannot be shown: the public
+// detail and the reservation (search-availability re-exports it) and the DiNNo
+// administrator panel answer exactly the same.
+export {
+  RESTAURANT_NOT_FOUND_CODE,
+  RESTAURANT_NOT_FOUND_MESSAGE,
+  restaurantNotFound,
+} from './shared/restaurant-not-found.js';
 // Internal event emitted after a change that affects availability is saved.
 export {
   RESTAURANT_AVAILABILITY_AFFECTED,

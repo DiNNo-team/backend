@@ -10,6 +10,8 @@ import {
   Clock,
   SearchAvailabilityModule,
 } from './../src/modules/search-availability/index.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 // Friday 2026-10-16 13:00 in Bogotá.
 const FRIDAY_13H = new Date('2026-10-16T18:00:00Z');
@@ -90,6 +92,8 @@ describe('SearchAvailabilityModule wiring (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => ({}))
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({})
       .overrideProvider(Clock)

@@ -168,6 +168,7 @@ function buildServices(
       labels,
       clock,
       events,
+      { feeCop: 2000 },
     ),
     queries: new ReservationQueryService(source, expiration, view, clock),
   };
@@ -177,11 +178,13 @@ const asDiner = (userId: string) => ({
   userId,
   restaurantId: null,
   role: UserRole.DINER,
+  restaurantApproval: null,
 });
 const asAdmin = (userId: string, restaurantId: string) => ({
   userId,
   restaurantId,
   role: UserRole.RESTAURANT_ADMIN,
+  restaurantApproval: 'approved' as const,
 });
 
 // Reserva activa y su mesa reserved, escritas directo: no generan eventos.

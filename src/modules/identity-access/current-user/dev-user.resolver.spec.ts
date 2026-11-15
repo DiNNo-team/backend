@@ -1,3 +1,4 @@
+import type { RestaurantApprovalReader } from '../approval/restaurant-approval.reader.js';
 import { UnauthorizedException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
@@ -38,11 +39,13 @@ function createResolver(env: Record<string, string>) {
     ),
   };
   const config = { get: (key: string) => env[key] } as ConfigService;
+  const approvals = { statusOf: vi.fn().mockResolvedValue('approved') };
   const resolver = new DevUserResolver(
     users as unknown as Repository<User>,
     config,
+    approvals as unknown as RestaurantApprovalReader,
   );
-  return { resolver, users };
+  return { approvals, resolver, users };
 }
 
 function requestWith(headers: Record<string, string> = {}): Request {
@@ -52,8 +55,8 @@ function requestWith(headers: Record<string, string> = {}): Request {
 const devEnv = { DEV_USER_ENABLED: 'true', DEV_USER_ID: OWNER_ID };
 
 describe('DevUserResolver', () => {
-  it('returns the default dev user with its three fields', async () => {
-    const { resolver } = createResolver(devEnv);
+  it('returns the default dev user with its fields and its restaurant approval', async () => {
+    const { resolver, approvals } = createResolver(devEnv);
 
     await expect(resolver.resolve(requestWith())).resolves.toEqual({
       kind: 'registered',
@@ -61,8 +64,21 @@ describe('DevUserResolver', () => {
         userId: OWNER_ID,
         restaurantId: RESTAURANT_ID,
         role: UserRole.RESTAURANT_ADMIN,
+        restaurantApproval: 'approved',
       },
     });
+    expect(approvals.statusOf).toHaveBeenCalledWith(RESTAURANT_ID);
+  });
+
+  it('carries the approval status of a pending restaurant', async () => {
+    const { resolver, approvals } = createResolver(devEnv);
+    approvals.statusOf.mockResolvedValue('pending');
+
+    const identity = await resolver.resolve(requestWith());
+
+    expect(
+      identity.kind === 'registered' && identity.user.restaurantApproval,
+    ).toBe('pending');
   });
 
   it('returns a diner row with its own role', async () => {
@@ -70,7 +86,12 @@ describe('DevUserResolver', () => {
 
     await expect(resolver.resolve(requestWith())).resolves.toEqual({
       kind: 'registered',
-      user: { userId: DINER_ID, restaurantId: null, role: UserRole.DINER },
+      user: {
+        userId: DINER_ID,
+        restaurantId: null,
+        role: UserRole.DINER,
+        restaurantApproval: null,
+      },
     });
   });
 

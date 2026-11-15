@@ -20,6 +20,7 @@ const newcomer: CurrentUserData = {
   userId: USER_ID,
   restaurantId: null,
   role: UserRole.RESTAURANT_ADMIN,
+  restaurantApproval: null,
 };
 
 const dto: RegisterRestaurantDto = {
@@ -76,6 +77,9 @@ describe('RestaurantRegistrationService', () => {
         address: 'Calle 72 # 10-34, Bogotá',
         latitude: null,
         longitude: null,
+        contactPhone: null,
+        // An enabled user's restaurant is born approved, explicitly (§11).
+        approvalStatus: 'approved',
       });
       expect(result.restaurant.id).toBe(RESTAURANT_ID);
       expect(result.schedules).toEqual([

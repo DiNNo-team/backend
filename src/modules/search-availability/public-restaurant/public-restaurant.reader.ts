@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import type { RestaurantCategory } from '../../restaurant-operations/index.js';
 import type { GeoPoint } from '../search/geo.js';
+import {
+  DINER_VISIBLE_RESTAURANT,
+  type VisibilityColumns,
+} from '../visibility/restaurant-visibility.js';
 
 // One open day, in the format of GET /restaurants/me.
 export interface PublicSchedule {
@@ -74,8 +78,9 @@ export function toProfile(
   };
 }
 
-// What the diner may see of one restaurant: profile and opening hours. Read
-// only; the availability comes from AvailabilityService. The id must be a
+// What the diner may see of one restaurant: profile and opening hours, only
+// if it is visible to the diners (approved; else null, like an unknown id).
+// Read only; the availability comes from AvailabilityService. The id must be a
 // valid UUID (the controller checks it).
 @Injectable()
 export class PublicRestaurantReader {
@@ -83,17 +88,19 @@ export class PublicRestaurantReader {
 
   async findProfile(id: string): Promise<PublicRestaurantProfile | null> {
     const [row, schedules] = await Promise.all([
-      this.dataSource.getRepository<ProfileRow>('Restaurant').findOne({
-        where: { id },
-        select: {
-          id: true,
-          name: true,
-          category: true,
-          address: true,
-          latitude: true,
-          longitude: true,
-        },
-      }),
+      this.dataSource
+        .getRepository<ProfileRow & VisibilityColumns>('Restaurant')
+        .findOne({
+          where: { id, ...DINER_VISIBLE_RESTAURANT },
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            address: true,
+            latitude: true,
+            longitude: true,
+          },
+        }),
       this.dataSource
         .getRepository<ScheduleRow & { restaurantId: string }>(
           'RestaurantSchedule',

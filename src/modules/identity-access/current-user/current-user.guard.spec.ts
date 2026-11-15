@@ -26,6 +26,7 @@ describe('CurrentUserGuard', () => {
         userId: '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718',
         restaurantId: null,
         role: UserRole.RESTAURANT_ADMIN,
+        restaurantApproval: null,
       },
     };
     const request = { headers: {} } as RequestWithCurrentUser;

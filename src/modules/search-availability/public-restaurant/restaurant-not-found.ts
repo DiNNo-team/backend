@@ -1,13 +1,9 @@
-import { NotFoundException } from '@nestjs/common';
-
-// The only 404 of the public detail: malformed id, unknown restaurant or a
-// restaurant without location. The app shows the message with a way back.
-export const RESTAURANT_NOT_FOUND_CODE = 'RESTAURANT_NOT_FOUND';
-export const RESTAURANT_NOT_FOUND_MESSAGE =
-  'Este restaurante ya no está disponible.';
-
-export function restaurantNotFound(): NotFoundException {
-  return new NotFoundException(RESTAURANT_NOT_FOUND_MESSAGE, {
-    errorCode: RESTAURANT_NOT_FOUND_CODE,
-  });
-}
+// The only 404 of the public detail: malformed id, unknown restaurant, a
+// restaurant without location or not approved. It lives in restaurant-operations
+// (shared/restaurant-not-found.ts) because the DiNNo administrator panel answers
+// the same 404 and that module cannot import this one; re-exported here.
+export {
+  RESTAURANT_NOT_FOUND_CODE,
+  RESTAURANT_NOT_FOUND_MESSAGE,
+  restaurantNotFound,
+} from '../../restaurant-operations/index.js';
