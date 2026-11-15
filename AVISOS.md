@@ -7,6 +7,12 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-15 · Elizabeth): PR de notificaciones push listo para fusionar** (`feat/sprint4-notificaciones`, trabajo de Sebastián; ya incluye `develop`).
+  - **Migración renombrada a `1794600000003-CreatePushDevices`** (antes `1794500000000`, más antigua que las de aprobación, cobro y KPIs ya aplicadas en desarrollo). **Hay que correr `migration:run` en la base de desarrollo antes de fusionar;** sin la tabla `push_devices`, las rutas nuevas responden 500 (el resto de la API sigue bien).
+  - **Variables opcionales (secretos):** `FIREBASE_SERVICE_ACCOUNT_FILE` o `FIREBASE_SERVICE_ACCOUNT_JSON`. Sin ellas la API arranca igual y las notificaciones quedan desactivadas (un aviso en el log). Nunca van al repositorio ni al log.
+  - **Mobile ya llama a las rutas nuevas** (`PUT` y `DELETE /v1/notifications/devices`, solo comensal). Un restaurante o un administrador de DiNNo recibe el error de rol de siempre (`RESTAURANT_ACCOUNT` / `ADMIN_ACCOUNT`).
+  - **Pruebas:** la e2e de notificaciones ahora simula `RestaurantApprovalReader`, como toda prueba que monta `IdentityAccessModule`.
+
 - **Nuevo (2026-11-15 · Elizabeth): aprobación de restaurantes completa, panel del administrador, cobro por check-in y resumen del restaurante** (`feat/admin-approval`). Todavía **no** está en `develop`. Detalle en CLAUDE.md §11: «Aprobación de restaurantes», «Administrador», «Cobro por check-in» y «Resumen y KPIs». El texto propuesto para §10 y §12 (comunes a los tres repos) está en `docs/contratos-pendientes.md`: Elizabeth lo sincroniza en los tres repos el mismo día. Las cuatro líneas nuevas de §8 ya están en el CLAUDE.md de este repo y también hay que copiarlas.
   - **Qué quedó listo:**
     - **Administrador de DiNNo** (`platform_admin`, solo por seed o SQL): `GET /v1/admin/restaurants` (lista paginada por estado, con el correo del dueño), `GET /v1/admin/restaurants/:id`, `POST /v1/admin/restaurants/:id/approve` y `POST /v1/admin/restaurants/:id/reject` `{ reason }` (10 a 300 caracteres). Solo desde `pending`; si no, `409 RESTAURANT_NOT_PENDING`. Swagger, tag `admin`.
