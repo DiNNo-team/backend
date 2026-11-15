@@ -6,6 +6,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { configureApp } from './../src/app.setup.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 import { FIREBASE_AUTH } from './../src/modules/identity-access/auth/firebase-admin.provider.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
 import {
@@ -24,7 +25,10 @@ import {
 } from './../src/modules/search-availability/index.js';
 import { FakeDatabaseModule } from './support/fake-database.js';
 import {
+  approvalReader,
+  approvalTestUsers,
   fakeFirebaseAuth,
+  TEST_APPROVALS,
   testUsers,
   usersRepository,
 } from './support/test-accounts.js';
@@ -116,8 +120,14 @@ describe('Notifications (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => fakeFirebaseAuth)
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(
+        approvalReader({ [RESTAURANT_ID]: 'approved', ...TEST_APPROVALS }),
+      )
       .overrideProvider(getRepositoryToken(User))
-      .useValue(usersRepository(testUsers(RESTAURANT_ID)))
+      .useValue(
+        usersRepository([...testUsers(RESTAURANT_ID), ...approvalTestUsers()]),
+      )
       .overrideProvider(getRepositoryToken(PushDevice))
       .useValue(repository)
       .overrideProvider(PushSender)
@@ -185,6 +195,21 @@ describe('Notifications (e2e)', () => {
       .put('/v1/notifications/devices')
       .send({ token: PHONE, platform: 'android' })
       .expect(401);
+  });
+
+  it('a pending restaurant and a DiNNo administrator get the role error, not the approval one', async () => {
+    const pending = await register('pendingOwner', {
+      token: PHONE,
+      platform: 'android',
+    }).expect(403);
+    expect(pending.body.errorCode).toBe('RESTAURANT_ACCOUNT');
+
+    const admin = await register('platformAdmin', {
+      token: PHONE,
+      platform: 'android',
+    }).expect(403);
+    expect(admin.body.errorCode).toBe('ADMIN_ACCOUNT');
+    expect(devices).toEqual([]);
   });
 
   it('forgets the phone on sign-out (204)', async () => {
