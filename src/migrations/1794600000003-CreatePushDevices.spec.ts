@@ -1,6 +1,6 @@
 import type { QueryRunner } from 'typeorm';
 import { PUSH_TOKEN_MAX_LENGTH } from '../modules/notifications/devices/push-device.entity.js';
-import { CreatePushDevices1794500000000 } from './1794500000000-CreatePushDevices.js';
+import { CreatePushDevices1794600000003 } from './1794600000003-CreatePushDevices.js';
 
 async function queriesOf(direction: 'up' | 'down'): Promise<string[]> {
   const queries: string[] = [];
@@ -10,7 +10,7 @@ async function queriesOf(direction: 'up' | 'down'): Promise<string[]> {
       return Promise.resolve();
     },
   } as unknown as QueryRunner;
-  await new CreatePushDevices1794500000000()[direction](queryRunner);
+  await new CreatePushDevices1794600000003()[direction](queryRunner);
   return queries;
 }
 

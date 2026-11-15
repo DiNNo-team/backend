@@ -157,7 +157,7 @@ Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaura
 
 ### `push_devices` · entidad `PushDevice` (Sprint 4, notificaciones)
 
-Los teléfonos de cada comensal que reciben las notificaciones de su reserva: el token de Firebase Cloud Messaging que la app obtiene del sistema. Migración `1794500000000-CreatePushDevices`.
+Los teléfonos de cada comensal que reciben las notificaciones de su reserva: el token de Firebase Cloud Messaging que la app obtiene del sistema. Migración `1794600000003-CreatePushDevices`.
 
 | Columna | Tipo | Reglas |
 |---|---|---|

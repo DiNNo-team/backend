@@ -5,8 +5,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 // account at a time) and the rows go away with their user. Additive: no
 // existing table changes. Hand-written, like the other migrations of the shared
 // database.
-export class CreatePushDevices1794500000000 implements MigrationInterface {
-  name = 'CreatePushDevices1794500000000';
+export class CreatePushDevices1794600000003 implements MigrationInterface {
+  name = 'CreatePushDevices1794600000003';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
