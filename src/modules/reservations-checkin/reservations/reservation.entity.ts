@@ -58,6 +58,11 @@ const ONLY_ACTIVE = `"status" = 'active'`;
 ])
 // Historial del comensal, de lo más reciente a lo más antiguo.
 @Index('IDX_reservations_diner_id_created_at', ['dinerId', 'createdAt'])
+// Resumen del restaurante: reservas creadas en un periodo.
+@Index('IDX_reservations_restaurant_id_created_at', [
+  'restaurantId',
+  'createdAt',
+])
 export class Reservation {
   @PrimaryGeneratedColumn('uuid')
   id: string;

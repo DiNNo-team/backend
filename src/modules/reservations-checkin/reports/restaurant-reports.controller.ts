@@ -27,8 +27,12 @@ import {
 import {
   BILLING_PAGE_SIZE_DEFAULT,
   BillingQueryDto,
+  ReportPeriodQueryDto,
 } from './dto/report-query.dto.js';
-import { BillingStatementResponseDto } from './dto/report-response.dto.js';
+import {
+  BillingStatementResponseDto,
+  RestaurantSummaryResponseDto,
+} from './dto/report-response.dto.js';
 import { REPORT_PERIOD_MESSAGES } from './report-period.js';
 import { RestaurantReportsService } from './restaurant-reports.service.js';
 
@@ -43,7 +47,7 @@ const PERIOD_BAD_REQUEST = {
   },
 };
 
-// Reportes del restaurante de la sesión: estado de cuenta.
+// Reportes del restaurante de la sesión: estado de cuenta y resumen (KPIs).
 // Solo un restaurante aprobado: pendiente o rechazado reciben 403 (§11).
 @ApiTags('restaurant-reports')
 @ApiBearerAuth()
@@ -70,6 +74,21 @@ const PERIOD_BAD_REQUEST = {
 @Controller('restaurants/me')
 export class RestaurantReportsController {
   constructor(private readonly reports: RestaurantReportsService) {}
+
+  @Get('summary')
+  @ApiOperation({
+    summary: 'Resumen del restaurante: cobro y KPIs de un periodo',
+    description:
+      'Periodo en días de Bogotá, inclusivo (from..to, AAAA-MM-DD); por defecto, del día 1 del mes en curso hasta hoy; máximo 366 días. Antes de calcular vence las reservas debidas del restaurante. reservations: reservas con created_at dentro del periodo, por estado actual. billing: check-ins con checked_in_at dentro del periodo, amountCop = suma de la tarifa guardada en cada uno, currentFeeCop = tarifa vigente. rates: conversion = completed / created, noShow = expired / (completed + expired), cancellation = cancelled / created, con 4 decimales y null si el denominador es 0. averagePartySize sobre las creadas (2 decimales; null si no hay). peakHours: las 3 horas con más reservas creadas (desempate por hora menor). byDayOfWeek: 7 entradas (1 = lunes … 7 = domingo) con 0 si no hay datos. Nunca trae datos de los comensales.',
+  })
+  @ApiOkResponse({ type: RestaurantSummaryResponseDto })
+  @ApiBadRequestResponse(PERIOD_BAD_REQUEST)
+  summary(
+    @CurrentUser() user: CurrentUserData,
+    @Query() query: ReportPeriodQueryDto,
+  ): Promise<RestaurantSummaryResponseDto> {
+    return this.reports.summary(requireRestaurant(user.restaurantId), query);
+  }
 
   @Get('billing/check-ins')
   @ApiOperation({
