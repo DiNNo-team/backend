@@ -130,9 +130,8 @@ const BLOCKED_RESTAURANT_ROUTES: [string, string, object?][] = [
   ['get', '/v1/table-areas'],
   ['post', '/v1/table-areas', { name: 'Terraza' }],
   ['post', '/v1/restaurants', { name: 'Nuevo' }],
-  // Edición y reenvío: llegan en la tarea 2; por ahora, bloqueados.
-  ['patch', '/v1/restaurants/me', { name: 'Otro' }],
-  ['get', '/v1/restaurants/me/status'],
+  // PATCH /v1/restaurants/me, GET /v1/restaurants/me/status y el reenvío sí se
+  // permiten (test/restaurant-resubmit.e2e-spec.ts); cambiar el estado, no.
   ['patch', '/v1/restaurants/me/status', { isOpen: false }],
   ['get', '/v1/table-logs'],
   ['get', '/v1/restaurants/me/reservations'],

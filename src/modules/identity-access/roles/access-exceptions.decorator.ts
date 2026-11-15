@@ -7,8 +7,9 @@ export const ALLOW_UNREGISTERED_ACCOUNT_METADATA =
 
 // Explicit and short list of the restaurant routes that a restaurant_admin
 // whose restaurant is pending or rejected may still call (CLAUDE.md §11,
-// "Aprobación de restaurantes"): GET /v1/me, GET /v1/restaurants/me and
-// GET /v1/geocode. Every other @Roles(RESTAURANT_ADMIN) route answers
+// "Aprobación de restaurantes"): GET /v1/me, GET and PATCH /v1/restaurants/me,
+// POST /v1/restaurants/me/resubmit, GET /v1/restaurants/me/status (read only)
+// and GET /v1/geocode. Every other @Roles(RESTAURANT_ADMIN) route answers
 // ACCOUNT_PENDING_APPROVAL or ACCOUNT_REJECTED. Put it on the handler, never on
 // a whole controller, so a new route is blocked by default.
 export const AllowUnapprovedRestaurant = () =>

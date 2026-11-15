@@ -504,6 +504,8 @@ describe('Restaurant edit (e2e)', () => {
       'latitude',
       'longitude',
       'schedules',
+      // Fase 3 de la aprobación: se edita igual que en el registro público.
+      'contactPhone',
     ]);
     expect(
       res.body.components.schemas.UpdateRestaurantDto.required ?? [],

@@ -92,7 +92,21 @@ export interface SeedSummary {
   realRestaurantsCreated: number;
   realRestaurantsReset: number;
   realRestaurantsNewTables: number;
+  // The DiNNo administrator of PLATFORM_ADMIN_EMAIL; null when the variable is
+  // not defined. created: false when it already existed (nothing changed).
+  platformAdmin: { user: User; created: boolean } | null;
 }
+
+export interface SeedOptions {
+  // PLATFORM_ADMIN_EMAIL (CLAUDE.md §11, "Administrador"), read by src/seed.ts.
+  platformAdminEmail?: string;
+}
+
+export const platformAdminRoleConflict = (email: string, role: string) =>
+  `${email} ya existe con el rol ${role}: el seed no cambia roles. Usa otro correo en PLATFORM_ADMIN_EMAIL o cambia esa cuenta a mano. No se guardó nada.`;
+
+export const PLATFORM_ADMIN_EMAIL_INVALID =
+  'PLATFORM_ADMIN_EMAIL no parece un correo (le falta la @ o tiene espacios). Corrígela o quítala. No se guardó nada.';
 
 const logger = new Logger('Seed');
 
@@ -262,10 +276,48 @@ async function seedRealRestaurant(
   return { created, newTables };
 }
 
+// The DiNNo administrator (platform_admin) of PLATFORM_ADMIN_EMAIL: created if
+// missing, left as it is if it already exists with that role. An existing
+// account with another role stops the seed (the whole transaction rolls back):
+// the seed never promotes nor demotes a role. firebase_uid stays null: the first
+// sign-in with that verified email links it (FirebaseUserResolver).
+async function ensurePlatformAdmin(
+  manager: EntityManager,
+  rawEmail: string,
+): Promise<{ user: User; created: boolean }> {
+  const email = rawEmail.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+$/.test(email)) {
+    throw new Error(PLATFORM_ADMIN_EMAIL_INVALID);
+  }
+  const users = manager.getRepository<User>('User');
+  const existing = await users.findOneBy({ email });
+  if (existing) {
+    if (existing.role !== UserRole.PLATFORM_ADMIN) {
+      throw new Error(platformAdminRoleConflict(email, existing.role));
+    }
+    return { user: existing, created: false };
+  }
+  const user = await users.save(
+    users.create({
+      email,
+      role: UserRole.PLATFORM_ADMIN,
+      restaurantId: null,
+      displayName: null,
+    }),
+  );
+  return { user, created: true };
+}
+
 export async function runSeed(
   manager: EntityManager,
   realRestaurants: RealRestaurant[],
+  options: SeedOptions = {},
 ): Promise<SeedSummary> {
+  // First: a conflicting administrator stops the seed before anything else.
+  const platformAdmin =
+    options.platformAdminEmail === undefined
+      ? null
+      : await ensurePlatformAdmin(manager, options.platformAdminEmail);
   const admin = UserRole.RESTAURANT_ADMIN;
   const onboardingUser = await findOrCreateUser(
     manager,
@@ -307,5 +359,6 @@ export async function runSeed(
     realRestaurantsCreated,
     realRestaurantsReset: realRestaurants.length - realRestaurantsCreated,
     realRestaurantsNewTables,
+    platformAdmin,
   };
 }
