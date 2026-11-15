@@ -91,6 +91,11 @@ const REQUIRED_SCHEMA = [
     column: 'submitted_at',
     migration: '1794600000000-AddRestaurantSubmittedAt',
   },
+  {
+    table: 'check_ins',
+    column: 'fee_cop',
+    migration: '1794600000001-AddCheckInFee',
+  },
 ] as const;
 
 export async function assertMigrationsApplied(client: Client): Promise<void> {

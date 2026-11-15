@@ -382,10 +382,12 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
         { status: 'occupied' },
       );
       expect(statusLog.record).toHaveBeenCalledTimes(1);
+      // Sin CHECKIN_FEE_COP en la configuración de la prueba: la tarifa por defecto.
       expect(checkInsRepo.insert).toHaveBeenCalledWith({
         reservationId: ACTIVE_ID,
         restaurantId: RESTAURANT_ID,
         checkedInAt: NOW,
+        feeCop: 2000,
       });
     });
 

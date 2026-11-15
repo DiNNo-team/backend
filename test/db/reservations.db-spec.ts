@@ -219,13 +219,13 @@ describe('check_ins', () => {
         dinerId: s.dinerA,
       });
       await client.query(
-        `INSERT INTO check_ins (reservation_id, restaurant_id, checked_in_at) VALUES ($1, $2, now())`,
+        `INSERT INTO check_ins (reservation_id, restaurant_id, checked_in_at, fee_cop) VALUES ($1, $2, now(), 2000)`,
         [reservationId, s.restaurantId],
       );
 
       const error = await expectDatabaseError(
         client,
-        `INSERT INTO check_ins (reservation_id, restaurant_id, checked_in_at) VALUES ($1, $2, now())`,
+        `INSERT INTO check_ins (reservation_id, restaurant_id, checked_in_at, fee_cop) VALUES ($1, $2, now(), 2000)`,
         [reservationId, s.restaurantId],
       );
 

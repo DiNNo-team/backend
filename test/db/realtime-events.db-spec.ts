@@ -168,6 +168,7 @@ function buildServices(
       labels,
       clock,
       events,
+      { feeCop: 2000 },
     ),
     queries: new ReservationQueryService(source, expiration, view, clock),
   };

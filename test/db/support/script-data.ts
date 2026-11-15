@@ -62,8 +62,8 @@ export async function insertCheckIn(
   reservationId: string,
 ): Promise<string> {
   const [{ id }] = await dataSource.query<{ id: string }[]>(
-    `INSERT INTO check_ins (reservation_id, restaurant_id, checked_in_at)
-     VALUES ($1, $2, now()) RETURNING id`,
+    `INSERT INTO check_ins (reservation_id, restaurant_id, checked_in_at, fee_cop)
+     VALUES ($1, $2, now(), 2000) RETURNING id`,
     [reservationId, scenario.restaurantId],
   );
   return id;

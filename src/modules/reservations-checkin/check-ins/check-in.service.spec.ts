@@ -216,6 +216,7 @@ function setup(options: Options = {}) {
     labels as unknown as ReservationLabelsReader,
     { now: () => NOW } as Clock,
     events as unknown as EventEmitter2,
+    { feeCop: 2000 },
   );
   return {
     service,
@@ -299,7 +300,7 @@ describe('CheckInService · check-in válido', () => {
     );
   });
 
-  it('check_ins se inserta con el mismo instante de checked_in_at', async () => {
+  it('check_ins se inserta con el mismo instante de checked_in_at y la tarifa vigente', async () => {
     const t = setup();
 
     await t.service.checkIn(admin, CODE);
@@ -309,6 +310,7 @@ describe('CheckInService · check-in válido', () => {
       reservationId: RESERVATION_ID,
       restaurantId: RESTAURANT_ID,
       checkedInAt: NOW,
+      feeCop: 2000,
     });
     expect(t.executed[0].params[1]).toBe(NOW);
   });

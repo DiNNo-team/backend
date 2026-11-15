@@ -80,6 +80,7 @@ function buildServices(clock: Clock = CLOCK, source: DataSource = dataSource) {
       labels,
       clock,
       events,
+      { feeCop: 2000 },
     ),
     list: new RestaurantReservationsService(
       dataSource,
