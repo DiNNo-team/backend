@@ -18,6 +18,13 @@ export {
 } from './reservation-ttl/reservation-ttl.config.js';
 // The time shown in the check-in messages (HH:mm in Bogotá).
 export { formatBogotaClock } from './availability/bogota-time.js';
+// Diner visibility of a restaurant (approved only, §11), reused by the
+// reservation so the rule lives in one place.
+export {
+  DINER_VISIBLE_RESTAURANT,
+  isVisibleToDiners,
+  type VisibilityColumns,
+} from './visibility/restaurant-visibility.js';
 // The 404 of the public detail, reused by the reservation (same visibility rule).
 export {
   RESTAURANT_NOT_FOUND_CODE,

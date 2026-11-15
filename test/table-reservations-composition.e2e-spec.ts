@@ -23,7 +23,8 @@ import { TableLog } from './../src/modules/restaurant-operations/table-logs/tabl
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { FakeDatabaseModule } from './support/fake-database.js';
-import { fakeFirebaseAuth } from './support/test-accounts.js';
+import { fakeFirebaseAuth, approvalReader } from './support/test-accounts.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 // Composición real de las mesas con las reservas, con los repositorios en
 // memoria. Fija que el puerto TableReservations que declara restaurant-operations
@@ -52,6 +53,8 @@ function baseModule(...modules: unknown[]): TestingModuleBuilder {
   })
     .overrideProvider(FIREBASE_AUTH)
     .useValue(() => fakeFirebaseAuth)
+    .overrideProvider(RestaurantApprovalReader)
+    .useValue(approvalReader('approved'))
     .overrideProvider(getRepositoryToken(User))
     .useValue({})
     .overrideProvider(getRepositoryToken(Restaurant))
@@ -143,6 +146,8 @@ describe('Reservas de las mesas: composición real (e2e)', () => {
       })
         .overrideProvider(FIREBASE_AUTH)
         .useValue(() => fakeFirebaseAuth)
+        .overrideProvider(RestaurantApprovalReader)
+        .useValue(approvalReader('approved'))
         .overrideProvider(getRepositoryToken(User))
         .useValue({})
         .overrideProvider(getRepositoryToken(Restaurant))

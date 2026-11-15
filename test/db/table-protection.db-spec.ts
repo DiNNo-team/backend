@@ -100,11 +100,13 @@ const asOwner = (s: Scenario, userId: string) => ({
   userId,
   restaurantId: s.restaurantId,
   role: UserRole.RESTAURANT_ADMIN,
+  restaurantApproval: 'approved' as const,
 });
 const asDiner = (userId: string) => ({
   userId,
   restaurantId: null,
   role: UserRole.DINER,
+  restaurantApproval: null,
 });
 
 const errorCodeOf = (error: unknown) =>

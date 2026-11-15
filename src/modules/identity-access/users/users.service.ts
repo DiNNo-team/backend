@@ -72,6 +72,50 @@ export class UsersService {
     return new Map(users.map((user) => [user.id, user.email]));
   }
 
+  // Correo del dueño de cada restaurante, en una consulta, para el panel del
+  // administrador de DiNNo (§11, "Administrador"): solo lo ve un platform_admin.
+  // Dueño = restaurant_admin con ese restaurant_id; si hubiera varios, el de la
+  // cuenta más antigua. Un restaurante sin dueño no aparece en el mapa.
+  async findRestaurantOwnerEmails(
+    restaurantIds: string[],
+  ): Promise<Map<string, string>> {
+    const uniqueIds = [...new Set(restaurantIds)];
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+    const owners = await this.usersRepository.find({
+      where: {
+        restaurantId: In(uniqueIds),
+        role: UserRole.RESTAURANT_ADMIN,
+      },
+      select: { restaurantId: true, email: true },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+    const emails = new Map<string, string>();
+    for (const owner of owners) {
+      if (owner.restaurantId !== null && !emails.has(owner.restaurantId)) {
+        emails.set(owner.restaurantId, owner.email);
+      }
+    }
+    return emails;
+  }
+
+  // Correos de administradores de DiNNo por id (quién revisó una solicitud). El
+  // rol va en la consulta: un id de otro rol no sale.
+  async findPlatformAdminEmailsByIds(
+    ids: string[],
+  ): Promise<Map<string, string>> {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+    const admins = await this.usersRepository.find({
+      where: { id: In(uniqueIds), role: UserRole.PLATFORM_ADMIN },
+      select: { id: true, email: true },
+    });
+    return new Map(admins.map((admin) => [admin.id, admin.email]));
+  }
+
   // Names that someone else may see (the restaurant, CLAUDE.md §11), by user id,
   // in one query. null when there is no name or when the stored name is the
   // email before the @, the default of POST /v1/diners/me: that would reveal part
@@ -142,16 +186,21 @@ export class UsersService {
     }
   }
 
-  // Only POST /v1/diners/me creates users (Sprint 2); restaurant accounts are
-  // enabled by hand (docs/database.md, "Restaurantes habilitados").
-  create(input: CreateUserInput): Promise<User> {
-    const user = this.usersRepository.create({
+  // Only POST /v1/diners/me and POST /v1/restaurants/signup create users;
+  // restaurant accounts can also be enabled by hand (docs/database.md,
+  // "Restaurantes habilitados"). With a manager, the row is created inside that
+  // transaction (the sign-up creates the user and its restaurant together).
+  create(input: CreateUserInput, manager?: EntityManager): Promise<User> {
+    const repository = manager
+      ? manager.getRepository(User)
+      : this.usersRepository;
+    const user = repository.create({
       email: normalizeEmail(input.email),
       firebaseUid: input.firebaseUid,
       role: input.role,
       restaurantId: input.restaurantId,
       displayName: input.displayName,
     });
-    return this.usersRepository.save(user);
+    return repository.save(user);
   }
 }

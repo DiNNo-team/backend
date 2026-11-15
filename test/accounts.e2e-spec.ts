@@ -28,6 +28,8 @@ import { TableLog } from './../src/modules/restaurant-operations/table-logs/tabl
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const TABLE_ID = '3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f';
@@ -218,6 +220,8 @@ describe('Accounts and roles (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => firebaseAuth)
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue(usersRepository(users))
       .overrideProvider(getRepositoryToken(Restaurant))

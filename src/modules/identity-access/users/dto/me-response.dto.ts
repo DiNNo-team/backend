@@ -26,7 +26,7 @@ export class MeResponseDto {
     enum: USER_ROLES,
     example: UserRole.DINER,
     description:
-      'restaurant_admin = restaurante (solo web), diner = comensal (solo app).',
+      'restaurant_admin = restaurante (solo web), diner = comensal (solo app), platform_admin = administrador de DiNNo (panel de administración en la web).',
   })
   role: UserRole;
 

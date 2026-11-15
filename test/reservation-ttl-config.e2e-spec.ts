@@ -9,6 +9,8 @@ import {
   SearchAvailabilityModule,
 } from './../src/modules/search-availability/index.js';
 import { FakeDatabaseModule } from './support/fake-database.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 // Composición: SearchAvailabilityModule (dueño de ReservationConfig) valida
 // RESERVATION_TTL_MINUTES al crearse. AppModule lo registra, así que un valor
@@ -33,6 +35,8 @@ async function compile(ttl: string | undefined) {
   })
     .overrideProvider(FIREBASE_AUTH)
     .useValue(() => ({}))
+    .overrideProvider(RestaurantApprovalReader)
+    .useValue(approvalReader('approved'))
     .overrideProvider(getRepositoryToken(User))
     .useValue({})
     .compile();

@@ -1,7 +1,16 @@
-import { Body, Controller, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
@@ -10,6 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowUnapprovedRestaurant,
   CurrentUser,
   CurrentUserGuard,
   RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
@@ -29,6 +39,32 @@ import {
   NO_CHANGES_MESSAGE,
   RestaurantEditService,
 } from './restaurant-edit.service.js';
+import { RestaurantRegistrationService } from './restaurant-registration.service.js';
+import {
+  RESTAURANT_NOT_REJECTED_CODE,
+  RESTAURANT_NOT_REJECTED_MESSAGE,
+  RestaurantResubmitService,
+} from './restaurant-resubmit.service.js';
+
+const FORBIDDEN_RESPONSE = {
+  description:
+    'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED), es de comensal (DINER_ACCOUNT) o de administrador (ADMIN_ACCOUNT), o todavía no registra su restaurante (RESTAURANT_REQUIRED). Un restaurante pendiente o rechazado SÍ puede usar esta ruta.',
+  type: ErrorResponseDto,
+  examples: {
+    accountNotEnabled: RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES.accountNotEnabled,
+    dinerAccount: RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES.dinerAccount,
+    adminAccount: RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES.adminAccount,
+    restaurantRequired: {
+      summary: 'El usuario todavía no registra su restaurante',
+      value: {
+        statusCode: 403,
+        message: RESTAURANT_REQUIRED_MESSAGE,
+        error: 'Forbidden',
+        errorCode: RESTAURANT_REQUIRED_CODE,
+      },
+    },
+  },
+};
 
 @ApiTags('restaurants')
 @ApiBearerAuth()
@@ -38,14 +74,18 @@ import {
 export class RestaurantEditController {
   constructor(
     private readonly restaurantEditService: RestaurantEditService,
+    private readonly resubmitService: RestaurantResubmitService,
+    private readonly registrationService: RestaurantRegistrationService,
     private readonly reservations: TableReservationsAccess,
   ) {}
 
   @Patch('me')
+  // Un pendiente o rechazado corrige sus datos (§11): editar no cambia el estado.
+  @AllowUnapprovedRestaurant()
   @ApiOperation({
     summary: 'Editar los datos del restaurante del usuario',
     description:
-      'Actualiza solo los campos que se envían; los demás no cambian. Todos son opcionales, pero hay que enviar al menos uno. Se pueden editar el nombre, la categoría, la dirección y los horarios. schedules reemplaza todos los horarios guardados, con las mismas reglas que el registro; si no se envía, los horarios no cambian. Todo se guarda en una sola transacción. Cualquier campo que no esté en el DTO se rechaza con 400. El restaurante es siempre el del usuario de la sesión. Responde lo mismo que GET /restaurants/me.',
+      'Actualiza solo los campos que se envían; los demás no cambian. Todos son opcionales, pero hay que enviar al menos uno. Se pueden editar el nombre, la categoría, la dirección, la ubicación, el teléfono de contacto y los horarios. También la usan un restaurante pendiente (sigue pendiente) y uno rechazado (corrige y después reenvía con POST /restaurants/me/resubmit); editar nunca cambia approvalStatus. schedules reemplaza todos los horarios guardados, con las mismas reglas que el registro; si no se envía, los horarios no cambian. Todo se guarda en una sola transacción. Cualquier campo que no esté en el DTO se rechaza con 400. El restaurante es siempre el del usuario de la sesión. Responde lo mismo que GET /restaurants/me.',
   })
   @ApiOkResponse({
     description:
@@ -79,23 +119,7 @@ export class RestaurantEditController {
     },
   })
   @ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
-  @ApiForbiddenResponse({
-    description:
-      'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED), es de comensal (DINER_ACCOUNT) o todavía no registra su restaurante (RESTAURANT_REQUIRED).',
-    type: ErrorResponseDto,
-    examples: {
-      ...RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
-      restaurantRequired: {
-        summary: 'El usuario todavía no registra su restaurante',
-        value: {
-          statusCode: 403,
-          message: RESTAURANT_REQUIRED_MESSAGE,
-          error: 'Forbidden',
-          errorCode: RESTAURANT_REQUIRED_CODE,
-        },
-      },
-    },
-  })
+  @ApiForbiddenResponse(FORBIDDEN_RESPONSE)
   async update(
     @CurrentUser() user: CurrentUserData,
     @Body() dto: UpdateRestaurantDto,
@@ -103,6 +127,46 @@ export class RestaurantEditController {
     const { restaurant, schedules } = await this.restaurantEditService.update(
       user.restaurantId,
       dto,
+    );
+    return RestaurantProfileResponseDto.fromEntities(
+      restaurant,
+      schedules,
+      await this.reservations.countActive(restaurant.id),
+    );
+  }
+
+  @Post('me/resubmit')
+  @HttpCode(HttpStatus.OK)
+  // Solo tiene sentido para un rechazado; un pendiente o aprobado recibe el 409.
+  @AllowUnapprovedRestaurant()
+  @ApiOperation({
+    summary: 'Reenviar la solicitud rechazada',
+    description:
+      'Solo desde rejected: vuelve a pending, se borran el motivo y la revisión (rejectionReason, revisor y fecha) y la fecha de envío pasa a ahora, así la solicitud vuelve a la lista de pendientes del administrador. Primero se corrigen los datos con PATCH /restaurants/me. No usa body (si llega, se ignora). Responde lo mismo que GET /restaurants/me.',
+  })
+  @ApiOkResponse({
+    description: 'Restaurante con approvalStatus pending.',
+    type: RestaurantProfileResponseDto,
+  })
+  @ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
+  @ApiForbiddenResponse(FORBIDDEN_RESPONSE)
+  @ApiConflictResponse({
+    description:
+      'La solicitud no está rechazada (está pendiente o ya fue aprobada), o se reenvió dos veces a la vez.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 409,
+      message: RESTAURANT_NOT_REJECTED_MESSAGE,
+      error: 'Conflict',
+      errorCode: RESTAURANT_NOT_REJECTED_CODE,
+    },
+  })
+  async resubmit(
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<RestaurantProfileResponseDto> {
+    await this.resubmitService.resubmit(user.restaurantId);
+    const { restaurant, schedules } = await this.registrationService.findMine(
+      user.restaurantId,
     );
     return RestaurantProfileResponseDto.fromEntities(
       restaurant,

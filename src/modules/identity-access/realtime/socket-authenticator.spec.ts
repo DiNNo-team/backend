@@ -1,3 +1,4 @@
+import type { RestaurantApprovalReader } from '../approval/restaurant-approval.reader.js';
 import { UnauthorizedException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { Repository } from 'typeorm';
@@ -7,6 +8,7 @@ import { FirebaseUserResolver } from '../auth/firebase-user.resolver.js';
 import type { RequestIdentity } from '../current-user/current-user-data.js';
 import type { CurrentUserResolver } from '../current-user/current-user.resolver.js';
 import { DevUserResolver } from '../current-user/dev-user.resolver.js';
+import { ACCOUNT_ERROR_CODES } from '../roles/account-errors.js';
 import { UserRole } from '../roles/user-role.js';
 import type { User } from '../users/user.entity.js';
 import type { UsersService } from '../users/users.service.js';
@@ -23,7 +25,12 @@ const RESTAURANT_ID = '55bb0482-be1e-490b-9ba8-7533335d958b';
 
 const diner: RequestIdentity = {
   kind: 'registered',
-  user: { userId: DINER_ID, restaurantId: null, role: UserRole.DINER },
+  user: {
+    userId: DINER_ID,
+    restaurantId: null,
+    role: UserRole.DINER,
+    restaurantApproval: null,
+  },
 };
 
 const owner: RequestIdentity = {
@@ -32,6 +39,7 @@ const owner: RequestIdentity = {
     userId: OWNER_ID,
     restaurantId: RESTAURANT_ID,
     role: UserRole.RESTAURANT_ADMIN,
+    restaurantApproval: 'approved',
   },
 };
 
@@ -65,7 +73,57 @@ describe('SocketAuthenticator', () => {
       userId: OWNER_ID,
       restaurantId: RESTAURANT_ID,
       role: UserRole.RESTAURANT_ADMIN,
+      restaurantApproval: 'approved',
     });
+  });
+
+  // §11 "Aprobación de restaurantes": same codes as the HTTP 403s.
+  it.each([
+    ['a pending restaurant', 'pending', 'ACCOUNT_PENDING_APPROVAL'],
+    ['a rejected restaurant', 'rejected', 'ACCOUNT_REJECTED'],
+  ] as const)('rejects %s with %s', async (_case, approval, code) => {
+    const { authenticator } = withResolver(
+      vi.fn().mockResolvedValue({
+        kind: 'registered',
+        user: {
+          ...(owner.kind === 'registered' && owner.user),
+          restaurantApproval: approval,
+        },
+      }),
+    );
+
+    await expect(rejectionCode(authenticator, { token: 't' })).resolves.toBe(
+      code,
+    );
+  });
+
+  it('rejects a platform_admin with ADMIN_ACCOUNT (no admin events yet)', async () => {
+    const { authenticator } = withResolver(
+      vi.fn().mockResolvedValue({
+        kind: 'registered',
+        user: {
+          userId: OWNER_ID,
+          restaurantId: null,
+          role: UserRole.PLATFORM_ADMIN,
+          restaurantApproval: null,
+        },
+      }),
+    );
+
+    await expect(rejectionCode(authenticator, { token: 't' })).resolves.toBe(
+      'ADMIN_ACCOUNT',
+    );
+  });
+
+  it('keeps ADMIN_ACCOUNT and the approval codes equal to the HTTP account codes', () => {
+    for (const code of [
+      'ADMIN_ACCOUNT',
+      'ACCOUNT_PENDING_APPROVAL',
+      'ACCOUNT_REJECTED',
+    ] as const) {
+      expect(SOCKET_REJECTION_CODES).toContain(code);
+      expect(ACCOUNT_ERROR_CODES).toContain(code);
+    }
   });
 
   it('uses the same RESTAURANT_REQUIRED code as the HTTP 403, and no longer RESTAURANT_ACCOUNT', () => {
@@ -192,10 +250,15 @@ describe('SocketAuthenticator', () => {
         }),
       );
       const resolver = selectCurrentUserResolver(
-        new DevUserResolver(users as unknown as Repository<User>, config),
+        new DevUserResolver(
+          users as unknown as Repository<User>,
+          config,
+          {} as RestaurantApprovalReader,
+        ),
         new FirebaseUserResolver(
           () => ({ verifyIdToken }) as never,
           {} as UsersService,
+          {} as RestaurantApprovalReader,
         ),
         {
           getOrThrow: () => 'firebase-project-example',

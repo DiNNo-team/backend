@@ -24,7 +24,9 @@ import {
   fakeFirebaseAuth,
   testUsers,
   usersRepository,
+  approvalReader,
 } from './support/test-accounts.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 // Friday 2026-10-16 13:00 in Bogotá.
 const FRIDAY_13H = new Date('2026-10-16T18:00:00Z');
@@ -45,6 +47,7 @@ const RESTAURANTS = [
     category: 'colombian',
     address: ADDRESS,
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.655671,
     longitude: -74.057006,
   },
@@ -54,6 +57,7 @@ const RESTAURANTS = [
     category: 'italian',
     address: 'Calle 71 # 9-10, Bogotá',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.6551,
     longitude: -74.0575,
   },
@@ -63,6 +67,7 @@ const RESTAURANTS = [
     category: null,
     address: null,
     isOpen: false,
+    approvalStatus: 'approved',
     latitude: 4.656,
     longitude: -74.058,
   },
@@ -72,6 +77,7 @@ const RESTAURANTS = [
     category: 'other',
     address: null,
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: null,
     longitude: null,
   },
@@ -131,6 +137,9 @@ const OWNER_RESTAURANT = {
   category: 'colombian',
   address: ADDRESS,
   isOpen: true,
+  approvalStatus: 'approved',
+  rejectionReason: null,
+  contactPhone: null,
   latitude: 4.655671,
   longitude: -74.057006,
 };
@@ -193,6 +202,8 @@ describe('Public restaurant detail (e2e)', () => {
     })
       .overrideProvider(FIREBASE_AUTH)
       .useValue(() => fakeFirebaseAuth)
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue(usersRepository(USERS))
       .overrideProvider(getRepositoryToken(Restaurant))
@@ -393,6 +404,9 @@ describe('Public restaurant detail (e2e)', () => {
           address: ADDRESS,
           latitude: 4.655671,
           longitude: -74.057006,
+          approvalStatus: 'approved',
+          rejectionReason: null,
+          contactPhone: null,
           activeReservationsCount: 0,
           schedules: [
             {

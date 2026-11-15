@@ -122,8 +122,10 @@ function movesLocation(
 }
 
 // Each DTO field is copied to the entity property with the same name.
-// Pick fails to compile if RestaurantFieldsDto gets a field the entity lacks.
-type RestaurantChanges = Partial<Pick<Restaurant, keyof RestaurantFieldsDto>>;
+// Pick fails to compile if the DTO gets a field the entity lacks.
+type RestaurantChanges = Partial<
+  Pick<Restaurant, keyof RestaurantFieldsDto | 'contactPhone'>
+>;
 
 // Only the fields the client sent: a PATCH leaves the rest untouched. Generic
 // on purpose, so fields added to RestaurantFieldsDto need no change here.

@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowUnapprovedRestaurant,
   CurrentUser,
   CurrentUserGuard,
   RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
@@ -58,10 +59,12 @@ export class RestaurantStatusController {
   ) {}
 
   @Get('me/status')
+  // Solo lectura para un pendiente o rechazado (§11); el PATCH sigue bloqueado.
+  @AllowUnapprovedRestaurant()
   @ApiOperation({
     summary: 'Consultar si el restaurante del usuario está abierto o cerrado',
     description:
-      'El restaurante es siempre el del usuario de la sesión. Un restaurante nuevo empieza abierto.',
+      'El restaurante es siempre el del usuario de la sesión. Un restaurante nuevo empieza abierto. Un restaurante pendiente o rechazado también puede consultarlo (solo lectura: cambiarlo le responde ACCOUNT_PENDING_APPROVAL o ACCOUNT_REJECTED).',
   })
   @ApiOkResponse({
     description: 'Estado actual del restaurante.',

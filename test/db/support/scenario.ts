@@ -7,6 +7,7 @@ import { ReservationLabelsReader } from '../../../src/modules/reservations-check
 import { Reservation } from '../../../src/modules/reservations-checkin/reservations/reservation.entity.js';
 import { Restaurant } from '../../../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
 import { RestaurantSchedule } from '../../../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
+import { TableArea } from '../../../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableLog } from '../../../src/modules/restaurant-operations/table-logs/table-log.entity.js';
 import { Table } from '../../../src/modules/restaurant-operations/tables/table.entity.js';
 import {
@@ -57,6 +58,9 @@ export async function openTestDataSource(): Promise<DataSource> {
       Restaurant,
       RestaurantSchedule,
       Table,
+      // Table.areaId tiene FK a TableArea (zonas de mesas): sin ella la
+      // metadata no se construye y ninguna suite arranca.
+      TableArea,
       TableLog,
       User,
     ],
@@ -102,7 +106,7 @@ export async function createScenario(
   dinerCount: number,
 ): Promise<Scenario> {
   const [{ id: restaurantId }] = await dataSource.query<{ id: string }[]>(
-    `INSERT INTO restaurants (name, is_open, latitude, longitude) VALUES ($1, true, 4.655671, -74.057006) RETURNING id`,
+    `INSERT INTO restaurants (name, is_open, latitude, longitude, approval_status) VALUES ($1, true, 4.655671, -74.057006, 'approved') RETURNING id`,
     [`db-test-${randomUUID()}`],
   );
   const scenario: Scenario = {

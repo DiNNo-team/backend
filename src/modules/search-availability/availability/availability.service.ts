@@ -11,6 +11,10 @@ import type { AvailabilityResult } from './availability.types.js';
 import { Clock } from './clock.js';
 import { computeAvailability } from './compute-availability.js';
 import { hasTableFor } from './table-availability.js';
+import {
+  DINER_VISIBLE_RESTAURANT,
+  type VisibilityColumns,
+} from '../visibility/restaurant-visibility.js';
 
 // Availability of restaurants for the diner (search, public detail and
 // WebSocket in Sprint 2; table assignment in Sprint 3). Reads the tables of
@@ -29,7 +33,8 @@ export class AvailabilityService {
     private readonly clock: Clock,
   ) {}
 
-  // null when the restaurant does not exist.
+  // null when the restaurant does not exist or is not visible to the diners
+  // (not approved): then nothing is shown or sent for it.
   async getForRestaurant(
     restaurantId: string,
   ): Promise<AvailabilityResult | null> {
@@ -37,8 +42,10 @@ export class AvailabilityService {
     return results.get(restaurantId) ?? null;
   }
 
-  // Three queries whatever the number of ids (no N+1). Unknown ids are left
-  // out of the map. With partySize (the search filter), a restaurant is only
+  // Three queries whatever the number of ids (no N+1). Unknown ids, and those
+  // of restaurants not visible to the diners (pending or rejected), are left
+  // out of the map: the search drops them, the public detail answers 404 and
+  // no availability.changed goes out. With partySize (the search filter), a restaurant is only
   // searchable if it also has a free, active table for the whole party,
   // checked on the tables already loaded.
   async getForRestaurants(
@@ -50,10 +57,12 @@ export class AvailabilityService {
       return new Map();
     }
     const [restaurants, schedules, tables] = await Promise.all([
-      this.dataSource.getRepository<RestaurantRow>('Restaurant').find({
-        where: { id: In(ids) },
-        select: { id: true, isOpen: true, latitude: true, longitude: true },
-      }),
+      this.dataSource
+        .getRepository<RestaurantRow & VisibilityColumns>('Restaurant')
+        .find({
+          where: { id: In(ids), ...DINER_VISIBLE_RESTAURANT },
+          select: { id: true, isOpen: true, latitude: true, longitude: true },
+        }),
       this.dataSource.getRepository<ScheduleRow>('RestaurantSchedule').find({
         where: { restaurantId: In(ids) },
         select: {

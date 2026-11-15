@@ -28,6 +28,7 @@ const owner: CurrentUserData = {
   userId: USER_ID,
   restaurantId: RESTAURANT_ID,
   role: UserRole.RESTAURANT_ADMIN,
+  restaurantApproval: 'approved',
 };
 
 const row = (overrides: Partial<Table> = {}): Table =>

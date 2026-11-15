@@ -12,6 +12,7 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowUnapprovedRestaurant,
   CurrentUser,
   CurrentUserGuard,
   RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
@@ -48,7 +49,7 @@ export class RestaurantRegistrationController {
   @ApiOperation({
     summary: 'Registrar el restaurante del usuario',
     description:
-      'Crea el restaurante del usuario de la sesión con su nombre, categoría, dirección y horarios, y lo asocia a ese usuario. Un usuario solo tiene un restaurante. Cualquier campo que no esté en el DTO (restaurantId, id…) se rechaza con 400.',
+      'Crea el restaurante del usuario de la sesión con su nombre, categoría, dirección, horarios y teléfono de contacto opcional, y lo asocia a ese usuario. Es para cuentas habilitadas por el equipo: el restaurante nace aprobado (approvalStatus approved). Un usuario solo tiene un restaurante. Cualquier campo que no esté en el DTO (restaurantId, id…) se rechaza con 400.',
   })
   @ApiCreatedResponse({
     description: 'Restaurante registrado, con sus horarios.',
@@ -98,10 +99,12 @@ export class RestaurantRegistrationController {
   }
 
   @Get('me')
+  // A pending or rejected restaurant still sees its own data and status (§11).
+  @AllowUnapprovedRestaurant()
   @ApiOperation({
     summary: 'Consultar el restaurante del usuario',
     description:
-      'Devuelve el restaurante del usuario de la sesión con sus horarios. Mismos campos que PATCH /restaurants/me, más schedules.',
+      'Devuelve el restaurante del usuario de la sesión con sus horarios y su estado de aprobación (approvalStatus, rejectionReason). Responde también con el restaurante pendiente o rechazado. Mismos campos que PATCH /restaurants/me, más schedules.',
   })
   @ApiOkResponse({
     description: 'Restaurante del usuario, con sus horarios.',

@@ -14,10 +14,12 @@ import {
   AvailabilityService,
   canSeatParty,
   Clock,
+  DINER_VISIBLE_RESTAURANT,
   RESERVATION_CREATED,
   restaurantNotFound,
   type ReservationCreatedEvent,
   type TableSnapshot,
+  type VisibilityColumns,
 } from '../../search-availability/index.js';
 import { ReservationLabelsReader } from '../check-ins/reservation-labels.reader.js';
 import { toRestaurantReservation } from '../check-ins/restaurant-reservation.mapper.js';
@@ -154,13 +156,14 @@ export class CreateReservationService {
     }
   }
 
-  // Visible = existe y tiene coordenadas: el mismo criterio del detalle público
+  // Visible = existe, está aprobado (DINER_VISIBLE_RESTAURANT, §11) y tiene
+  // coordenadas: el mismo criterio del detalle público
   // (search-availability/public-restaurant), con su mismo 404.
   private async findVisibleRestaurant(id: string): Promise<VisibleRestaurant> {
     const row = await this.dataSource
-      .getRepository<RestaurantRow>('Restaurant')
+      .getRepository<RestaurantRow & VisibilityColumns>('Restaurant')
       .findOne({
-        where: { id },
+        where: { id, ...DINER_VISIBLE_RESTAURANT },
         select: {
           id: true,
           name: true,

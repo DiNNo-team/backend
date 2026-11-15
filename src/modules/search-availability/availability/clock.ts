@@ -1,13 +1,4 @@
-import { Injectable } from '@nestjs/common';
-
-// Source of the current instant, so the tests can fix the time.
-export abstract class Clock {
-  abstract now(): Date;
-}
-
-@Injectable()
-export class SystemClock extends Clock {
-  now(): Date {
-    return new Date();
-  }
-}
+// Clock vive en src/common/time (lo usan también restaurant-operations y
+// reservations-checkin). Re-export para no cambiar los imports existentes: es el
+// mismo token, así que .overrideProvider(Clock) sigue valiendo para todos.
+export { Clock, SystemClock } from '../../../common/time/clock.js';

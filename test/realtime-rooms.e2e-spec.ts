@@ -35,8 +35,9 @@ import {
 } from './../src/modules/search-availability/index.js';
 import { AvailabilityGateway } from './../src/modules/search-availability/realtime/availability.gateway.js';
 import { FakeDatabaseModule, type Row } from './support/fake-database.js';
-import { usersRepository } from './support/test-accounts.js';
+import { usersRepository, approvalReader } from './support/test-accounts.js';
 import { createMetadataOnlyDataSource } from './support/typeorm-metadata.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 // Salas y eventos del WebSocket (Sprint 3, §12.7 y §12.8) de punta a punta sin
 // PostgreSQL ni Firebase: servidor real, socket.io-client, los servicios reales y
@@ -162,6 +163,7 @@ function createDatabase() {
     name,
     address: 'Calle 72',
     isOpen: true,
+    approvalStatus: 'approved',
     latitude: 4.655671,
     longitude: -74.057006,
   });
@@ -335,6 +337,8 @@ describe('Tiempo real: salas y eventos de reserva (e2e)', () => {
               );
         },
       }))
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         ...usersRepository(USERS),

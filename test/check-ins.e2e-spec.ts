@@ -33,8 +33,10 @@ import {
   fakeFirebaseAuth,
   testUsers,
   usersRepository,
+  approvalReader,
 } from './support/test-accounts.js';
 import { createMetadataOnlyDataSource } from './support/typeorm-metadata.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
 
 // La capa HTTP real: controlador, pipes, guards, CheckInService y su SQL armado
 // por TypeORM. Solo se reemplaza la ida a la base (el comportamiento real contra
@@ -273,6 +275,8 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
               })
             : fakeFirebaseAuth.verifyIdToken(token),
       }))
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         ...usersRepository([
@@ -378,10 +382,12 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
         { status: 'occupied' },
       );
       expect(statusLog.record).toHaveBeenCalledTimes(1);
+      // Sin CHECKIN_FEE_COP en la configuración de la prueba: la tarifa por defecto.
       expect(checkInsRepo.insert).toHaveBeenCalledWith({
         reservationId: ACTIVE_ID,
         restaurantId: RESTAURANT_ID,
         checkedInAt: NOW,
+        feeCop: 2000,
       });
     });
 

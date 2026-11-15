@@ -53,6 +53,25 @@ function logSummary(summary: SeedSummary): void {
   logger.log(
     `Usuario COMENSAL: DEV_USER_ID=${dinerUser.id} (${DINER_USER_EMAIL})`,
   );
+  if (summary.platformAdmin) {
+    const { user, created } = summary.platformAdmin;
+    logger.log(
+      `Administrador de DiNNo (platform_admin) ${created ? 'creado' : 'ya existía, sin cambios'}: ${user.email} (id ${user.id}).`,
+    );
+  } else {
+    logger.log(
+      'Sin PLATFORM_ADMIN_EMAIL: no se crea el administrador de DiNNo.',
+    );
+  }
+}
+
+// Correo del administrador de DiNNo (CLAUDE.md §11, "Administrador"). Excepción
+// documentada a "nadie lee process.env": el seed es un punto de entrada fuera de
+// la inyección de dependencias, como data-source.ts. Vacía cuenta como no
+// definida.
+function platformAdminEmail(): string | undefined {
+  const value = process.env.PLATFORM_ADMIN_EMAIL?.trim();
+  return value ? value : undefined;
 }
 
 async function seed(): Promise<void> {
@@ -61,7 +80,9 @@ async function seed(): Promise<void> {
   await dataSource.initialize();
   try {
     const summary = await dataSource.transaction((manager) =>
-      runSeed(manager, realRestaurants),
+      runSeed(manager, realRestaurants, {
+        platformAdminEmail: platformAdminEmail(),
+      }),
     );
     logSummary(summary);
   } finally {

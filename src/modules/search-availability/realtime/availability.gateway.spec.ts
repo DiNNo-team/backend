@@ -14,11 +14,13 @@ const DINER = {
   userId: '7d6c5b4a-3f2e-4d1c-8b0a-9f8e7d6c5b4a',
   restaurantId: null,
   role: UserRole.DINER,
+  restaurantApproval: null,
 };
 const OWNER = {
   userId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
   restaurantId: '55bb0482-be1e-490b-9ba8-7533335d958b',
   role: UserRole.RESTAURANT_ADMIN,
+  restaurantApproval: 'approved' as const,
 };
 
 function gatewayWith(authenticate: ReturnType<typeof vi.fn>) {

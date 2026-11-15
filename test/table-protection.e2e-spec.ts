@@ -16,6 +16,8 @@ import { TableLog } from './../src/modules/restaurant-operations/table-logs/tabl
 import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
 import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
 import { TableStatusLog } from './../src/modules/restaurant-operations/tables/table-status-log.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
 
 const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
@@ -130,6 +132,8 @@ describe('Tables · protección con reserva activa (e2e)', () => {
         RestaurantOperationsModule,
       ],
     })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         findOneBy: ({ id }: { id: string }) =>
