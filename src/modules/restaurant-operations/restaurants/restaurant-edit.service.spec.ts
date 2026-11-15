@@ -41,6 +41,7 @@ function createService() {
     reviewedBy: null,
     reviewedAt: null,
     contactPhone: null,
+    submittedAt: new Date('2026-10-04T12:00:00Z'),
     createdAt: new Date('2026-10-04T12:00:00Z'),
     updatedAt: new Date('2026-10-04T12:00:00Z'),
   };

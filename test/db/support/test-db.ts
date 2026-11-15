@@ -86,6 +86,11 @@ const REQUIRED_SCHEMA = [
     column: 'approval_status',
     migration: '1794400000000-AddRestaurantApproval',
   },
+  {
+    table: 'restaurants',
+    column: 'submitted_at',
+    migration: '1794600000000-AddRestaurantSubmittedAt',
+  },
 ] as const;
 
 export async function assertMigrationsApplied(client: Client): Promise<void> {

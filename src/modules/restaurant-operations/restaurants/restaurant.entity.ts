@@ -144,6 +144,16 @@ export class Restaurant {
   })
   contactPhone: string | null;
 
+  // When the approval request was sent, or sent again after a rejection
+  // (resubmit). The administrator's pending list is ordered by it; updated_at is
+  // not used because any edit changes it. The database fills it on insert.
+  @Column({
+    name: 'submitted_at',
+    type: 'timestamptz',
+    default: () => 'now()',
+  })
+  submittedAt: Date;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

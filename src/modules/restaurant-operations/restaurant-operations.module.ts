@@ -4,6 +4,10 @@ import { IdentityAccessModule } from '../identity-access/index.js';
 import { GeocodeController } from './geocoding/geocode.controller.js';
 import { Geocoder } from './geocoding/geocoder.js';
 import { GoogleGeocoder } from './geocoding/google-geocoder.js';
+import { Clock, SystemClock } from '../../common/time/clock.js';
+import { AdminRestaurantsController } from './restaurant-review/admin-restaurants.controller.js';
+import { RestaurantReviewQueries } from './restaurant-review/restaurant-review.queries.js';
+import { RestaurantReviewService } from './restaurant-review/restaurant-review.service.js';
 import { TableReservationsAccess } from './shared/table-reservations.js';
 import { RestaurantEditController } from './restaurants/restaurant-edit.controller.js';
 import { RestaurantEditService } from './restaurants/restaurant-edit.service.js';
@@ -48,8 +52,14 @@ import { TablesService } from './tables/tables.service.js';
     RestaurantStatusController,
     TableLogsController,
     GeocodeController,
+    // Panel del administrador de DiNNo (§11 "Administrador").
+    AdminRestaurantsController,
   ],
   providers: [
+    // Hora de la revisión y del reenvío; las pruebas la fijan con overrideProvider(Clock).
+    { provide: Clock, useClass: SystemClock },
+    RestaurantReviewQueries,
+    RestaurantReviewService,
     TablesService,
     TableAreasService,
     // Puerto de las reservas, visto desde las mesas (lo implementa reservations-checkin).

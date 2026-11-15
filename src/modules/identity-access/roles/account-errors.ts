@@ -77,6 +77,22 @@ export const DINER_ENDPOINT_ACCOUNT_EXAMPLES = {
   ),
 };
 
+// Swagger examples of the account 403s that every DiNNo administrator endpoint
+// (@Roles(UserRole.PLATFORM_ADMIN)) can answer. A restaurant_admin gets
+// RESTAURANT_ACCOUNT even when its restaurant is pending or rejected: the role
+// goes before the approval.
+export const ADMIN_ENDPOINT_ACCOUNT_EXAMPLES = {
+  accountNotEnabled: swaggerExample(
+    'La cuenta no tiene perfil',
+    'ACCOUNT_NOT_ENABLED',
+  ),
+  restaurantAccount: swaggerExample(
+    'Es una cuenta de restaurante',
+    'RESTAURANT_ACCOUNT',
+  ),
+  dinerAccount: swaggerExample('Es una cuenta de comensal', 'DINER_ACCOUNT'),
+};
+
 export function accountForbidden(code: AccountErrorCode): ForbiddenException {
   return new ForbiddenException(ACCOUNT_ERROR_MESSAGES[code], {
     errorCode: code,

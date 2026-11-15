@@ -129,6 +129,72 @@ describe('UsersService', () => {
     });
   });
 
+  describe('findRestaurantOwnerEmails', () => {
+    it('reads the owners of every restaurant in one query, filtering the role in it', async () => {
+      usersRepository.find.mockResolvedValue([
+        { restaurantId: 'r1', email: 'antigua@example.com' },
+        { restaurantId: 'r1', email: 'nueva@example.com' },
+        { restaurantId: 'r2', email: 'otra@example.com' },
+      ]);
+
+      const emails = await usersService.findRestaurantOwnerEmails([
+        'r1',
+        'r2',
+        'r1',
+        'r3',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledExactlyOnceWith({
+        where: {
+          restaurantId: In(['r1', 'r2', 'r3']),
+          role: UserRole.RESTAURANT_ADMIN,
+        },
+        select: { restaurantId: true, email: true },
+        order: { createdAt: 'ASC', id: 'ASC' },
+      });
+      // Si hubiera varios dueños, el de la cuenta más antigua.
+      expect(emails).toEqual(
+        new Map([
+          ['r1', 'antigua@example.com'],
+          ['r2', 'otra@example.com'],
+        ]),
+      );
+    });
+
+    it('does not query with no restaurants', async () => {
+      expect(await usersService.findRestaurantOwnerEmails([])).toEqual(
+        new Map(),
+      );
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findPlatformAdminEmailsByIds', () => {
+    it('reads only platform_admin accounts, in one query', async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'a1', email: 'admin@example.com' },
+      ]);
+
+      const emails = await usersService.findPlatformAdminEmailsByIds([
+        'a1',
+        'a1',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledExactlyOnceWith({
+        where: { id: In(['a1']), role: UserRole.PLATFORM_ADMIN },
+        select: { id: true, email: true },
+      });
+      expect(emails).toEqual(new Map([['a1', 'admin@example.com']]));
+    });
+
+    it('does not query with no ids', async () => {
+      expect(await usersService.findPlatformAdminEmailsByIds([])).toEqual(
+        new Map(),
+      );
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+  });
+
   describe('findPublicDisplayNamesByIds', () => {
     const namesFor = async (displayName: string | null, email: string) => {
       usersRepository.find.mockResolvedValue([
