@@ -33,6 +33,7 @@ Domain logic lives under `src/modules/<domain>/`, one module per bounded context
 - `reservations-checkin`
 - `search-availability`
 - `notifications`
+- `insights`
 
 Each module owns its controllers, services, entities and DTOs. Keep modules decoupled — cross-module calls go through a module's exported providers, never by reaching into another module's internals. Shared/global wiring (`ConfigModule`, TypeORM, the Redis client) lives in `src/app.module.ts` and `src/config/`.
 

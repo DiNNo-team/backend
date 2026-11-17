@@ -6,6 +6,22 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 17 nov 2026 · Santiago · Informe inteligente del restaurante: backend de la IA (Sprint 4, tareas 2.1.1 y 2.1.3) · para revisar: Santiago
+
+- **Ruta nueva:** `GET /v1/restaurants/me/insights?refresh=true|false`, solo `restaurant_admin` **aprobado** (pendiente, rechazado o suspendido: su `403`; un suspendido recibe `RESTAURANT_SUSPENDED`), con `@RateLimit('ai')` (10 por minuto). Contrato completo en CLAUDE.md §12.16 y en Swagger (tag `insights`).
+- **Qué devuelve:** métricas de los **últimos 7 días de Bogotá, hoy incluido**, comparadas con los 7 anteriores; una serie por día (`metrics.daily`, para gráficos); el indicador de confiabilidad (`reliability.level`: `high`, `medium`, `low` o `null`) con sus motivos; y 2 o 3 recomendaciones (`narrative.text`).
+- **El respaldo nunca rompe la pantalla:** si no hay llave, el modelo falla, tarda más de 20 s o el texto no pasa la validación, la respuesta sigue siendo `200` con `narrative.source = "template"` y `narrative.fallback` con el motivo (`llm_disabled`, `llm_unavailable`, `llm_invalid`). Con menos de 10 reservas resueltas: `dataSufficiency = "insufficient"`, tasas y nivel en `null` y `fallback = "insufficient_data"`.
+- **Para Sergio (web):** decidir por `dataSufficiency`, `reliability.level` y `narrative.source`/`fallback`, nunca por el texto. El texto es generado automáticamente: la pantalla lo marca así. El botón «Actualizar» usa `refresh=true` (cuenta para el límite de 10 por minuto; con `429` se muestra el texto propio y no se reintenta solo).
+- **Privacidad:** al modelo solo salen números agregados del restaurante: ni ids, ni nombre, ni dirección, ni datos de comensales (lo fijan `llm-prompt.spec.ts` y `test/insights.e2e-spec.ts`). Nunca cambia una reserva ni una mesa.
+- **Caché en Redis** (sin migración): una hora si el texto lo redactó el modelo, 5 minutos si salió de plantillas; la clave lleva el día. Si Redis falla, el informe se calcula igual.
+- **Variables nuevas, opcionales:** `INSIGHTS_LLM_API_KEY` (**secreto**, en Azure va en Key Vault; Santiago se la pasa a Jacobo por privado) e `INSIGHTS_LLM_MODEL` (por defecto `claude-haiku-5-5`). Sin la llave la API arranca igual, con plantillas.
+- **Dependencia nueva:** `@anthropic-ai/sdk` (1.9.0), el SDK oficial del proveedor (decisión del equipo: Claude). Después del pull corre `npm install`.
+- **Base de datos:** sin migraciones. Lee `reservations`, `check_ins`, `table_logs` y `tables` solo para consultar (reutiliza `RestaurantMetricsService` y agrega 4 consultas de lectura en `insights/metrics/insights-activity.reader.ts`). **Elizabeth:** revisar si esa lectura con SQL directo te sirve como modelo de lectura (docs/ia-diseno.md §6.1, opción a).
+- **Contrato común (§12.16):** se agregó en el `CLAUDE.md` del backend. Hay que copiarlo igual en los de frontend y mobile (§12 es igual en los tres repos); el de frontend lo copia Sergio en su PR de la pantalla.
+- **Demo (paso 7, respaldo):** para mostrar el respaldo en vivo, quitar `INSIGHTS_LLM_API_KEY` del Container App (crea una revisión nueva) o esperar a que el modelo falle; luego «Actualizar». Coordinarlo con Jacobo antes del ensayo.
+
+---
+
 ## 17 nov 2026 · Jacobo · Imagen del backend para Azure y commit en el health (Sprint 4, tareas 3.1.1 y 3.1.2) · para revisar: Elizabeth
 
 - **Qué hay:** `Dockerfile` (Node 24, dos etapas, corre como usuario `node`, `NODE_ENV=production` dentro de la imagen) y `.dockerignore` (ningún `.env` de ninguna carpeta entra a la imagen). Es la imagen que se desplegará en Azure Container Apps. Detalle en §11, «Migración a Azure».
