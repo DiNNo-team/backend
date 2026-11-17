@@ -7,6 +7,8 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ## Acciones pendientes de todos
 
+- **Nuevo (2026-11-16 · Jacobo): créditos de Azure.** Vencen el **9 de diciembre de 2026**. Saldo al 16 nov: **<saldo>**. Al vencer o acabarse, Azure deshabilita los recursos: **nadie pasa la cuenta a «pago por uso»**. Todo lo que quede encendido consume créditos (sección 2.1 del reparto del Sprint 4). Alertas de presupuesto al 25 %, 50 % y 75 % al correo de cada uno (en configuración). Jacobo revisa cada noche que todo quede apagado.
+  - **Inventario al 16 nov (`rg-dinno`, eastus):** solo el entorno de Container Apps `managedEnvironment-rgdinno-8310` y la app de prueba `ca-dinno-prueba`, los dos en **westus2**. Todavía no hay PostgreSQL, Redis, registro de contenedores ni Log Analytics.
 - **Nuevo (15 nov 2026 · Elizabeth · Administrador, cobro y KPIs: backend desplegado y contratos):** contratos sincronizados en los tres repos.
   - **Qué quedó listo y desplegado (backend):** aprobación de restaurantes (`pending`, `approved`, `rejected`), rol `platform_admin` con su panel de API (`/v1/admin/restaurants*`), registro público (`POST /v1/restaurants/signup`), reenvío (`POST /v1/restaurants/me/resubmit`), cobro por check-in (`GET /v1/restaurants/me/billing/check-ins`, tarifa fija de COP 2.000) y resumen con KPIs (`GET /v1/restaurants/me/summary`).
   - **`errorCode` nuevos:** `ACCOUNT_PENDING_APPROVAL`, `ACCOUNT_REJECTED` y `ADMIN_ACCOUNT` (403), `RESTAURANT_NOT_PENDING` y `RESTAURANT_NOT_REJECTED` (409). También son `connect_error` del WebSocket (no reintentar).
