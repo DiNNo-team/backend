@@ -3,25 +3,25 @@
 Esquema vigente de PostgreSQL (Neon). **Se actualiza en el mismo PR que cambia el esquema.**
 Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md](../CLAUDE.md), subsección "Migraciones".
 
-Última migración aplicada en Neon: `1793840000003-AddTableLogSource` (2026-11-05). Todas las migraciones del repositorio están aplicadas en la base de desarrollo y en la de pruebas (verificado con `migration:run` y `migration:show`).
+Última migración aplicada en Neon: `1793840000003-AddTableLogSource` (2026-11-05). Todas las migraciones del repositorio están aplicadas en producción y en la base de pruebas (verificado con `migration:show`, 17 nov 2026).
 
-> Migraciones aplicadas en Neon, en orden: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15), `1793084146913-AddTablePlan` (plano de mesas, manual de identidad v2.0; agrega `tables.plan_x`, `plan_y` y `plan_shape`; aplicada el 2026-10-27) y las tres del Sprint 3, todas de Elizabeth y aplicadas el 2026-11-05: `1793840000001-CreateReservations` (crea `reservations`), `1793840000002-CreateCheckIns` (crea `check_ins`) y `1793840000003-AddTableLogSource` (agrega `table_logs.source` y deja `table_logs.user_id` nullable). Todo lo que se documenta abajo existe en Neon, **salvo** `1794300000000-CreateTableAreas` (zonas de mesas, Sebastián; crea `table_areas` y agrega `tables.area_id`), que **todavía no está aplicada en Neon**: hay que correrla antes de fusionar el PR que la trae, o todas las rutas de `/v1/tables` responden 500 en Render.
+> Migraciones aplicadas en Neon, en orden: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15), `1793084146913-AddTablePlan` (plano de mesas, manual de identidad v2.0; agrega `tables.plan_x`, `plan_y` y `plan_shape`; aplicada el 2026-10-27) y las tres del Sprint 3, todas de Elizabeth y aplicadas el 2026-11-05: `1793840000001-CreateReservations` (crea `reservations`), `1793840000002-CreateCheckIns` (crea `check_ins`) y `1793840000003-AddTableLogSource` (agrega `table_logs.source` y deja `table_logs.user_id` nullable). Todo lo que se documenta abajo existe en Neon; `1794300000000-CreateTableAreas` (zonas de mesas, Sebastián; crea `table_areas` y agrega `tables.area_id`) también está aplicada.
 
-> **Pendientes de aplicar (rama `feat/admin-approval`, Elizabeth), en este orden:**
+> **Aplicadas en producción (rama `feat/admin-approval`, Elizabeth), en este orden:**
 > 1. `1794400000000-AddRestaurantApproval`: columnas de aprobación en `restaurants`; deja **todos** los restaurantes existentes en `approved`.
 > 2. `1794400000001-AddPlatformAdminRole`: agrega `platform_admin` a `CHK_users_role`.
 > 3. `1794600000000-AddRestaurantSubmittedAt`: `restaurants.submitted_at` (fecha de envío de la solicitud), llenada con `created_at`.
 > 4. `1794600000001-AddCheckInFee`: `check_ins.fee_cop` (2000 para los check-ins existentes, sin default después), `CHK_check_ins_fee_cop` e `IDX_check_ins_restaurant_id_checked_in_at`.
 > 5. `1794600000002-AddReservationsRestaurantCreatedAtIndex`: `IDX_reservations_restaurant_id_created_at`.
 >
-> **Pendientes de aplicar (rama `feat/sprint4-admin-panel`, Elizabeth, 17 nov 2026), en este orden:**
+> **Aplicadas en producción (rama `feat/sprint4-admin-panel`, Elizabeth, 17 nov 2026), en este orden:**
 > 1. `1794700000000-AddRestaurantSuspension`: `suspended` en `CHK_restaurants_approval_status`, `suspension_reason`, `suspended_at`, `suspended_by` y `CHK_restaurants_suspension`.
 > 2. `1794700000001-CreateBillingPeriods`: tabla `billing_periods`.
 > 3. `1794700000002-AddPlatformReportIndexes`: `IDX_check_ins_checked_in_at` e `IDX_reservations_created_at`.
 >
-> Aplicadas y probadas (up → down → up, y `migration:generate --check` sin diferencias) en la base de **pruebas**. Falta la base de desarrollo, **antes** de fusionar: sin la 1, toda ruta que lee el restaurante completo responde 500 en Render. Ver `AVISOS.md`.
+> Probadas (up → down → up, y `migration:generate --check` sin diferencias) en la base de **pruebas** y ya aplicadas en producción. En un entorno nuevo hay que correrlas en este orden antes de desplegar: sin la 1, toda ruta que lee el restaurante completo responde 500. Ver `AVISOS.md`.
 >
-> Ya aplicadas en la rama de pruebas de Neon. Falta la base de desarrollo, **antes** de fusionar: sin ellas, toda petición de un restaurante, toda búsqueda y todo check-in responden 500 en Render. Los timestamps `17946…` son posteriores a `1794500000000-CreatePushDevices` (rama `feat/sprint4-notificaciones`, sin fusionar) y no chocan con ningún archivo de las ramas remotas. Ver `AVISOS.md`.
+> Las ocho migraciones de este bloque están aplicadas en producción y en la base de pruebas. Los timestamps `17946…` son posteriores a `1794500000000-CreatePushDevices` y no chocan con ningún archivo de las ramas remotas.
 
 ## Tablas
 
