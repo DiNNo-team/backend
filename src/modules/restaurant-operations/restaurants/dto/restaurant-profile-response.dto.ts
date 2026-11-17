@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   REJECTED,
   RESTAURANT_APPROVAL_STATUSES,
+  SUSPENDED,
   type RestaurantApprovalStatus,
 } from '../../../identity-access/index.js';
 import type { RestaurantSchedule } from '../restaurant-schedule.entity.js';
@@ -71,7 +72,7 @@ export class RestaurantProfileResponseDto extends RestaurantResponseDto {
 
   @ApiProperty({
     description:
-      'Estado de aprobación del restaurante: pending (en revisión), approved (aprobado: visible para los comensales y operable) o rejected (no aprobado). Los restaurantes registrados por un usuario habilitado por el equipo nacen approved; los del registro público (POST /v1/restaurants/signup), pending.',
+      'Estado de aprobación del restaurante: pending (en revisión), approved (aprobado: visible para los comensales y operable) o rejected (no aprobado) o suspended (suspendido por DiNNo: no es visible para los comensales ni opera; ver suspensionReason). Los restaurantes registrados por un usuario habilitado por el equipo nacen approved; los del registro público (POST /v1/restaurants/signup), pending.',
     enum: RESTAURANT_APPROVAL_STATUSES,
     example: 'approved',
   })
@@ -85,6 +86,15 @@ export class RestaurantProfileResponseDto extends RestaurantResponseDto {
     example: null,
   })
   rejectionReason: string | null;
+
+  @ApiProperty({
+    description:
+      'Motivo por el que DiNNo suspendió el restaurante. Solo mientras está suspendido; si no, null.',
+    type: String,
+    nullable: true,
+    example: null,
+  })
+  suspensionReason: string | null;
 
   @ApiProperty({
     description:
@@ -111,6 +121,11 @@ export class RestaurantProfileResponseDto extends RestaurantResponseDto {
       rejectionReason:
         restaurant.approvalStatus === REJECTED
           ? restaurant.rejectionReason
+          : null,
+      // The restaurant sees the reason only while suspended (the admin always).
+      suspensionReason:
+        restaurant.approvalStatus === SUSPENDED
+          ? restaurant.suspensionReason
           : null,
       contactPhone: restaurant.contactPhone,
     };

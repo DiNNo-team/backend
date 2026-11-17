@@ -55,8 +55,16 @@ import {
 import { RestaurantReviewQueries } from './restaurant-review.queries.js';
 import { RestaurantReviewService } from './restaurant-review.service.js';
 import {
+  SUSPENSION_REASON_INVALID,
+  SuspendRestaurantDto,
+} from './dto/suspend-restaurant.dto.js';
+import {
+  RESTAURANT_NOT_APPROVED_CODE,
+  RESTAURANT_NOT_APPROVED_MESSAGE,
   RESTAURANT_NOT_PENDING_CODE,
   RESTAURANT_NOT_PENDING_MESSAGE,
+  RESTAURANT_NOT_SUSPENDED_CODE,
+  RESTAURANT_NOT_SUSPENDED_MESSAGE,
 } from './review-errors.js';
 
 // Un :id que no es UUID responde el mismo 404 que uno que no existe.
@@ -86,6 +94,30 @@ const NOT_PENDING_RESPONSE = {
   },
 };
 
+const NOT_APPROVED_RESPONSE = {
+  description:
+    'El restaurante no está aprobado: está pendiente, rechazado o ya suspendido (también si otro administrador se adelantó). La web vuelve a consultar el detalle.',
+  type: ErrorResponseDto,
+  example: {
+    statusCode: 409,
+    message: RESTAURANT_NOT_APPROVED_MESSAGE,
+    error: 'Conflict',
+    errorCode: RESTAURANT_NOT_APPROVED_CODE,
+  },
+};
+
+const NOT_SUSPENDED_RESPONSE = {
+  description:
+    'El restaurante no está suspendido (también si otro administrador ya lo reactivó). La web vuelve a consultar el detalle.',
+  type: ErrorResponseDto,
+  example: {
+    statusCode: 409,
+    message: RESTAURANT_NOT_SUSPENDED_MESSAGE,
+    error: 'Conflict',
+    errorCode: RESTAURANT_NOT_SUSPENDED_CODE,
+  },
+};
+
 const ID_PARAM = {
   name: 'id',
   format: 'uuid',
@@ -99,7 +131,7 @@ const ID_PARAM = {
 @ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
 @ApiForbiddenResponse({
   description:
-    'La cuenta no es de administrador de DiNNo: es de restaurante (errorCode: RESTAURANT_ACCOUNT, también si su restaurante está pendiente o rechazado), de comensal (DINER_ACCOUNT) o no tiene perfil (ACCOUNT_NOT_ENABLED).',
+    'La cuenta no es de administrador de DiNNo: es de restaurante (errorCode: RESTAURANT_ACCOUNT, también si su restaurante está pendiente, rechazado o suspendido), de comensal (DINER_ACCOUNT) o no tiene perfil (ACCOUNT_NOT_ENABLED).',
   type: ErrorResponseDto,
   examples: ADMIN_ENDPOINT_ACCOUNT_EXAMPLES,
 })
@@ -116,7 +148,7 @@ export class AdminRestaurantsController {
   @ApiOperation({
     summary: 'Listar las solicitudes de restaurantes por estado',
     description:
-      'Paginada. status por defecto pending. Orden: las pendientes por submittedAt ascendente (la que más lleva esperando primero); las aprobadas y rechazadas por reviewedAt descendente (las aprobadas sin revisión, al final). Cualquier otro parámetro da 400.',
+      'Paginada. status por defecto pending. Orden: las pendientes por submittedAt ascendente (la que más lleva esperando primero); las aprobadas y rechazadas por reviewedAt descendente (las aprobadas sin revisión, al final); las suspendidas por suspendedAt descendente. Cualquier otro parámetro da 400.',
   })
   @ApiOkResponse({ type: AdminRestaurantPageDto })
   @ApiBadRequestResponse({
@@ -198,6 +230,54 @@ export class AdminRestaurantsController {
     @Body() dto: RejectRestaurantDto,
   ): Promise<AdminRestaurantDetailDto> {
     await this.review.reject(admin.userId, id, dto.reason);
+    return this.queries.detail(id);
+  }
+
+  @Post(':id/suspend')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Suspender un restaurante aprobado',
+    description:
+      'Solo desde approved. reason es obligatorio (10 a 300 caracteres, sin contar espacios de los extremos) y es lo que verá el restaurante mientras esté suspendido. Guarda quién y cuándo (solo la última suspensión). Desde ese momento no aparece para los comensales (búsqueda, detalle y reserva responden como un restaurante no disponible) y su cuenta solo puede ver su restaurante, su cobro y hacer check-in de las reservas activas, que se respetan hasta su check-in o vencimiento. Responde el detalle actualizado.',
+  })
+  @ApiParam(ID_PARAM)
+  @ApiOkResponse({ type: AdminRestaurantDetailDto })
+  @ApiBadRequestResponse({
+    description:
+      'reason falta, no es texto, tiene solo espacios o está fuera de 10 a 300 caracteres; o el body trae un campo que no existe. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [SUSPENSION_REASON_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  @ApiConflictResponse(NOT_APPROVED_RESPONSE)
+  async suspend(
+    @CurrentUser() admin: CurrentUserData,
+    @RestaurantIdParam() id: string,
+    @Body() dto: SuspendRestaurantDto,
+  ): Promise<AdminRestaurantDetailDto> {
+    await this.review.suspend(admin.userId, id, dto.reason);
+    return this.queries.detail(id);
+  }
+
+  @Post(':id/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reactivar un restaurante suspendido',
+    description:
+      'Solo desde suspended, sin body. Vuelve a approved: opera de nuevo y, si cumple lo demás, aparece para los comensales. Se conservan los datos de la última suspensión (el detalle los sigue mostrando). Responde el detalle actualizado.',
+  })
+  @ApiParam(ID_PARAM)
+  @ApiOkResponse({ type: AdminRestaurantDetailDto })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  @ApiConflictResponse(NOT_SUSPENDED_RESPONSE)
+  async reactivate(
+    @RestaurantIdParam() id: string,
+  ): Promise<AdminRestaurantDetailDto> {
+    await this.review.reactivate(id);
     return this.queries.detail(id);
   }
 }
