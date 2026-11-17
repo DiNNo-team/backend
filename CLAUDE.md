@@ -260,6 +260,7 @@ NestJS **12**, TypeORM **1.x**, TypeScript **6**, Node **24**, Vitest **4**. Lee
 ```bash
 npm install          # siempre primero, y después de cada pull
 npm run start:dev    # servidor en modo desarrollo (http://localhost:3000)
+npm run start        # ejecuta la build ya compilada (node dist/main); corre npm run build antes. Es lo que usa Render (no recompila: nest start consumía demasiada memoria)
 npm run build        # compila a dist/
 npm run lint         # oxlint sobre src/, test/ y scripts/ (no revisa tipos)
 npm run typecheck    # tsc --noEmit con el tsconfig.json raíz: revisa tipos también en pruebas y test/, que el build excluye

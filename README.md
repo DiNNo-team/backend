@@ -121,11 +121,11 @@ src/
 
 | Comando | Qué hace |
 |---|---|
-| `npm run start` | Arranca la app sin recarga automática. |
+| `npm run start` | Ejecuta la build ya compilada (`node dist/main`); corre `npm run build` antes. Es lo que usa Render. |
 | `npm run start:dev` | Arranca en modo desarrollo, con recarga al cambiar archivos. |
 | `npm run start:debug` | Igual que `start:dev`, con el inspector de Node activo. |
 | `npm run build` | Compila el proyecto a `dist/` (`nest build`). |
-| `npm run start:prod` | Ejecuta la build ya compilada (`node dist/main`). |
+| `npm run start:prod` | Igual que `start`. |
 | `npm run lint` | Revisa `src/`, `test/` y `scripts/` con oxlint. |
 | `npm run typecheck` | Revisa los tipos de todo el proyecto, pruebas incluidas (`tsc --noEmit`). |
 | `npm run format` | Formatea `src/` y `test/` con Prettier. |
