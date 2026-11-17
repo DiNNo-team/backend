@@ -1,7 +1,6 @@
 import type { Redis } from 'ioredis';
-import type { DataSource } from 'typeorm';
-import { AppModule } from '../app.module.js';
 import { closeRedisClient } from './redis.config.js';
+import { RedisModule } from './redis.module.js';
 
 function fakeClient(status: string) {
   return {
@@ -34,15 +33,12 @@ describe('closeRedisClient', () => {
   );
 });
 
-describe('AppModule shutdown', () => {
+describe('RedisModule shutdown', () => {
   it('closes the Redis client when the application shuts down', async () => {
     const client = fakeClient('ready');
-    const appModule = new AppModule(
-      {} as DataSource,
-      client as unknown as Redis,
-    );
+    const redisModule = new RedisModule(client as unknown as Redis);
 
-    await appModule.onApplicationShutdown();
+    await redisModule.onApplicationShutdown();
 
     expect(client.quit).toHaveBeenCalledTimes(1);
   });

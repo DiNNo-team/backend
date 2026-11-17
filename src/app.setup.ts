@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { UnhandledExceptionFilter } from './common/filters/unhandled-exception.filter.js';
+import { parseTrustProxyHops } from './common/rate-limit/rate-limit.settings.js';
+import type { SocketConnectionLimiter } from './common/rate-limit/socket-connection-limiter.js';
+import { securityHeaders } from './common/security/security-headers.js';
 import { CorsIoAdapter } from './config/socket-io.adapter.js';
 import { isDeployedEnvironment } from './modules/identity-access/index.js';
 
@@ -64,9 +68,30 @@ export function createValidationPipe(): ValidationPipe {
   });
 }
 
+export interface AppSetupOptions {
+  // Solo la app real (main.ts) lo pasa: las e2e montan módulos sueltos, sin
+  // RateLimitModule.
+  socketConnectionLimiter?: SocketConnectionLimiter;
+}
+
 // Configuración HTTP compartida por main.ts y las pruebas e2e.
-export function configureApp(app: INestApplication): void {
+export function configureApp(
+  app: INestApplication,
+  options: AppSetupOptions = {},
+): void {
   const config = app.get(ConfigService);
+
+  // La IP real del cliente detrás del ingress (X-Forwarded-For): la usan el
+  // límite de peticiones y los logs. Desplegado, 1 proxy; en local, ninguno.
+  (app as NestExpressApplication).set(
+    'trust proxy',
+    parseTrustProxyHops(
+      config.get<string>('TRUST_PROXY_HOPS'),
+      isDeployedEnvironment(config),
+    ),
+  );
+  // Cabeceras de seguridad (Sprint 4, tarea 6.1.4), antes de cualquier ruta.
+  app.use(securityHeaders(`/${DOCS_PATH}`));
 
   app.setGlobalPrefix(API_PREFIX);
   app.useGlobalPipes(createValidationPipe());
@@ -79,7 +104,9 @@ export function configureApp(app: INestApplication): void {
     credentials: false,
   });
   // WebSocket (Socket.IO, /socket.io) con los mismos orígenes que la API.
-  app.useWebSocketAdapter(new CorsIoAdapter(app, corsOrigins));
+  app.useWebSocketAdapter(
+    new CorsIoAdapter(app, corsOrigins, options.socketConnectionLimiter),
+  );
 
   const document = SwaggerModule.createDocument(
     app,

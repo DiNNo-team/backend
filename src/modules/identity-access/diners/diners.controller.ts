@@ -26,6 +26,7 @@ import { ACCOUNT_ERROR_MESSAGES } from '../roles/account-errors.js';
 import { MeResponseDto } from '../users/dto/me-response.dto.js';
 import { DinersService } from './diners.service.js';
 import { RegisterDinerDto } from './dto/register-diner.dto.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 // No @Roles on purpose: this route accepts a Firebase account without a
 // users row, which is exactly what it creates.
@@ -37,6 +38,7 @@ export class DinersController {
   constructor(private readonly diners: DinersService) {}
 
   @Post('me')
+  @RateLimit('account')
   @ApiOperation({
     summary: 'Crear el perfil de comensal de la cuenta de la sesión',
     description:

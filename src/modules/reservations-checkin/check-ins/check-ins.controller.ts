@@ -50,6 +50,7 @@ import {
   RestaurantReservationsQueryDto,
 } from './dto/restaurant-reservations-query.dto.js';
 import { RestaurantReservationsService } from './restaurant-reservations.service.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 const conflict = (message: string, errorCode: string) => ({
   value: { statusCode: 409, message, error: 'Conflict', errorCode },
@@ -86,6 +87,7 @@ export class CheckInsController {
   ) {}
 
   @Post('check-ins')
+  @RateLimit('checkIn')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Hacer el check-in con el código del comensal',

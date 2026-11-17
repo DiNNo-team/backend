@@ -45,6 +45,7 @@ import {
   RESTAURANT_NOT_REJECTED_MESSAGE,
   RestaurantResubmitService,
 } from './restaurant-resubmit.service.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 const FORBIDDEN_RESPONSE = {
   description:
@@ -136,6 +137,7 @@ export class RestaurantEditController {
   }
 
   @Post('me/resubmit')
+  @RateLimit('signup')
   @HttpCode(HttpStatus.OK)
   // Solo tiene sentido para un rechazado; un pendiente o aprobado recibe el 409.
   @AllowUnapprovedRestaurant()

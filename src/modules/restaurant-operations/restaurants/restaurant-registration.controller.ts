@@ -32,6 +32,7 @@ import {
   ALREADY_REGISTERED_MESSAGE,
   RestaurantRegistrationService,
 } from './restaurant-registration.service.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 @ApiTags('restaurants')
 @ApiBearerAuth()
@@ -46,6 +47,7 @@ export class RestaurantRegistrationController {
   ) {}
 
   @Post()
+  @RateLimit('signup')
   @ApiOperation({
     summary: 'Registrar el restaurante del usuario',
     description:

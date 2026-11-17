@@ -31,6 +31,7 @@ import {
   GEOCODING_ERROR_MESSAGES,
   geocodingUnavailable,
 } from './geocoding-errors.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 // Address → coordinates: the restaurant location form (web) and the diner's
 // search by address (app: geocode, then search by lat/lng). It does not call
@@ -52,6 +53,7 @@ export class GeocodeController {
   constructor(private readonly geocoder: Geocoder) {}
 
   @Get()
+  @RateLimit('geocode')
   @ApiOperation({
     summary: 'Ubicar una dirección de Bogotá',
     description:
