@@ -828,7 +828,7 @@ Los 404 y 409 existentes de mesas siguen sin `errorCode`; no se cambian en este 
 
 ### 12.10 Fuera de alcance del Sprint 3
 - Que el restaurante cancele una reserva.
-- Notificaciones push.
+- Notificaciones push (llegaron en el Sprint 4: §12.13).
 - Comisiones variables, facturas y pagos (el estado de cuenta con tarifa fija por check-in está en §12.12).
 - Límite de peticiones y de conexiones WebSocket (Sprint 4, seguridad).
 - Adaptador de Redis para Socket.IO (Sprint 4, Azure).
@@ -906,3 +906,37 @@ Los 404 y 409 existentes de mesas siguen sin `errorCode`; no se cambian en este 
 - `averagePartySize`: promedio de personas de las creadas, con 2 decimales; `null` si no hay.
 - `peakHours`: las 3 horas (0 a 23, hora de Bogotá) con más reservas creadas, de mayor a menor; a igual cantidad, la hora menor primero; vacío si no hay.
 - `byDayOfWeek`: siempre 7 entradas (1 = lunes … 7 = domingo), con 0 en los días sin reservas.
+
+### 12.13 Sprint 4 · QR de check-in y notificaciones de la reserva
+
+**QR de check-in**
+- **Contenido:** solo el código de 6 caracteres de la reserva (§12.1), sin URL ni prefijo. Modo alfanumérico, corrección de errores nivel M. Siempre tinta oscura sobre fondo claro, también en modo oscuro.
+- **App:** lo dibuja en el tiquete de la reserva activa. Tocarlo lo abre en grande con el código debajo.
+- **Web (restaurante):** lee el código de tres formas y en las tres valida con el mismo `POST /v1/restaurants/me/check-ins` (§12.6):
+  - Lector USB de código de barras/QR: el lector «escribe» como un teclado. Una ráfaga de teclas con menos de 60 ms entre ellas que termina en Enter se toma como un escaneo.
+  - Cámara del computador.
+  - Escribir el código a mano.
+- El backend no cambia: sigue recibiendo el código como en el Sprint 3.
+
+**Notificaciones de la reserva** (solo el comensal)
+- **Registro del teléfono:** `PUT /v1/notifications/devices`, solo `diner`, body `{ "token": string, "platform": "android" | "ios" }` → `204`.
+  - `token` es el token de Firebase Cloud Messaging del teléfono, máximo 4096 caracteres.
+  - Un token pertenece a un solo comensal: si ya existía, pasa al comensal de la sesión.
+  - La app lo registra al iniciar, al dar el permiso y cuando el sistema cambia el token.
+- **Baja:** `DELETE /v1/notifications/devices`, body `{ "token": string }` → `204`. La app la llama antes de cerrar sesión.
+- **Cuándo se envía:** el backend envía una push, después de confirmar la transacción, cuando la reserva:
+  - se crea: «Mesa reservada en …»;
+  - se cancela: «Cancelaste tu reserva»;
+  - vence: «Tu reserva se venció»;
+  - tiene check-in: «Check-in confirmado».
+- **Textos:** los escribe el backend y nunca incluyen el código de la reserva.
+- **`data` de la push:** `{ "type": "created" | "cancelled" | "expired" | "checked_in", "reservationId": string }`. Al tocarla, la app abre la reserva.
+- **Si falla:** las notificaciones nunca bloquean la reserva. Sin credenciales, la API arranca con la push desactivada. Los tokens que FCM rechaza se borran.
+- **Credenciales del backend:** cuenta de servicio de Firebase en `FIREBASE_SERVICE_ACCOUNT_JSON` (el contenido; es lo que usa Render) o en `FIREBASE_SERVICE_ACCOUNT_FILE` (una ruta). Nunca en el repo.
+- **Credenciales de la app:** `google-services.json` y `GoogleService-Info.plist` sí van en el repo; no tienen secretos.
+- **iOS:** sin el programa pago de Apple no hay push remota, solo el recordatorio local.
+- **Recordatorio local** «Tu reserva vence pronto», en Android y en iOS: lo programa la app, sin backend.
+  - Suena 5 minutos antes del vencimiento, o 1 minuto antes si la reserva dura 5 minutos o menos.
+  - Se calcula con la hora del servidor.
+  - Se cancela si la reserva termina antes.
+- Tabla `push_devices` (`token` único, `user_id` con borrado en cascada, `platform`).
