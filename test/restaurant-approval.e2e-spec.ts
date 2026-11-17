@@ -276,6 +276,29 @@ describe('Restaurant approval (e2e)', () => {
       },
     );
 
+    // Suspended (panel del administrador): blocked like a pending one, with its
+    // own code, except the reservations list and the check-in (allow-listed).
+    it.each(
+      BLOCKED_RESTAURANT_ROUTES.filter(
+        ([, path]) =>
+          path !== '/v1/restaurants/me/reservations' &&
+          path !== '/v1/restaurants/me/check-ins',
+      ),
+    )(
+      'suspended: %s %s → 403 RESTAURANT_SUSPENDED',
+      async (method, path, body) => {
+        const res = await call(
+          method as Method,
+          path,
+          'suspendedOwner',
+          body,
+        ).expect(403);
+
+        expect(res.body).toEqual(forbidden('RESTAURANT_SUSPENDED'));
+        expect(writes.transaction).not.toHaveBeenCalled();
+      },
+    );
+
     it('a pending restaurant on a diner route gets the role code first: RESTAURANT_ACCOUNT', async () => {
       const res = await call('get', '/v1/search/zones', 'pendingOwner').expect(
         403,
@@ -492,6 +515,7 @@ describe('Restaurant approval (e2e)', () => {
     it.each([
       ['pendingOwner', 'ACCOUNT_PENDING_APPROVAL'],
       ['rejectedOwner', 'ACCOUNT_REJECTED'],
+      ['suspendedOwner', 'RESTAURANT_SUSPENDED'],
       ['platformAdmin', 'ADMIN_ACCOUNT'],
     ])('rejects %s with connect_error %s', async (token, code) => {
       await expect(rejectionOf(token)).resolves.toBe(code);

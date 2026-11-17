@@ -47,7 +47,9 @@ describe('Restaurant approval (Postgres)', () => {
     );
 
   describe('restaurants.approval_status', () => {
-    it('accepts the three states and rejects any other with its named check', async () => {
+    // 'suspended' (panel del administrador) is valid too, with its own rules:
+    // test/db/admin-suspension.db-spec.ts. An unknown state is rejected here.
+    it('accepts the original three states and rejects an unknown one with its named check', async () => {
       await inRolledBackTransaction(client, async () => {
         for (const status of ['pending', 'approved', 'rejected']) {
           const { rows } = await insertRestaurant(status);
@@ -56,7 +58,7 @@ describe('Restaurant approval (Postgres)', () => {
 
         const error = await expectDatabaseError(
           client,
-          `INSERT INTO restaurants (name, approval_status) VALUES ($1, 'suspended')`,
+          `INSERT INTO restaurants (name, approval_status) VALUES ($1, 'archived')`,
           [`db-test-${randomUUID()}`],
         );
         expect(error).toMatchObject({

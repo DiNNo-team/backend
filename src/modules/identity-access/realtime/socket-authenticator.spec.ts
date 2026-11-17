@@ -81,6 +81,8 @@ describe('SocketAuthenticator', () => {
   it.each([
     ['a pending restaurant', 'pending', 'ACCOUNT_PENDING_APPROVAL'],
     ['a rejected restaurant', 'rejected', 'ACCOUNT_REJECTED'],
+    // Treated like a pending one: rejected at the handshake (no retry).
+    ['a suspended restaurant', 'suspended', 'RESTAURANT_SUSPENDED'],
   ] as const)('rejects %s with %s', async (_case, approval, code) => {
     const { authenticator } = withResolver(
       vi.fn().mockResolvedValue({
@@ -120,6 +122,7 @@ describe('SocketAuthenticator', () => {
       'ADMIN_ACCOUNT',
       'ACCOUNT_PENDING_APPROVAL',
       'ACCOUNT_REJECTED',
+      'RESTAURANT_SUSPENDED',
     ] as const) {
       expect(SOCKET_REJECTION_CODES).toContain(code);
       expect(ACCOUNT_ERROR_CODES).toContain(code);

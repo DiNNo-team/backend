@@ -76,6 +76,7 @@ describe('Restaurant location (e2e)', () => {
       longitude: null,
       approvalStatus: 'approved',
       rejectionReason: null,
+      suspensionReason: null,
       contactPhone: null,
     };
     manager = {
@@ -196,6 +197,7 @@ describe('Restaurant location (e2e)', () => {
         ...CASA_72,
         approvalStatus: 'approved',
         rejectionReason: null,
+        suspensionReason: null,
         contactPhone: null,
         activeReservationsCount: 0,
         schedules: [SATURDAY_24H],

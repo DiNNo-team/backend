@@ -139,6 +139,7 @@ const OWNER_RESTAURANT = {
   isOpen: true,
   approvalStatus: 'approved',
   rejectionReason: null,
+  suspensionReason: null,
   contactPhone: null,
   latitude: 4.655671,
   longitude: -74.057006,
@@ -406,6 +407,7 @@ describe('Public restaurant detail (e2e)', () => {
           longitude: -74.057006,
           approvalStatus: 'approved',
           rejectionReason: null,
+          suspensionReason: null,
           contactPhone: null,
           activeReservationsCount: 0,
           schedules: [
@@ -429,7 +431,11 @@ describe('Public restaurant detail (e2e)', () => {
     it('GET /v1/restaurants/me/status for the restaurant, unchanged', async () => {
       await get('/v1/restaurants/me/status', 'owner')
         .expect(200)
-        .expect({ isOpen: true });
+        .expect({
+          isOpen: true,
+          approvalStatus: 'approved',
+          suspensionReason: null,
+        });
     });
 
     it('GET /v1/restaurants/me is still a restaurant route: a diner gets 403 DINER_ACCOUNT', async () => {

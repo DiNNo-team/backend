@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowSuspendedRestaurant,
   AllowUnapprovedRestaurant,
   CurrentUser,
   CurrentUserGuard,
@@ -61,6 +62,8 @@ export class RestaurantStatusController {
   @Get('me/status')
   // Solo lectura para un pendiente o rechazado (§11); el PATCH sigue bloqueado.
   @AllowUnapprovedRestaurant()
+  // Un suspendido lee su estado y el motivo; el PATCH sigue bloqueado.
+  @AllowSuspendedRestaurant()
   @ApiOperation({
     summary: 'Consultar si el restaurante del usuario está abierto o cerrado',
     description:

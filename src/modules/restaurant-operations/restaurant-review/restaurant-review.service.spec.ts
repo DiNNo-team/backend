@@ -14,8 +14,12 @@ import {
 import type { Restaurant } from '../restaurants/restaurant.entity.js';
 import { RestaurantReviewService } from './restaurant-review.service.js';
 import {
+  RESTAURANT_NOT_APPROVED_CODE,
+  RESTAURANT_NOT_APPROVED_MESSAGE,
   RESTAURANT_NOT_PENDING_CODE,
   RESTAURANT_NOT_PENDING_MESSAGE,
+  RESTAURANT_NOT_SUSPENDED_CODE,
+  RESTAURANT_NOT_SUSPENDED_MESSAGE,
 } from './review-errors.js';
 
 const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
@@ -225,5 +229,144 @@ describe('RestaurantReviewService', () => {
         ).status,
       ).toBe(404);
     });
+  });
+
+  describe('suspend', () => {
+    const REASON = 'Varios comensales reportaron mesas que no existían.';
+
+    it('suspends an approved restaurant with the reason, who and when, keeping the review', async () => {
+      const { service, stored, restaurants } = createService('approved');
+
+      await service.suspend(ADMIN_ID, RESTAURANT_ID, REASON);
+
+      expect(stored).toMatchObject({
+        approvalStatus: 'suspended',
+        suspensionReason: REASON,
+        suspendedBy: ADMIN_ID,
+        suspendedAt: NOW,
+        // La revisión original no cambia.
+        reviewedBy: null,
+        reviewedAt: null,
+      });
+      // Una sola sentencia condicional: solo desde approved.
+      expect(restaurants.update).toHaveBeenCalledExactlyOnceWith(
+        { id: RESTAURANT_ID, approvalStatus: 'approved' },
+        {
+          approvalStatus: 'suspended',
+          suspensionReason: REASON,
+          suspendedBy: ADMIN_ID,
+          suspendedAt: NOW,
+        },
+      );
+    });
+
+    it('emits the availability event after saving, like approving', async () => {
+      const { service, events } = createService('approved');
+
+      await service.suspend(ADMIN_ID, RESTAURANT_ID, REASON);
+
+      expect(events.emit).toHaveBeenCalledExactlyOnceWith(
+        RESTAURANT_AVAILABILITY_AFFECTED,
+        availabilityAffected(RESTAURANT_ID),
+      );
+    });
+
+    it.each(['pending', 'rejected', 'suspended'] as const)(
+      'answers 409 RESTAURANT_NOT_APPROVED from %s, without changes or events',
+      async (status) => {
+        const { service, stored, events } = createService(status);
+        const before = { ...stored };
+
+        expect(
+          await errorOf(service.suspend(ADMIN_ID, RESTAURANT_ID, REASON)),
+        ).toEqual({
+          status: 409,
+          body: {
+            statusCode: 409,
+            message: RESTAURANT_NOT_APPROVED_MESSAGE,
+            error: 'Conflict',
+            errorCode: RESTAURANT_NOT_APPROVED_CODE,
+          },
+        });
+        expect(stored).toEqual(before);
+        expect(events.emit).not.toHaveBeenCalled();
+      },
+    );
+
+    it('answers 404 RESTAURANT_NOT_FOUND for an unknown restaurant', async () => {
+      const { service } = createService('approved');
+
+      expect(
+        (await errorOf(service.suspend(ADMIN_ID, UNKNOWN_ID, REASON))).status,
+      ).toBe(404);
+    });
+
+    it('two suspensions at once: one wins, the other gets 409', async () => {
+      const { service, stored } = createService('approved');
+
+      const results = await Promise.allSettled([
+        service.suspend(ADMIN_ID, RESTAURANT_ID, REASON),
+        service.suspend(ADMIN_ID, RESTAURANT_ID, REASON),
+      ]);
+
+      expect(results.map((result) => result.status).sort()).toEqual([
+        'fulfilled',
+        'rejected',
+      ]);
+      expect(stored.approvalStatus).toBe('suspended');
+    });
+  });
+
+  describe('reactivate', () => {
+    it('goes back to approved and keeps the last suspension', async () => {
+      const { service, stored, restaurants } = createService('suspended');
+      Object.assign(stored, {
+        suspensionReason: 'Motivo de la última suspensión.',
+        suspendedBy: ADMIN_ID,
+        suspendedAt: NOW,
+      });
+
+      await service.reactivate(RESTAURANT_ID);
+
+      expect(stored).toMatchObject({
+        approvalStatus: 'approved',
+        suspensionReason: 'Motivo de la última suspensión.',
+        suspendedBy: ADMIN_ID,
+        suspendedAt: NOW,
+      });
+      expect(restaurants.update).toHaveBeenCalledExactlyOnceWith(
+        { id: RESTAURANT_ID, approvalStatus: 'suspended' },
+        { approvalStatus: 'approved' },
+      );
+    });
+
+    it('emits the availability event: the restaurant can appear again', async () => {
+      const { service, events } = createService('suspended');
+
+      await service.reactivate(RESTAURANT_ID);
+
+      expect(events.emit).toHaveBeenCalledExactlyOnceWith(
+        RESTAURANT_AVAILABILITY_AFFECTED,
+        availabilityAffected(RESTAURANT_ID),
+      );
+    });
+
+    it.each(['pending', 'approved', 'rejected'] as const)(
+      'answers 409 RESTAURANT_NOT_SUSPENDED from %s, without events',
+      async (status) => {
+        const { service, events } = createService(status);
+
+        expect(await errorOf(service.reactivate(RESTAURANT_ID))).toEqual({
+          status: 409,
+          body: {
+            statusCode: 409,
+            message: RESTAURANT_NOT_SUSPENDED_MESSAGE,
+            error: 'Conflict',
+            errorCode: RESTAURANT_NOT_SUSPENDED_CODE,
+          },
+        });
+        expect(events.emit).not.toHaveBeenCalled();
+      },
+    );
   });
 });

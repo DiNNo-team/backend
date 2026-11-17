@@ -69,6 +69,7 @@ function restaurant(id: string, approvalStatus: string, extra: Row = {}): Row {
     longitude: -74.057006,
     approvalStatus,
     rejectionReason: null,
+    suspensionReason: null,
     reviewedBy: null,
     reviewedAt: null,
     contactPhone: '+573001234567',
@@ -92,6 +93,7 @@ describe('Editar y reenviar la solicitud (e2e)', () => {
       restaurant(PENDING_RESTAURANT_ID, 'pending'),
       restaurant(REJECTED_RESTAURANT_ID, 'rejected', {
         rejectionReason: REASON,
+        suspensionReason: null,
         reviewedBy: ADMIN_ID,
         reviewedAt: new Date('2026-11-11T12:00:00Z'),
       }),
@@ -218,6 +220,7 @@ describe('Editar y reenviar la solicitud (e2e)', () => {
         contactPhone: '+576012345678',
         approvalStatus: 'pending',
         rejectionReason: null,
+        suspensionReason: null,
       });
       expect(row(PENDING_RESTAURANT_ID)?.approvalStatus).toBe('pending');
     });
@@ -231,6 +234,7 @@ describe('Editar y reenviar la solicitud (e2e)', () => {
         address: 'Calle 73 # 10-10, Bogotá',
         approvalStatus: 'rejected',
         rejectionReason: REASON,
+        suspensionReason: null,
       });
     });
 
@@ -269,7 +273,11 @@ describe('Editar y reenviar la solicitud (e2e)', () => {
         '/v1/restaurants/me/status',
         'pendingOwner',
       ).expect(200);
-      expect(get.body).toEqual({ isOpen: true });
+      expect(get.body).toEqual({
+        isOpen: true,
+        approvalStatus: 'pending',
+        suspensionReason: null,
+      });
 
       const patch = await send(
         'patch',
@@ -293,11 +301,13 @@ describe('Editar y reenviar la solicitud (e2e)', () => {
         id: REJECTED_RESTAURANT_ID,
         approvalStatus: 'pending',
         rejectionReason: null,
+        suspensionReason: null,
         activeReservationsCount: 0,
       });
       expect(row(REJECTED_RESTAURANT_ID)).toMatchObject({
         approvalStatus: 'pending',
         rejectionReason: null,
+        suspensionReason: null,
         reviewedBy: null,
         reviewedAt: null,
         submittedAt: NOW,

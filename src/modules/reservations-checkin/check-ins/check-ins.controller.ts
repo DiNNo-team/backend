@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowSuspendedRestaurant,
   CurrentUser,
   CurrentUserGuard,
   RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
@@ -87,6 +88,9 @@ export class CheckInsController {
   ) {}
 
   @Post('check-ins')
+  // Un suspendido hace check-in de sus reservas activas (§12.2: se respetan
+  // hasta el check-in o el vencimiento). Solo existen activas para validar.
+  @AllowSuspendedRestaurant()
   @RateLimit('checkIn')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -152,6 +156,8 @@ export class CheckInsController {
   }
 
   @Get('reservations')
+  // Solo lectura para un suspendido: ve quién viene en camino.
+  @AllowSuspendedRestaurant()
   @ApiOperation({
     summary: 'Consultar las reservas de mi restaurante',
     description:
