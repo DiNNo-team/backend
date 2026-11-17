@@ -68,10 +68,12 @@ export class SearchResultDto {
 
   @ApiProperty({
     description:
-      'Distancia en km desde la ubicación o el centro de la zona, con 2 decimales. El formato para mostrar («a 650 m», «a 1,4 km») lo hace la app.',
+      'Distancia en km desde la ubicación o el centro de la zona, con 2 decimales. null si la búsqueda no trae lat y lng ni zona. El formato para mostrar («a 650 m», «a 1,4 km») lo hace la app.',
+    nullable: true,
+    type: Number,
     example: 0.65,
   })
-  distanceKm: number;
+  distanceKm: number | null;
 
   @ApiProperty({
     description:

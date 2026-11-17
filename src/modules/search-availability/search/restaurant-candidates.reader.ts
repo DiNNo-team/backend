@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Between, DataSource } from 'typeorm';
+import {
+  Between,
+  DataSource,
+  IsNull,
+  Not,
+  type FindOptionsWhere,
+} from 'typeorm';
 import type { RestaurantCategory } from '../../restaurant-operations/index.js';
 import {
   DINER_VISIBLE_RESTAURANT,
@@ -57,17 +63,38 @@ export interface CandidateFilters {
 export class RestaurantCandidatesReader {
   constructor(private readonly dataSource: DataSource) {}
 
-  async findWithin(
+  findWithin(
     box: BoundingBox,
     filters: CandidateFilters = {},
+  ): Promise<RestaurantCandidate[]> {
+    return this.find(
+      {
+        latitude: Between(box.minLat, box.maxLat),
+        longitude: Between(box.minLng, box.maxLng),
+      },
+      filters,
+    );
+  }
+
+  // Every visible restaurant with coordinates (Sprint 4: the search without a
+  // radius). Without coordinates it cannot be on the map, so it stays out.
+  findAll(filters: CandidateFilters = {}): Promise<RestaurantCandidate[]> {
+    return this.find(
+      { latitude: Not(IsNull()), longitude: Not(IsNull()) },
+      filters,
+    );
+  }
+
+  private async find(
+    location: FindOptionsWhere<CandidateRow>,
+    filters: CandidateFilters,
   ): Promise<RestaurantCandidate[]> {
     const rows = await this.dataSource
       .getRepository<CandidateRow & VisibilityColumns>('Restaurant')
       .find({
         where: {
           ...DINER_VISIBLE_RESTAURANT,
-          latitude: Between(box.minLat, box.maxLat),
-          longitude: Between(box.minLng, box.maxLng),
+          ...location,
           ...(filters.category !== undefined && { category: filters.category }),
         },
         select: {

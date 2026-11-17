@@ -30,10 +30,14 @@ async function messagesFor(query: Record<string, unknown>): Promise<string[]> {
 
 describe('SearchRestaurantsQueryDto', () => {
   describe('valid searches', () => {
-    it('by location, with the default radius of 2 km', async () => {
+    it('without location, zone nor radius: every restaurant', async () => {
+      await expect(validate({})).resolves.toEqual({});
+    });
+
+    it('by location without a radius: every restaurant, measured', async () => {
       await expect(
         validate({ lat: '4.655671', lng: '-74.057006' }),
-      ).resolves.toEqual({ lat: 4.655671, lng: -74.057006, radiusKm: 2 });
+      ).resolves.toEqual({ lat: 4.655671, lng: -74.057006 });
     });
 
     it('by location, with a radius', async () => {
@@ -42,10 +46,9 @@ describe('SearchRestaurantsQueryDto', () => {
       ).resolves.toEqual({ lat: 4.655671, lng: -74.057006, radiusKm: 10 });
     });
 
-    it('by zone, with the default radius', async () => {
+    it('by zone without a radius', async () => {
       await expect(validate({ zone: 'calle-72' })).resolves.toEqual({
         zone: 'calle-72',
-        radiusKm: 2,
       });
     });
 
@@ -58,7 +61,7 @@ describe('SearchRestaurantsQueryDto', () => {
     it('by a location outside Bogotá (it just finds nothing)', async () => {
       await expect(
         validate({ lat: '6.2442', lng: '-75.5812' }),
-      ).resolves.toEqual({ lat: 6.2442, lng: -75.5812, radiusKm: 2 });
+      ).resolves.toEqual({ lat: 6.2442, lng: -75.5812 });
     });
   });
 
@@ -75,13 +78,16 @@ describe('SearchRestaurantsQueryDto', () => {
       ).resolves.toEqual([SEARCH_MESSAGES.BOTH_ORIGINS]);
     });
 
-    it('rejects a search without location nor zone', async () => {
-      await expect(messagesFor({})).resolves.toEqual([
-        SEARCH_MESSAGES.NO_ORIGIN,
-      ]);
+    it('rejects a radius without location nor zone', async () => {
       await expect(messagesFor({ radiusKm: '5' })).resolves.toEqual([
-        SEARCH_MESSAGES.NO_ORIGIN,
+        SEARCH_MESSAGES.RADIUS_WITHOUT_ORIGIN,
       ]);
+    });
+
+    it('accepts the filters alone, without location nor zone', async () => {
+      await expect(
+        validate({ category: 'colombian', partySize: '4' }),
+      ).resolves.toEqual({ category: 'colombian', partySize: 4 });
     });
 
     it.each([
@@ -134,7 +140,6 @@ describe('SearchRestaurantsQueryDto', () => {
       await expect(validate({ lat: '0', lng: '0' })).resolves.toEqual({
         lat: 0,
         lng: 0,
-        radiusKm: 2,
       });
     });
 
@@ -147,7 +152,6 @@ describe('SearchRestaurantsQueryDto', () => {
         lat: 4.655671,
         lng: -74.057006,
         partySize: 4,
-        radiusKm: 2,
       });
     });
 
@@ -196,10 +200,9 @@ describe('SearchRestaurantsQueryDto', () => {
       ).resolves.toEqual({ zone: 'calle-72', radiusKm: 2 });
     });
 
-    it('defaults to 2 km when radiusKm is missing', async () => {
+    it('has no default: without radiusKm there is no distance limit', async () => {
       await expect(validate({ zone: 'calle-72' })).resolves.toEqual({
         zone: 'calle-72',
-        radiusKm: 2,
       });
     });
   });
@@ -209,7 +212,7 @@ describe('SearchRestaurantsQueryDto', () => {
       'accepts category=%s',
       async (category) => {
         await expect(validate({ zone: 'calle-72', category })).resolves.toEqual(
-          { zone: 'calle-72', radiusKm: 2, category },
+          { zone: 'calle-72', category },
         );
       },
     );
@@ -243,7 +246,6 @@ describe('SearchRestaurantsQueryDto', () => {
     ])('accepts partySize=%s', async (partySize, expected) => {
       await expect(validate({ zone: 'calle-72', partySize })).resolves.toEqual({
         zone: 'calle-72',
-        radiusKm: 2,
         partySize: expected,
       });
     });
@@ -274,7 +276,6 @@ describe('SearchRestaurantsQueryDto', () => {
         validate({ zone: 'chapinero', category: 'italian' }),
       ).resolves.toEqual({
         zone: 'chapinero',
-        radiusKm: 2,
         category: 'italian',
       });
     });
@@ -282,7 +283,7 @@ describe('SearchRestaurantsQueryDto', () => {
     it('location + partySize', async () => {
       await expect(
         validate({ lat: '4.65', lng: '-74.05', partySize: '4' }),
-      ).resolves.toEqual({ lat: 4.65, lng: -74.05, radiusKm: 2, partySize: 4 });
+      ).resolves.toEqual({ lat: 4.65, lng: -74.05, partySize: 4 });
     });
 
     it('location + category + partySize + radiusKm', async () => {

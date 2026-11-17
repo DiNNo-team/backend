@@ -51,7 +51,10 @@ function setup(
   candidates: RestaurantCandidate[],
   overrides: Record<string, AvailabilityResult> = {},
 ) {
-  const reader = { findWithin: vi.fn().mockResolvedValue(candidates) };
+  const reader = {
+    findWithin: vi.fn().mockResolvedValue(candidates),
+    findAll: vi.fn().mockResolvedValue(candidates),
+  };
   const availability = {
     getForRestaurants: vi.fn(
       (ids: string[], _options?: GetForRestaurantsOptions) =>
@@ -368,6 +371,55 @@ describe('RestaurantSearchService', () => {
       expect(availability.getForRestaurants).toHaveBeenCalledWith(
         [italianNoTable.id, italianWithTable.id],
         { partySize: 6 },
+      );
+    });
+  });
+
+  describe('without a radius (Sprint 4: every restaurant)', () => {
+    const named = (n: number, name: string, km: number) => ({
+      ...candidate(n, km),
+      name,
+    });
+
+    it('without an origin: reads them all, by name and without distance', async () => {
+      const { service, reader } = setup([
+        named(1, 'Zona Café', 1),
+        named(2, 'arepas de la 72', 3),
+        named(3, 'Ñam', 0.2),
+      ]);
+
+      const results = await service.search({ category: 'colombian' });
+
+      expect(reader.findAll).toHaveBeenCalledWith({ category: 'colombian' });
+      expect(reader.findWithin).not.toHaveBeenCalled();
+      expect(results.map((result) => result.name)).toEqual([
+        'arepas de la 72',
+        'Ñam',
+        'Zona Café',
+      ]);
+      expect(results.every((result) => result.distanceKm === null)).toBe(true);
+    });
+
+    it('with a location: reads them all, the farthest too, closest first', async () => {
+      const { service, reader } = setup([candidate(1, 25), candidate(2, 0.4)]);
+
+      const results = await service.search({
+        lat: CENTER.latitude,
+        lng: CENTER.longitude,
+      });
+
+      expect(reader.findAll).toHaveBeenCalledTimes(1);
+      expect(results.map((result) => result.distanceKm)).toEqual([0.4, 25]);
+    });
+
+    it(`answers more than ${SEARCH_RESULTS_LIMIT}`, async () => {
+      const many = Array.from({ length: SEARCH_RESULTS_LIMIT + 10 }, (_, i) =>
+        candidate(i + 1, i / 10),
+      );
+      const { service } = setup(many);
+
+      await expect(service.search({})).resolves.toHaveLength(
+        SEARCH_RESULTS_LIMIT + 10,
       );
     });
   });

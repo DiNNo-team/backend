@@ -312,16 +312,49 @@ describe('Search (e2e)', () => {
       ]);
     });
 
-    it('by location: the default radius of 2 km leaves Parque 93 (2.51 km) out', async () => {
+    it('by location: a radius of 2 km leaves Parque 93 (2.51 km) out', async () => {
       const res = await get(
-        '/v1/search/restaurants?lat=4.655671&lng=-74.057006',
+        '/v1/search/restaurants?lat=4.655671&lng=-74.057006&radiusKm=2',
       ).expect(200);
 
       expect(res.body.map((r: { id: string }) => r.id)).toEqual([CASA_72]);
     });
 
+    it('by location without a radius: every restaurant, closest first', async () => {
+      const res = await get(
+        '/v1/search/restaurants?lat=4.655671&lng=-74.057006',
+      ).expect(200);
+
+      const ids = res.body.map((r: { id: string }) => r.id);
+      expect(ids.slice(0, 2)).toEqual([CASA_72, PARQUE_93]);
+      expect(ids).toContain(KENNEDY);
+      const distances = res.body.map(
+        (r: { distanceKm: number }) => r.distanceKm,
+      );
+      expect(distances).toEqual([...distances].sort((a, b) => a - b));
+    });
+
+    it('without location nor radius: every restaurant, by name and without distance', async () => {
+      const res = await get('/v1/search/restaurants').expect(200);
+
+      const names = res.body.map((r: { name: string }) => r.name);
+      expect(names).toEqual(
+        [...names].sort((a: string, b: string) =>
+          a.localeCompare(b, 'es', { sensitivity: 'base' }),
+        ),
+      );
+      expect(res.body.map((r: { id: string }) => r.id)).toEqual(
+        expect.arrayContaining([CASA_72, PARQUE_93, KENNEDY]),
+      );
+      expect(
+        res.body.every((r: { distanceKm: unknown }) => r.distanceKm === null),
+      ).toBe(true);
+    });
+
     it('by zone: searches around the centre of the zone', async () => {
-      const res = await get('/v1/search/restaurants?zone=kennedy').expect(200);
+      const res = await get(
+        '/v1/search/restaurants?zone=kennedy&radiusKm=2',
+      ).expect(200);
 
       expect(res.body).toStrictEqual([
         expect.objectContaining({
@@ -334,7 +367,7 @@ describe('Search (e2e)', () => {
     });
 
     it('answers [] far from every restaurant (a location outside Bogotá)', async () => {
-      await get('/v1/search/restaurants?lat=6.2442&lng=-75.5812')
+      await get('/v1/search/restaurants?lat=6.2442&lng=-75.5812&radiusKm=10')
         .expect(200)
         .expect([]);
     });
@@ -363,7 +396,9 @@ describe('Search (e2e)', () => {
     });
 
     it('without filters, Usaquén has the four restaurants', async () => {
-      const res = await get('/v1/search/restaurants?zone=usaquen').expect(200);
+      const res = await get(
+        '/v1/search/restaurants?zone=usaquen&radiusKm=2',
+      ).expect(200);
 
       expect(ids(res).sort()).toEqual(
         [PAREJAS, GRANDE_OCUPADA, GRANDE_INACTIVA, GRANDE_LIBRE].sort(),
@@ -372,7 +407,7 @@ describe('Search (e2e)', () => {
 
     it('partySize leaves out small free tables and big tables that are occupied or inactive', async () => {
       const res = await get(
-        '/v1/search/restaurants?zone=usaquen&partySize=6',
+        '/v1/search/restaurants?zone=usaquen&radiusKm=2&partySize=6',
       ).expect(200);
 
       expect(ids(res)).toEqual([GRANDE_LIBRE]);
@@ -380,7 +415,7 @@ describe('Search (e2e)', () => {
 
     it('partySize=2 keeps all four (each has a free active table for 2)', async () => {
       const res = await get(
-        '/v1/search/restaurants?zone=usaquen&partySize=2',
+        '/v1/search/restaurants?zone=usaquen&radiusKm=2&partySize=2',
       ).expect(200);
 
       expect(res.body).toHaveLength(4);
@@ -394,7 +429,7 @@ describe('Search (e2e)', () => {
       'zone + category=%s + partySize=%i',
       async (category, partySize, expected) => {
         const res = await get(
-          `/v1/search/restaurants?zone=usaquen&category=${category}&partySize=${partySize}`,
+          `/v1/search/restaurants?zone=usaquen&radiusKm=2&category=${category}&partySize=${partySize}`,
         ).expect(200);
 
         expect(ids(res)).toEqual(expected);
@@ -455,9 +490,9 @@ describe('Search (e2e)', () => {
         'Busca por tu ubicación o por una zona, no por las dos.',
       ],
       [
-        'no origin',
+        'a radius without origin',
         'radiusKm=2',
-        'Envía tu ubicación (lat y lng) o una zona para buscar.',
+        'El radio (radiusKm) necesita tu ubicación (lat y lng) o una zona. Sin radio se buscan todos los restaurantes.',
       ],
       ['only lat', 'lat=4.65', 'Envía lat y lng juntas.'],
       [
