@@ -25,6 +25,7 @@ import {
   ALREADY_ENABLED_MESSAGE,
   RestaurantSignupService,
 } from './restaurant-signup.service.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 const forbidden = (
   summary: string,
@@ -54,6 +55,7 @@ export class RestaurantSignupController {
   constructor(private readonly signupService: RestaurantSignupService) {}
 
   @Post('signup')
+  @RateLimit('signup')
   @ApiOperation({
     summary: 'Registrar un restaurante nuevo (solicitud de aprobación)',
     description:

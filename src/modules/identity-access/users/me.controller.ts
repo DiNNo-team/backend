@@ -18,6 +18,7 @@ import { Roles } from '../roles/roles.decorator.js';
 import { UserRole } from '../roles/user-role.js';
 import { MeResponseDto } from './dto/me-response.dto.js';
 import { UsersService } from './users.service.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 @ApiTags('accounts')
 @ApiBearerAuth()
@@ -28,6 +29,7 @@ export class MeController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
+  @RateLimit('account')
   // A restaurant pending or rejected still reads its own account (§11).
   @AllowUnapprovedRestaurant()
   @ApiOperation({

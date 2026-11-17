@@ -1,0 +1,1 @@
+export const RATE_LIMIT_SETTINGS = Symbol('RATE_LIMIT_SETTINGS');

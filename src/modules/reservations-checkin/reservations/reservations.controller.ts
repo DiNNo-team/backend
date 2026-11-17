@@ -58,6 +58,7 @@ import {
   RESTAURANT_CLOSED_CODE,
   RESTAURANT_CLOSED_MESSAGE,
 } from './reservation-errors.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
 
 export const RESERVATION_ID_INVALID =
   'El id de la reserva no es un UUID válido.';
@@ -97,6 +98,7 @@ export class ReservationsController {
   ) {}
 
   @Post()
+  @RateLimit('reservation')
   @ApiOperation({
     summary: 'Reservar una mesa por unos minutos',
     description:
@@ -217,6 +219,7 @@ export class ReservationsController {
   }
 
   @Post(':id/cancel')
+  @RateLimit('reservation')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancelar mi reserva',
