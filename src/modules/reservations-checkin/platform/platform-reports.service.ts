@@ -15,6 +15,7 @@ import {
   shiftMonth,
   type BillingMonth,
 } from '../billing/billing-month.js';
+import { billingStatus } from '../billing/billing-status.js';
 import { BillingStatementService } from '../billing/billing-statement.service.js';
 import { CheckInFeeConfig } from '../billing/checkin-fee.config.js';
 import {
@@ -30,7 +31,6 @@ import {
   type AdminBillingDetailDto,
   type AdminBillingPageDto,
   type AdminOverviewDto,
-  type BillingStatus,
   type PlatformMetricsDto,
 } from './dto/admin-platform-response.dto.js';
 import {
@@ -50,16 +50,6 @@ const iso = (value: Date | null): string | null =>
 
 function periodDto({ from, to, timezone }: ReportPeriod) {
   return { from, to, timezone };
-}
-
-function billingStatus(
-  month: BillingMonth,
-  row: { status: string } | null,
-): BillingStatus {
-  if (!month.closed) {
-    return 'in_progress';
-  }
-  return row?.status === 'paid' ? 'paid' : 'pending';
 }
 
 // Reportes del panel del administrador de DiNNo (Sprint 4): resuelve el mes o
