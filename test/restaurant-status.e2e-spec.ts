@@ -125,7 +125,6 @@ describe('Restaurant status (e2e)', () => {
       longitude: null,
       approvalStatus: 'approved',
       rejectionReason: null,
-      suspensionReason: null,
       reviewedBy: null,
       reviewedAt: null,
       suspensionReason: null,
