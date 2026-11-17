@@ -6,6 +6,18 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 16 nov 2026 · Sebastián · Límite de peticiones y cabeceras de seguridad (Sprint 4, tareas 6.1.3 y 6.1.4) · para revisar: Elizabeth
+
+- **Qué hay:** límite de peticiones en toda la API y en las conexiones del WebSocket, cabeceras de seguridad (helmet) y verificación del certificado de PostgreSQL con `sslmode=verify-full`. Contrato en §12.14 (igual en los tres repos) y detalle en §11, «Límite de peticiones y cabeceras de seguridad».
+- **Para web y app:** al pasar un límite, `429` sin `errorCode`; el WebSocket rechaza con `connect_error` `RATE_LIMITED`, que se reintenta como `SERVER_ERROR`. Lo ajustan los PR `feat/sprint4-limite-peticiones` de web y mobile. El uso normal no se acerca a los límites.
+- **Dependencias nuevas:** `@nestjs/throttler` (6.7.1; la 6.8.0 salió el mismo día y se evitó) y `helmet` (8.3.0). Después del pull corre `npm install`.
+- **Variables nuevas, todas opcionales:** `RATE_LIMIT_ENABLED`, `RATE_LIMIT_FACTOR` y `TRUST_PROXY_HOPS` (`.env.example`). En Render y Azure no se definen.
+- **Redis:** el cliente pasó a `RedisModule` (`src/config/redis.module.ts`, global), sin cambiar su comportamiento. El adaptador de Socket.IO (tareas 5.1.x) lo puede inyectar con `REDIS_CLIENT`.
+- **Informe de IA (Santiago):** la ruta nueva lleva `@RateLimit('ai')` (10 por minuto, ya definido).
+- **Pruebas:** con la API real contra Docker local (Postgres y Redis): el 11.º intento de reserva en un minuto da 429, los contadores quedan en Redis y, con Redis apagado, la API sigue respondiendo (un WARN y vuelve sola).
+
+---
+
 ## 16 nov 2026 · Sebastián · La búsqueda ya puede traer todos los restaurantes (Sprint 4) · para revisar: Elizabeth
 
 - **Qué cambia en `GET /v1/search/restaurants`** (§10): `lat`/`lng` y `zone` pasan a ser **opcionales** y `radiusKm` **ya no tiene valor por defecto**. Sin `radiusKm` no hay límite de distancia: salen todos los restaurantes que se pueden reservar (máximo 500). Sin ubicación ni zona se ordenan por nombre y `distanceKm` llega en `null`. `radiusKm` sin ubicación ni zona → 400 «El radio (radiusKm) necesita tu ubicación…».

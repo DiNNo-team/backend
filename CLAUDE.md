@@ -290,7 +290,7 @@ El módulo `reservations-checkin` tiene la creación, la consulta y la cancelaci
 
 ### Configuración y variables de entorno
 - **Nunca leas `process.env` en el código de una funcionalidad:** usa `ConfigService` (`getOrThrow` para lo obligatorio).
-- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local), `DEV_USER_ENABLED`, `DEV_USER_ID`, `RENDER`, `NODE_ENV`, `RENDER_GIT_COMMIT`, `FIREBASE_PROJECT_ID`, `GOOGLE_GEOCODING_API_KEY` (opcional, ver "Geocodificación"), `RESERVATION_TTL_MINUTES` y `RESERVATION_EXPIRY_ENABLED` (opcionales, ver "Reservas"), `CHECKIN_FEE_COP` (opcional, ver "Cobro por check-in") y `PLATFORM_ADMIN_EMAIL` (solo para el seed, ver "Administrador"; la app no la lee), `FIREBASE_SERVICE_ACCOUNT_FILE` y `FIREBASE_SERVICE_ACCOUNT_JSON` (opcionales, secreto, ver "Notificaciones").
+- Variables actuales (ver `.env.example`): `DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `PORT` (solo local), `DEV_USER_ENABLED`, `DEV_USER_ID`, `RENDER`, `NODE_ENV`, `RENDER_GIT_COMMIT`, `FIREBASE_PROJECT_ID`, `GOOGLE_GEOCODING_API_KEY` (opcional, ver "Geocodificación"), `RESERVATION_TTL_MINUTES` y `RESERVATION_EXPIRY_ENABLED` (opcionales, ver "Reservas"), `CHECKIN_FEE_COP` (opcional, ver "Cobro por check-in") y `PLATFORM_ADMIN_EMAIL` (solo para el seed, ver "Administrador"; la app no la lee), `FIREBASE_SERVICE_ACCOUNT_FILE` y `FIREBASE_SERVICE_ACCOUNT_JSON` (opcionales, secreto, ver "Notificaciones"), `RATE_LIMIT_ENABLED`, `RATE_LIMIT_FACTOR` y `TRUST_PROXY_HOPS` (opcionales, ver "Límite de peticiones y cabeceras de seguridad").
   - **Obligatorias:** `DATABASE_URL` y `REDIS_URL`; además, `FIREBASE_PROJECT_ID` cuando el usuario de desarrollo está deshabilitado. La app no arranca si falta una variable obligatoria (`getOrThrow`).
   - `DEV_USER_ENABLED=true` activa el usuario de desarrollo y `DEV_USER_ID` es el uuid del usuario por defecto. Solo local, nunca se definen en Render: sin ellas, toda ruta protegida responde `401`.
   - `FIREBASE_AUTH_EMULATOR_HOST` es opcional y solo para el emulador de Firebase en local; la usa el SDK de Firebase, y nuestro código solo comprueba si está definida. **Nunca se define en Render:** con ella, el SDK deja de verificar la firma de los tokens.
@@ -370,7 +370,7 @@ El módulo `reservations-checkin` tiene la creación, la consulta y la cancelaci
   - **Pruebas:** `table-logs.service.spec.ts` fija la consulta (join a `tables`, filtro, orden, límite) y que los correos salen de una sola llamada a `findRestaurantAdminEmailsByIds`, y `test/table-logs.e2e-spec.ts` prueba el aislamiento con un query builder simulado que aplica esos filtros a filas de dos restaurantes; ninguna ejecuta SQL real. `test/db/table-logs.db-spec.ts` fija con el servicio y SQL reales quién conserva el correo.
 
 ### Redis (Upstash)
-Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDIS_CLIENT`. No se usa en el Sprint 1 salvo que una tarea lo pida.
+Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDIS_CLIENT`. Lo registra `RedisModule` (`src/config/redis.module.ts`, global, una sola conexión, la cierra al apagar), importado una vez en `AppModule`. Desde el Sprint 4 lo usa el límite de peticiones (ver "Límite de peticiones y cabeceras de seguridad").
 
 ### API
 - Todas las rutas bajo **`/v1`** (definido en `app.setup.ts`). Health check: `GET /v1/health`.
@@ -442,7 +442,7 @@ Cliente `ioredis` en `src/config/redis.config.ts`, inyectable con el token `REDI
 - Un resultado sin `types` (o con una lista vacía) es una respuesta inesperada: `unavailable`. Se registra con `{ provide: Geocoder, useClass: GoogleGeocoder }`; las pruebas lo reemplazan con `.overrideProvider(Geocoder)`.
 - **Sin llave** (`GOOGLE_GEOCODING_API_KEY` vacía o sin definir): la app arranca, no se llama a Google y `GET /v1/geocode` responde `503 GEOCODING_UNAVAILABLE`.
 - **La llave nunca se registra:** ni ella ni la URL (que la lleva) ni la dirección van a logs, errores ni respuestas. El adaptador solo deja un WARN con el `status` de Google o el tipo de error (`timeout`, `HTTP 500`, `invalid JSON`…).
-- **`GET /v1/geocode`** (`geocode.controller.ts`): `@Roles(UserRole.RESTAURANT_ADMIN, UserRole.DINER)` + `CurrentUserGuard`, **sin** `requireRestaurant` (el formulario de registro lo usa antes de que exista el restaurante). El comensal lo usa para buscar por dirección (§10). **Ya no exige perfil** (aprobación de restaurantes): con `@AllowUnregisteredAccount()` acepta una cuenta de Firebase sin perfil con el correo verificado (el formulario del registro público) y con `@AllowUnapprovedRestaurant()` un restaurante pendiente o rechazado (corrige su dirección). El único `403` de cuenta es `ADMIN_ACCOUNT` (un `platform_admin`). **Sin límite de peticiones:** el rate limiting sigue como deuda del Sprint 4 (§12.10); hoy el único límite es la cuota de Google. `address` recortada, de 3 a 255 caracteres y sin caracteres invisibles. Los mensajes de `404` y `503` son neutros (`geocoding-errors.ts`): la web y la app ponen su propio texto según el `errorCode`.
+- **`GET /v1/geocode`** (`geocode.controller.ts`): `@Roles(UserRole.RESTAURANT_ADMIN, UserRole.DINER)` + `CurrentUserGuard`, **sin** `requireRestaurant` (el formulario de registro lo usa antes de que exista el restaurante). El comensal lo usa para buscar por dirección (§10). **Ya no exige perfil** (aprobación de restaurantes): con `@AllowUnregisteredAccount()` acepta una cuenta de Firebase sin perfil con el correo verificado (el formulario del registro público) y con `@AllowUnapprovedRestaurant()` un restaurante pendiente o rechazado (corrige su dirección). El único `403` de cuenta es `ADMIN_ACCOUNT` (un `platform_admin`). **Límite de peticiones:** `@RateLimit('geocode')`, 20 por minuto y cuenta (§12.14), además de la cuota de Google. `address` recortada, de 3 a 255 caracteres y sin caracteres invisibles. Los mensajes de `404` y `503` son neutros (`geocoding-errors.ts`): la web y la app ponen su propio texto según el `errorCode`.
 - **Coordenadas del restaurante:** `latitude` y `longitude` están en `RestaurantFieldsDto` con `RestaurantCoordinateField` (`restaurants/dto/restaurant-location-fields.ts`), así que POST y PATCH validan igual: opcionales, las dos o ninguna, dentro de Bogotá, `null` rechazado y redondeadas a 6 decimales antes de guardar. `RestaurantResponseDto` las devuelve como `number | null`.
 
 ### Tiempo real: eventos y WebSocket (Elizabeth)
@@ -626,6 +626,21 @@ Dos scripts de línea de comandos para la IA y la demo. **Solo los corre Elizabe
   - Rama de pruebas: `npm run build` y luego `node --env-file=.env.test dist/scripts/demo-reset/main.js [flags]` o `node --env-file=.env.test dist/scripts/export-data/main.js`. `.env.test` define `DATABASE_URL`, que es la que lee `data-source.ts`.
 - **Pruebas:** unitarias junto al código; `test/db/export-data.db-spec.ts` y `test/db/demo-reset.db-spec.ts` contra Postgres real con datos propios (`demo-reset` usa un restaurante `Demo Reset Test <uuid>`, nunca Casa 72).
 
+### Límite de peticiones y cabeceras de seguridad (`common/rate-limit/`, `common/security/`, Sebastián, Sprint 4)
+- **Contrato:** §12.14 (respuesta `429`, límites, `connect_error` `RATE_LIMITED`).
+- **Cómo funciona:** `RateLimitModule` (solo en `AppModule`) registra `@nestjs/throttler` con un guard global (`RateLimitGuard`, `APP_GUARD`) que corre **antes** de `CurrentUserGuard`: un exceso nunca llega a verificar el token. Las cifras viven en un solo lugar, `RATE_LIMIT_RULES` (`rate-limit.settings.ts`).
+- **Dos límites globales** en toda ruta HTTP: `ip` (por IP) y `caller` (por cuenta, o por IP sin sesión). Una ruta sensible agrega el suyo con `@RateLimit('<etiqueta>')` en el handler (`rate-limit.decorator.ts`; etiquetas en `RATE_LIMIT_TAGS`). Las rutas con la misma etiqueta comparten contador.
+- **Ruta nueva sensible** (crea algo, cuesta dinero o se puede usar para adivinar): ponle `@RateLimit(...)` con una etiqueta existente, o agrega una a `RATE_LIMIT_TAGS` y a `RATE_LIMIT_RULES` y avisa (§12.14). **El informe de IA usa `@RateLimit('ai')`** (10 por minuto), que ya existe.
+- **A quién se le cuenta** (`request-tracker.ts`): el `sub` del token de Firebase **sin verificarlo** (decodificado, por costo). Quien invente un `sub` distinto en cada petición recibe igual el `401` del guard, y el límite por IP sigue contando.
+- **Contadores en Redis** (`RedisThrottlerStorage`): ventana fija con un script Lua (`INCR` + `PEXPIRE`), claves `dinno:rl:<límite>:<user|ip>:<id>`. Si Redis no está `ready`, falla o tarda más de 250 ms, cuenta en la memoria de la instancia, con un solo WARN al caer y un LOG al volver: el límite nunca tumba la API.
+- **`RateLimitGuard` inyecta `RedisThrottlerStorage` con `@Inject` explícito:** el constructor de `ThrottlerGuard` declara `@Inject(ThrottlerStorage)` en esa posición y Nest hereda esa metadata. Sin el `@Inject`, el guard usa en silencio el almacenamiento en memoria del paquete (nos pasó). Lo fija `test/security.e2e-spec.ts`.
+- **WebSocket:** `SocketConnectionLimiter` cuenta las conexiones nuevas por IP. `main.ts` lo pasa a `configureApp`, que lo entrega a `CorsIoAdapter`. El adaptador registra su middleware antes que el del gateway, así que una conexión de más se rechaza antes de revisar el token. Si el limitador falla, la conexión sigue.
+- **IP real (`TRUST_PROXY_HOPS`):** `configureApp` fija `trust proxy` de Express, cuántos proxies hay delante. Desplegado vale 1 por defecto (el ingress de Container Apps o el de Render) y en local 0. El socket aplica la misma regla con `clientIp`. Un valor de más deja que el cliente elija su IP con `X-Forwarded-For`; uno de menos junta a todos en la IP del proxy.
+- **Variables:** `RATE_LIMIT_ENABLED` (`true` o `false`, por defecto `true`), `RATE_LIMIT_FACTOR` (entero de 1 a 1000, por defecto 1; multiplica todos los límites, para la prueba de carga) y `TRUST_PROXY_HOPS` (entero de 0 a 5). Un valor inválido **impide que la app arranque**, con un mensaje en español.
+- **Cabeceras (`common/security/security-headers.ts`):** helmet antes de cualquier ruta, en `configureApp`. La API usa una CSP `default-src 'none'; frame-ancestors 'none'` y Swagger (`/docs`, `/docs-json`) la de helmet por defecto. También van en los errores.
+- **TLS de PostgreSQL (`src/config/database-ssl.ts`):** `sslmode=verify-full` en `DATABASE_URL` cifra **y verifica** el certificado (es lo que se usa en Azure). `sslmode=require` cifra sin verificarlo (Neon, como antes) y sin `sslmode` no hay TLS (Docker local). Lo usan `app.module.ts` y `data-source.ts`.
+- **Pruebas:** unitarias de la configuración, el rastreador y el almacenamiento; `test/security.e2e-spec.ts` (429 y su forma, por cuenta, contador compartido, IP detrás del proxy, factor, apagado, arranque con valores inválidos, claves en Redis, cabeceras y el límite del socket).
+
 ### Pruebas
 - **`npm run test:db` (pruebas contra Postgres real):** archivos `test/db/*.db-spec.ts`, config `vitest.config.db.ts`, cliente `pg` directo. Son las únicas que ejecutan SQL de verdad (índices parciales, checks, restricciones únicas). **No forman parte de `npm test`, `npm run test:e2e` ni del CI.**
   - **Requiere `.env.test`** (ignorado por git) con `TEST_DATABASE_URL`, la URL de la base de **pruebas**. Para correr las migraciones sobre esa base con el CLI de TypeORM, el mismo archivo define `DATABASE_URL` con el mismo valor y se pasa con `--env-file=.env.test` (los scripts `migration:*` cargan `.env`, no `.env.test`).
@@ -647,6 +662,7 @@ Dos scripts de línea de comandos para la IA y la demo. **Solo los corre Elizabe
 Tres cosas dependen hoy de Render y hay que resolverlas al pasar a Azure:
 - **Ambiente desplegado:** `isDeployedEnvironment` (`identity-access/auth/deployed-environment.ts`) lo detecta por `RENDER` o `NODE_ENV=production`. En Azure no existe `RENDER`: hay que asegurar `NODE_ENV=production`. Si falta, el usuario de desarrollo y el emulador de Firebase no se bloquean al arrancar, y la API escucha solo en `127.0.0.1`.
 - **Commit desplegado:** `GET /v1/health` lee `RENDER_GIT_COMMIT` (`app.service.ts`). En Azure hay que pasar el commit con otra variable desde el pipeline y leerla en su lugar; si no, `commit` llega en `null` y el job `verify-deployment` del CI nunca termina bien.
+- **IP real y TLS:** detrás del ingress de Container Apps, `TRUST_PROXY_HOPS` se deja sin definir (1). `DATABASE_URL` de Azure Database for PostgreSQL va con `sslmode=verify-full` (ver "Límite de peticiones y cabeceras de seguridad").
 - **WebSocket:** en Azure App Service hay que activar *Web sockets*. Con más de una instancia hace falta ARR affinity (sesiones pegajosas) y un adaptador compartido de Socket.IO (por ejemplo Redis), porque las salas viven en la memoria del proceso (ver "Tiempo real: eventos y WebSocket").
 
 ### Sprint 2 · Notas de implementación
@@ -830,7 +846,7 @@ Los 404 y 409 existentes de mesas siguen sin `errorCode`; no se cambian en este 
 - Que el restaurante cancele una reserva.
 - Notificaciones push (llegaron en el Sprint 4: §12.13).
 - Comisiones variables, facturas y pagos (el estado de cuenta con tarifa fija por check-in está en §12.12).
-- Límite de peticiones y de conexiones WebSocket (Sprint 4, seguridad).
+- Límite de peticiones y de conexiones WebSocket (llegó en el Sprint 4: §12.14).
 - Adaptador de Redis para Socket.IO (Sprint 4, Azure).
 - Extender el tiempo de una reserva.
 
@@ -940,3 +956,31 @@ Los 404 y 409 existentes de mesas siguen sin `errorCode`; no se cambian en este 
   - Se calcula con la hora del servidor.
   - Se cancela si la reserva termina antes.
 - Tabla `push_devices` (`token` único, `user_id` con borrado en cascada, `platform`).
+
+### 12.14 Sprint 4 · Límite de peticiones y cabeceras de seguridad
+
+**Límite de peticiones (tarea 6.1.3)**
+- **Respuesta al pasar un límite:** `429` con `{ "statusCode": 429, "message": "Hiciste muchas solicitudes seguidas. Espera un momento e intenta de nuevo.", "error": "Too Many Requests" }`, sin `errorCode`, y la cabecera `Retry-After-<límite>` con los segundos que faltan.
+- **En los clientes:** cada uno muestra su propio texto por el status `429` y **no reintenta solo**. La persona vuelve a intentar.
+- **A quién se le cuenta:** con sesión, a la cuenta (el `sub` del token de Firebase); sin sesión, a la IP. En una misma red (por ejemplo, la universidad) todos salen por la misma IP, y así una persona no bloquea a las demás.
+- **Límites:** por ventana fija de 1 minuto, salvo donde se indica.
+
+| Qué | Límite |
+|---|---|
+| Toda la API, por cuenta (o IP sin sesión) | 300 |
+| Toda la API, por IP | 1000 |
+| `GET /v1/me` · `POST /v1/diners/me` | 20 |
+| `POST /v1/restaurants` · `POST /v1/restaurants/signup` · `POST /v1/restaurants/me/resubmit` | 10 cada 10 minutos |
+| `POST /v1/reservations` · `POST /v1/reservations/:id/cancel` (un solo contador) | 10 |
+| `POST /v1/restaurants/me/check-ins` | 30 |
+| `GET /v1/geocode` | 20 |
+| WebSocket: conexiones nuevas por IP | 120 |
+
+- **WebSocket:** una conexión de más se rechaza con `connect_error` `RATE_LIMITED`, antes de revisar el token. A diferencia de los códigos de sesión, **este sí se reintenta**, igual que `SERVER_ERROR` (5 s, 15 s, 30 s). Mientras tanto sigue la consulta periódica.
+- **Varias réplicas:** los contadores viven en Redis, así que con 2 réplicas cada cuenta tiene un solo límite. Si Redis falla, cada réplica cuenta en su memoria y la API sigue respondiendo.
+- **Prueba de carga:** `RATE_LIMIT_FACTOR` (entero de 1 a 1000) multiplica todos los límites y `RATE_LIMIT_ENABLED=false` los apaga. Solo durante la prueba: después se dejan como estaban.
+
+**Cabeceras de seguridad (tarea 6.1.4)**
+- La API responde con las cabeceras de helmet: `Content-Security-Policy` que no permite cargar nada ni incrustar la API, HSTS, `nosniff`, `Referrer-Policy: no-referrer` y sin `X-Powered-By`.
+- Swagger (`/docs`) usa la política por defecto de helmet, que permite sus propios scripts.
+- Para web y app no cambia nada: CORS sigue con `CORS_ORIGINS` y la app nativa no usa CORS.
