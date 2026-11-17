@@ -6,6 +6,16 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 17 nov 2026 · Jacobo · Imagen del backend para Azure y commit en el health (Sprint 4, tareas 3.1.1 y 3.1.2) · para revisar: Elizabeth
+
+- **Qué hay:** `Dockerfile` (Node 24, dos etapas, corre como usuario `node`, `NODE_ENV=production` dentro de la imagen) y `.dockerignore` (ningún `.env` de ninguna carpeta entra a la imagen). Es la imagen que se desplegará en Azure Container Apps. Detalle en §11, «Migración a Azure».
+- **Variable nueva: `GIT_COMMIT`.** `GET /v1/health` devuelve en `commit` el valor de `GIT_COMMIT` y, si falta o está vacía, `RENDER_GIT_COMMIT`, como hasta ahora. La define el pipeline de Azure (otro PR); **en Render no se define** y nada cambia allí. Está en `.env.example`.
+- **Sin cambios** de API, base de datos ni dependencias. La respuesta del health es la misma: `{ "status": "ok", "commit": "..." }`. En Azure, `commit` trae el SHA **corto** (7 caracteres); en Render sigue el completo.
+- **En local no cambia nada:** `npm run start:dev` sigue escuchando en `127.0.0.1`. Solo la imagen de Docker escucha en `0.0.0.0`, y por eso **no arranca** con `DEV_USER_ENABLED=true` (la protección de siempre en un ambiente desplegado). Para probar la imagen en tu equipo usa un archivo de entorno aparte, con Postgres y Redis locales, nunca tu `.env` (apunta a Neon).
+- **Render y Vercel siguen siendo producción** hasta que Azure pase las pruebas; después quedan como plan B hasta el sábado.
+
+---
+
 ## 17 nov 2026 · Elizabeth · `GET /v1/admin/platform/metrics` agrega `byDate` y `byDayHour` (Sprint 4, panel del administrador) · rama `feat/sprint4-admin-panel`
 
 - **Qué cambia (aditivo):** la respuesta agrega dos campos y **no cambia ninguno de los que ya tenía**. `byDate`: `[{ date: "AAAA-MM-DD", reservations }]`, una entrada por cada día del periodo (de 1 a 366), en orden y con los días en 0. `byDayHour`: `[{ dayOfWeek: 1..7, hour: 0..23, reservations }]`, siempre 168 entradas (lunes primero), con los ceros.

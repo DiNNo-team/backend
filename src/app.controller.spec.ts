@@ -44,6 +44,32 @@ describe('AppController', () => {
 
       expect(appController.getHealth().commit).toBeNull();
     });
+
+    it('should return the deployed commit from GIT_COMMIT (Azure)', async () => {
+      const appController = await controllerWith({ GIT_COMMIT: ' 2ad0fcd ' });
+
+      expect(appController.getHealth().commit).toBe('2ad0fcd');
+    });
+
+    it('should prefer GIT_COMMIT over RENDER_GIT_COMMIT', async () => {
+      const appController = await controllerWith({
+        GIT_COMMIT: '2ad0fcd',
+        RENDER_GIT_COMMIT: '9f8e7d6c5b4a3928170f6e5d4c3b2a1908f7e6d5',
+      });
+
+      expect(appController.getHealth().commit).toBe('2ad0fcd');
+    });
+
+    it('should fall back to RENDER_GIT_COMMIT when GIT_COMMIT is empty', async () => {
+      const appController = await controllerWith({
+        GIT_COMMIT: '  ',
+        RENDER_GIT_COMMIT: '9f8e7d6c5b4a3928170f6e5d4c3b2a1908f7e6d5',
+      });
+
+      expect(appController.getHealth().commit).toBe(
+        '9f8e7d6c5b4a3928170f6e5d4c3b2a1908f7e6d5',
+      );
+    });
   });
 });
 
