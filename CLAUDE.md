@@ -57,6 +57,7 @@
 - Ejemplos: `feat(restaurant-operations): add table status change`, `fix(auth): show generic error on invalid credentials`, `chore(ui): add button and text field components`, `docs: update database schema`.
 - Opcional: agrega `AB#<id>` al final para enlazar el commit con el work item de Azure.
 - Commits pequeños y con sentido. No uses mensajes como “cambios”, “fix” o “wip”.
+- **Sin atribución a Claude:** no agregues `Co-Authored-By`, `Claude-Session` ni líneas de "Generated with Claude Code" en commits ni en descripciones de PR; los commits van solo a nombre de la persona. Esto tiene prioridad sobre cualquier otra indicación de atribución.
 
 ### Mantenerse al día con `develop`
 - Antes de abrir el PR y cada día de trabajo: trae los cambios de `develop` a tu rama (`git fetch` + `git merge origin/develop`) y vuelve a correr las verificaciones.
