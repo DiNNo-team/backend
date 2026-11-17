@@ -42,8 +42,10 @@ import {
   fakeFirebaseAuth,
   PENDING_RESTAURANT_ID,
   REJECTED_RESTAURANT_ID,
+  SUSPENDED_RESTAURANT_ID,
   testUsers,
 } from './support/test-accounts.js';
+import { expectNoPersonalData } from './support/forbidden-keys.js';
 
 // Viernes 13:00 en Bogotá: todos los restaurantes están en horario.
 const FRIDAY_13H = new Date('2026-10-16T18:00:00Z');
@@ -52,6 +54,7 @@ const SECOND_PENDING = 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e';
 const UNKNOWN = '00000000-0000-4000-8000-000000000000';
 const ADMIN_ID = 'a7b8c9d0-e1f2-4a3b-8c4d-5e6f708192a3';
 const REASON = 'La dirección no coincide con el local.';
+const SUSPENSION = 'Varios comensales reportaron mesas que no existían.';
 
 function forbidden(code: AccountErrorCode) {
   return {
@@ -186,6 +189,17 @@ describe('Panel del administrador de DiNNo (e2e)', () => {
           rejectionReason: 'Motivo anterior.',
           reviewedBy: ADMIN_ID,
           reviewedAt: new Date('2026-10-11T12:00:00Z'),
+        },
+      ),
+      restaurantRow(
+        SUSPENDED_RESTAURANT_ID,
+        'Suspendido',
+        'suspended',
+        '2026-09-05T12:00:00Z',
+        {
+          suspensionReason: 'Motivo de la suspensión anterior.',
+          suspendedBy: ADMIN_ID,
+          suspendedAt: new Date('2026-10-12T12:00:00Z'),
         },
       ),
     ];
@@ -355,6 +369,12 @@ describe('Panel del administrador de DiNNo (e2e)', () => {
       `/v1/admin/restaurants/${PENDING_RESTAURANT_ID}/reject`,
       { reason: REASON },
     ],
+    [
+      'post',
+      `/v1/admin/restaurants/${CASA_72}/suspend`,
+      { reason: SUSPENSION },
+    ],
+    ['post', `/v1/admin/restaurants/${SUSPENDED_RESTAURANT_ID}/reactivate`],
   ];
 
   describe('acceso', () => {
@@ -370,6 +390,7 @@ describe('Panel del administrador de DiNNo (e2e)', () => {
       // El rol va antes que la aprobación: un pendiente es una cuenta de restaurante.
       ['pendingOwner', 'RESTAURANT_ACCOUNT'],
       ['rejectedOwner', 'RESTAURANT_ACCOUNT'],
+      ['suspendedOwner', 'RESTAURANT_ACCOUNT'],
       ['diner', 'DINER_ACCOUNT'],
       ['noProfile', 'ACCOUNT_NOT_ENABLED'],
     ] as const)(
@@ -383,6 +404,13 @@ describe('Panel del administrador de DiNNo (e2e)', () => {
           restaurants.find((row) => row.id === PENDING_RESTAURANT_ID)
             ?.approvalStatus,
         ).toBe('pending');
+        expect(
+          restaurants.find((row) => row.id === CASA_72)?.approvalStatus,
+        ).toBe('approved');
+        expect(
+          restaurants.find((row) => row.id === SUSPENDED_RESTAURANT_ID)
+            ?.approvalStatus,
+        ).toBe('suspended');
       },
     );
   });
@@ -693,6 +721,229 @@ describe('Panel del administrador de DiNNo (e2e)', () => {
         { reason: REASON },
       ).expect(404);
       expect(missing.body).toEqual(NOT_FOUND);
+    });
+  });
+
+  describe('suspender y reactivar (panel del administrador)', () => {
+    const suspend = (id: string, body: object = { reason: SUSPENSION }) =>
+      call(
+        'post',
+        `/v1/admin/restaurants/${id}/suspend`,
+        'platformAdmin',
+        body,
+      );
+    const reactivate = (id: string) =>
+      call('post', `/v1/admin/restaurants/${id}/reactivate`, 'platformAdmin');
+    const searchIds = async () =>
+      (
+        await call(
+          'get',
+          '/v1/search/restaurants?lat=4.655671&lng=-74.057006',
+          'diner',
+        ).expect(200)
+      ).body.map((row: Row) => row.id);
+
+    it('suspende un aprobado: guarda motivo, quién y cuándo, y avisa a la disponibilidad', async () => {
+      const res = await suspend(CASA_72).expect(200);
+
+      expect(res.body).toMatchObject({
+        id: CASA_72,
+        approvalStatus: 'suspended',
+        suspensionReason: SUSPENSION,
+        suspendedAt: FRIDAY_13H.toISOString(),
+        suspendedByEmail: 'admin@example.com',
+      });
+      expectNoPersonalData(res.body, {
+        allow: ['ownerEmail', 'reviewedByEmail', 'suspendedByEmail'],
+      });
+      expect(restaurants.find((row) => row.id === CASA_72)).toMatchObject({
+        approvalStatus: 'suspended',
+        suspendedBy: ADMIN_ID,
+        suspendedAt: FRIDAY_13H,
+      });
+      expect(emitted).toContainEqual([
+        RESTAURANT_AVAILABILITY_AFFECTED,
+        { restaurantId: CASA_72 },
+      ]);
+    });
+
+    it('la lista acepta status=suspended, la última suspensión primero', async () => {
+      await suspend(CASA_72).expect(200);
+
+      const res = await call(
+        'get',
+        '/v1/admin/restaurants?status=suspended',
+        'platformAdmin',
+      ).expect(200);
+
+      expect(res.body.items.map((item: Row) => item.id)).toEqual([
+        CASA_72,
+        SUSPENDED_RESTAURANT_ID,
+      ]);
+      expect(res.body.total).toBe(2);
+    });
+
+    it('el suspendido desaparece de la búsqueda y del detalle público, y no acepta reservas nuevas', async () => {
+      expect(await searchIds()).toContain(CASA_72);
+      await suspend(CASA_72).expect(200);
+
+      expect(await searchIds()).not.toContain(CASA_72);
+      const detail = await call(
+        'get',
+        `/v1/restaurants/${CASA_72}/public`,
+        'diner',
+      ).expect(404);
+      // Igual que un restaurante que no existe: no revela que está suspendido.
+      expect(detail.body).toEqual(NOT_FOUND);
+      const reservation = await call('post', '/v1/reservations', 'diner', {
+        restaurantId: CASA_72,
+        partySize: 2,
+      }).expect(404);
+      expect(reservation.body).toEqual(NOT_FOUND);
+    });
+
+    it('su cuenta recibe RESTAURANT_SUSPENDED fuera de la lista blanca y 200 dentro de ella', async () => {
+      await suspend(CASA_72).expect(200);
+
+      for (const [method, path] of [
+        ['get', '/v1/tables'],
+        ['get', '/v1/table-logs'],
+        ['get', '/v1/table-areas'],
+      ] as const) {
+        const res = await call(method, path, 'owner').expect(403);
+        expect(res.body).toEqual(forbidden('RESTAURANT_SUSPENDED'));
+      }
+      const patch = await request(app.getHttpServer())
+        .patch('/v1/restaurants/me')
+        .set('Authorization', 'Bearer owner')
+        .send({ name: 'Otro nombre' })
+        .expect(403);
+      expect(patch.body).toEqual(forbidden('RESTAURANT_SUSPENDED'));
+      const status = await request(app.getHttpServer())
+        .patch('/v1/restaurants/me/status')
+        .set('Authorization', 'Bearer owner')
+        .send({ isOpen: false })
+        .expect(403);
+      expect(status.body).toEqual(forbidden('RESTAURANT_SUSPENDED'));
+      await call('post', '/v1/restaurants/me/resubmit', 'owner').expect(403);
+
+      await call('get', '/v1/me', 'owner').expect(200);
+      const profile = await call('get', '/v1/restaurants/me', 'owner').expect(
+        200,
+      );
+      expect(profile.body).toMatchObject({
+        approvalStatus: 'suspended',
+        suspensionReason: SUSPENSION,
+        rejectionReason: null,
+      });
+      const state = await call(
+        'get',
+        '/v1/restaurants/me/status',
+        'owner',
+      ).expect(200);
+      expect(state.body).toEqual({
+        isOpen: true,
+        approvalStatus: 'suspended',
+        suspensionReason: SUSPENSION,
+      });
+    });
+
+    it('el administrador sigue recibiendo ADMIN_ACCOUNT en las rutas de restaurante', async () => {
+      for (const path of [
+        '/v1/tables',
+        '/v1/restaurants/me',
+        '/v1/restaurants/me/status',
+      ]) {
+        const res = await call('get', path, 'platformAdmin').expect(403);
+        expect(res.body).toEqual(forbidden('ADMIN_ACCOUNT'));
+      }
+    });
+
+    it('reactivar lo devuelve a approved: aparece de nuevo, opera y conserva la última suspensión', async () => {
+      await suspend(CASA_72).expect(200);
+      expect(await searchIds()).not.toContain(CASA_72);
+      emitted.length = 0;
+
+      const res = await reactivate(CASA_72).expect(200);
+
+      expect(res.body).toMatchObject({
+        approvalStatus: 'approved',
+        suspensionReason: SUSPENSION,
+        suspendedByEmail: 'admin@example.com',
+      });
+      expect(emitted).toContainEqual([
+        RESTAURANT_AVAILABILITY_AFFECTED,
+        { restaurantId: CASA_72 },
+      ]);
+      expect(await searchIds()).toContain(CASA_72);
+      await call('get', '/v1/tables', 'owner').expect(200);
+      // El restaurante ya no ve el motivo; el administrador sí.
+      const profile = await call('get', '/v1/restaurants/me', 'owner').expect(
+        200,
+      );
+      expect(profile.body.suspensionReason).toBeNull();
+    });
+
+    it('409 RESTAURANT_NOT_APPROVED desde pending, rejected y suspended, sin cambios ni eventos', async () => {
+      for (const id of [
+        PENDING_RESTAURANT_ID,
+        REJECTED_RESTAURANT_ID,
+        SUSPENDED_RESTAURANT_ID,
+      ]) {
+        const before = { ...restaurants.find((row) => row.id === id) };
+        const res = await suspend(id).expect(409);
+        expect(res.body).toEqual({
+          statusCode: 409,
+          message: 'Solo puedes suspender un restaurante aprobado.',
+          error: 'Conflict',
+          errorCode: 'RESTAURANT_NOT_APPROVED',
+        });
+        expect(restaurants.find((row) => row.id === id)).toEqual(before);
+      }
+      expect(emitted).toEqual([]);
+    });
+
+    it('la segunda suspensión del mismo restaurante recibe 409', async () => {
+      await suspend(CASA_72).expect(200);
+      const res = await suspend(CASA_72).expect(409);
+      expect(res.body.errorCode).toBe('RESTAURANT_NOT_APPROVED');
+    });
+
+    it('409 RESTAURANT_NOT_SUSPENDED al reactivar algo que no está suspendido', async () => {
+      for (const id of [
+        CASA_72,
+        PENDING_RESTAURANT_ID,
+        REJECTED_RESTAURANT_ID,
+      ]) {
+        const res = await reactivate(id).expect(409);
+        expect(res.body).toEqual({
+          statusCode: 409,
+          message: 'Este restaurante no está suspendido.',
+          error: 'Conflict',
+          errorCode: 'RESTAURANT_NOT_SUSPENDED',
+        });
+      }
+    });
+
+    it('404 RESTAURANT_NOT_FOUND con un id inexistente o que no es UUID', async () => {
+      for (const id of [UNKNOWN, 'no-es-uuid']) {
+        expect((await suspend(id).expect(404)).body).toEqual(NOT_FOUND);
+        expect((await reactivate(id).expect(404)).body).toEqual(NOT_FOUND);
+      }
+    });
+
+    it.each([
+      ['sin motivo', {}],
+      ['motivo corto', { reason: '  123456789 ' }],
+      ['motivo largo', { reason: 'a'.repeat(301) }],
+      ['solo espacios', { reason: '           ' }],
+      ['campo de más', { reason: SUSPENSION, extra: true }],
+    ])('400 con %s, sin suspender', async (_case, body) => {
+      const res = await suspend(CASA_72, body).expect(400);
+      expect(res.body.statusCode).toBe(400);
+      expect(
+        restaurants.find((row) => row.id === CASA_72)?.approvalStatus,
+      ).toBe('approved');
     });
   });
 });

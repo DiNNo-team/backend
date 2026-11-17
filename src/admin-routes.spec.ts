@@ -1,6 +1,7 @@
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import type { Type } from '@nestjs/common';
 import { AppModule } from './app.module.js';
+import { RATE_LIMIT_TAGS_METADATA } from './common/rate-limit/rate-limit.decorator.js';
 import { CurrentUserGuard, UserRole } from './modules/identity-access/index.js';
 import { ROLES_METADATA } from './modules/identity-access/roles/roles.decorator.js';
 
@@ -51,6 +52,7 @@ function controllersOf(root: Type): Set<Type> {
 
 interface Handler {
   route: string;
+  rateLimitTags: string[];
   roles: UserRole[] | undefined;
   guards: unknown[];
 }
@@ -76,6 +78,8 @@ function handlersOf(controller: Type): Handler[] {
         Reflect.getMetadata(PATH_METADATA, handler) !== undefined,
     )
     .map((handler) => ({
+      rateLimitTags: (Reflect.getMetadata(RATE_LIMIT_TAGS_METADATA, handler) ??
+        []) as string[],
       route: joinPath(
         base,
         Reflect.getMetadata(PATH_METADATA, handler) as string | string[],
@@ -125,4 +129,16 @@ describe('Rutas del administrador de DiNNo (/v1/admin/*)', () => {
       expect(handler.guards).toContain(CurrentUserGuard);
     },
   );
+
+  // Lecturas pesadas de toda la plataforma: su propio límite (adminReports).
+  it.each([
+    'admin/overview',
+    'admin/billing',
+    'admin/billing/:restaurantId',
+    'admin/activity',
+    'admin/platform/metrics',
+  ])('%s lleva @RateLimit("adminReports")', (route) => {
+    const handler = ADMIN_HANDLERS.find((entry) => entry.route === route);
+    expect(handler?.rateLimitTags).toEqual(['adminReports']);
+  });
 });
