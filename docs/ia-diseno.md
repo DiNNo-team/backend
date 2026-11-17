@@ -1,7 +1,7 @@
 # Diseño de la IA de DiNNo: informe inteligente del restaurante
 
 **Sprint 3 · PBI 6.1 · Tareas 6.1.3 (elegir el caso) y 6.1.5 (documento de diseño)** · Autores: Santiago y Sergio · Borrador del 9 nov 2026
-**Alcance:** solo el diseño. **No cambia código, base de datos, variables de entorno ni dependencias.** La IA se construye en el Sprint 4 (Feature 2, con mecanismo de respaldo).
+**Alcance:** el diseño (Sprint 3) y lo que se implementó en el Sprint 4. **Implementado el 17 nov 2026** (Sprint 4, tareas 2.1.1 y 2.1.3) en el módulo `src/modules/insights/`: el contrato final está en `CLAUDE.md` §12.16 y la descripción técnica en `CLAUDE.md` §11, «Informe de IA». Donde la implementación cambió el diseño original, la sección lo dice con **«Sprint 4»**. Los límites conocidos están en la sección 16.
 **Fuentes:** `DiNNo_Sprint3_Reparto.md` (§9.4), `CLAUDE.md` (§11 y §12), `docs/database.md`, `docs/export-datos.md`, el inventario de datos y la comparación de opciones del equipo, y el código citado en cada sección.
 **Regla del documento:** lo que no está en el repo ni en una fuente citada está marcado **«Por confirmar»**. Lo que es propuesta del equipo dice «Propuesta».
 
@@ -141,9 +141,15 @@ Periodo: los últimos 7 días completos, en hora de Bogotá, comparados con los 
 | `TemplateNarrativeWriter` | Respaldo con plantillas en español | — |
 | Tabla `restaurant_insights` | Guarda el último informe generado (caché) | Migración de Elizabeth |
 
-**Por confirmar con Elizabeth:** las métricas leen tablas de otros dos módulos (`reservations-checkin` y `restaurant-operations`). La regla del repo es que entre módulos solo se usan los providers exportados. Hay dos caminos: (a) consultas SQL de solo lectura dentro de `insights`, como un modelo de lectura, o (b) que esos módulos exporten un lector agregado. La (a) es más simple; la (b) respeta mejor la regla.
+**Lectura entre módulos:** las métricas leen tablas de otros dos módulos (`reservations-checkin` y `restaurant-operations`). La regla del repo es que entre módulos solo se usan los providers exportados. Había dos caminos: (a) consultas SQL de solo lectura dentro de `insights`, como un modelo de lectura, o (b) que esos módulos exporten un lector agregado.
+
+**Sprint 4 (implementado):** una mezcla de los dos. Los conteos, los check-ins y el promedio de personas salen de `RestaurantMetricsService`, que `reservations-checkin` ya exporta para esto (opción b). Lo que ese servicio no calcula (serie por día, franjas, mediana hasta el check-in y cambios manuales de mesas) sale de 4 consultas de solo lectura en `InsightsActivityReader` (opción a). Elizabeth revisa en el PR si esa lectura le sirve o prefiere moverla a un lector exportado.
+
+**Sprint 4 (cambio):** no hay tabla `restaurant_insights`. La caché vive en Redis (decisión del equipo, 17 nov 2026): sin migración y compartida entre réplicas.
 
 ### 6.2 Cuándo corre
+
+> **Sprint 4 (implementado):** bajo demanda con caché en Redis, pero **1 hora** si el texto lo redactó el modelo y **5 minutos** si salió de plantillas, no 24 horas: el periodo incluye el día de hoy y los números cambian durante el día. La clave lleva el día, así un informe nunca pasa al día siguiente, y `refresh=true` genera uno nuevo. El límite `@RateLimit('ai')` (10 por minuto por cuenta) acota el costo.
 
 **Propuesta: bajo demanda, con caché de 24 horas.** Cuando el restaurante abre la pantalla, el backend devuelve el informe guardado si tiene menos de 24 horas; si no, lo genera, lo guarda y lo devuelve.
 
@@ -159,6 +165,8 @@ Periodo: los últimos 7 días completos, en hora de Bogotá, comparados con los 
 3. Si no: `InsightsMetricsReader` calcula las métricas → `ReliabilityScorer` calcula el nivel → `NarrativeWriter` redacta el texto.
 4. `LlmNarrativeWriter` envía al modelo **solo** el objeto de métricas (números y etiquetas, sin nombre del restaurante ni datos de personas) y una instrucción fija: escribir 2 o 3 recomendaciones en español, tuteando, usando solo los números recibidos.
 5. **Validación del texto:** si la respuesta llega vacía, pasa de 600 caracteres o menciona un número que no está en las métricas, se descarta y se usa `TemplateNarrativeWriter`.
+
+> **Sprint 4 (cambio en los pasos 4 y 5):** el modelo ya no escribe números. Recibe cada dato como una clave con su valor y su significado (`"porcentaje_con_check_in": { "valor": "65 %", "significa": "…" }`) y escribe la clave entre llaves (`{porcentaje_con_check_in}`); el backend pone el valor con su unidad (`renderNarrative`). El texto se descarta si llega vacío, usa una clave que no existe, trae un dígito, un `%` o una llave suelta escritos por el modelo, o pasa de 600 caracteres ya con los valores puestos. **Por qué:** la primera versión solo revisaba que cada número del texto existiera en las métricas, y así un número real podía salir con otro sentido (los 24 cambios manuales de mesas escritos como «el 24 % de tus reservas»). Con las claves, cada valor siempre sale con su unidad y su dato correctos.
 6. Se guarda el informe con `narrativeSource` (`llm` o `template`) y se responde.
 
 ### 6.4 Variables de entorno nuevas (Sprint 4)
@@ -166,13 +174,15 @@ Periodo: los últimos 7 días completos, en hora de Bogotá, comparados con los 
 | Variable | Obligatoria | Qué es |
 |---|---|---|
 | `INSIGHTS_LLM_API_KEY` | No | Llave del proveedor del modelo. Sin ella, siempre se usan plantillas |
-| `INSIGHTS_LLM_MODEL` | No | Nombre del modelo. **Por confirmar** con el proveedor |
+| `INSIGHTS_LLM_MODEL` | No | Nombre del modelo. Sin definir: `claude-haiku-5-5` (sección 10) |
 
 Van en `.env.example` con comentario y en Render o Azure, nunca en el repo (`CLAUDE.md` §4).
 
 ---
 
-## 7. Contrato del endpoint (propuesta)
+## 7. Contrato del endpoint (propuesta del Sprint 3)
+
+> **Sprint 4:** el contrato final, que reemplaza esta propuesta, está en `CLAUDE.md` §12.16 y en Swagger (tag `insights`). Cambios principales: `period` y `previousPeriod` son días de Bogotá (`from`, `to`) y el periodo incluye hoy; `metrics` agrega `daily` (serie por día para gráficos), `checkIns`, `averagePartySize` y `daysWithManualUpdates`; `usageByCapacity` y `averageSpareSeats` no se implementaron; `narrative` agrega `fallback` (por qué se usaron plantillas); `reliability.level` usa `high`, `medium` y `low`; y `refresh=true` genera el informe de nuevo.
 
 | Método | Ruta | Rol | Recibe | Devuelve |
 |---|---|---|---|---|
@@ -271,7 +281,9 @@ La línea base son los datos del piloto antes de activar el informe.
 
 ## 12. Plan de tareas para el Sprint 4 (propuesta)
 
-Responsables **Por confirmar** en la planeación del Sprint 4. Estimaciones en horas, propuesta del equipo.
+Responsables del Sprint 4: **Santiago** el backend y **Sergio** el frontend; los dos revisan el trabajo del otro y prueban juntos. Estimaciones en horas, propuesta del equipo.
+
+**Sprint 4 (estado):** las tareas 2 a 6 y 8 están hechas en el backend (17 nov 2026). La 1 ya no aplica (caché en Redis, sin migración). La 7 es de Sergio y la 9 va en la matriz de pruebas del Sprint 4.
 
 | # | Tarea | Repo | Estimación |
 |---|---|---|---|
@@ -295,22 +307,53 @@ Responsables **Por confirmar** en la planeación del Sprint 4. Estimaciones en h
 
 ---
 
-## 14. Si el curso exige un modelo entrenado
+## 14. Alternativa: un modelo entrenado
 
-**Por confirmar con el profesor:** si un modelo de lenguaje por API, que redacta a partir de métricas, cuenta como IA para el curso.
+**Decisión del equipo (17 nov 2026):** la IA del proyecto es el informe con el modelo de lenguaje por API (Claude), que redacta a partir de métricas, más el indicador de confiabilidad. Esta sección queda como alternativa futura, no como parte del MVP.
 
 Si se exige un modelo entrenado, el diseño se mantiene y se agrega una pieza: un **modelo de clasificación simple** (por ejemplo, regresión logística) que estime la probabilidad de que una reserva termine en check-in según la franja horaria, el tamaño del grupo y el restaurante. Su resultado entraría al indicador de confiabilidad en lugar de los umbrales fijos de la sección 5. **Limitación:** con los datos actuales no hay suficientes reservas reales para entrenarlo bien; habría que entrenarlo con datos sintéticos y reentrenarlo con los del piloto.
 
 ---
 
-## 15. Por confirmar
+## 15. Puntos abiertos
 
-| # | Punto | Preguntar a |
+| # | Punto | Estado |
 |---|---|---|
-| 1 | ¿El curso acepta un modelo de lenguaje por API como la IA del proyecto? (sección 14) | Profesor |
-| 2 | ~~Proveedor del modelo y precio por llamada~~ **Resuelto:** Claude (Anthropic), Claude Haiku 5.5 por defecto y Claude Sonnet 5.5 como alternativa; precios en la sección 10. **Pendiente:** probar la calidad del texto con la API real (el prototipo solo se probó con la API simulada) y revisar las condiciones de privacidad del proveedor | Equipo |
-| 3 | Umbrales de datos suficientes y del indicador (secciones 4.3 y 5) | Santiago y Sergio, con datos del piloto |
-| 4 | Consultas SQL de solo lectura en `insights` o lectores exportados por otros módulos (sección 6.1) | Elizabeth |
-| 5 | Cómo excluir los datos de prueba y de la demo (sección 4.3) | Elizabeth |
-| 6 | ¿El indicador de confiabilidad se muestra también al comensal? (sección 5) | Equipo |
-| 7 | Responsables del Sprint 4 (sección 12) | Planeación del Sprint 4 |
+| 1 | ~~¿El modelo de lenguaje por API cuenta como la IA del proyecto?~~ | **Resuelto** (17 nov 2026): decisión del equipo, sección 14 |
+| 2 | ~~Proveedor del modelo y precio por llamada~~ | **Resuelto:** Claude (Anthropic), Claude Haiku 5.5 por defecto y Claude Sonnet 5.5 como alternativa; precios en la sección 10. **Pendiente (Santiago):** probar la calidad del texto con la API real y revisar las condiciones de privacidad del proveedor |
+| 3 | Umbrales de datos suficientes y del indicador (secciones 4.3 y 5) | Implementados con los valores iniciales (10 resueltas, 70 % y 40 %) en `insights.constants.ts`. **Se revisan con datos del piloto** (Santiago y Sergio): hoy no hay reservas reales suficientes para calibrarlos |
+| 4 | ~~Consultas SQL de solo lectura en `insights` o lectores exportados~~ | **Implementado** (sección 6.1). Elizabeth lo revisa en el PR |
+| 5 | Cómo excluir los datos de prueba y de la demo (sección 4.3) | **Abierto** (Elizabeth). Hoy el informe cuenta todo lo del restaurante; para la demo se usa `demo:reset --purge-history` o un restaurante limpio |
+| 6 | ¿El indicador de confiabilidad se muestra también al comensal? (sección 5) | Fuera del Sprint 4: solo lo ve el restaurante |
+| 7 | ~~Responsables del Sprint 4~~ | **Resuelto:** Santiago (backend) y Sergio (frontend), sección 12 |
+
+---
+
+## 16. Límites conocidos (Sprint 4)
+
+Lo que el informe hace y lo que no, para la sustentación y para quien lo use.
+
+**Datos**
+- Solo usa lo que DiNNo guarda: reservas, check-ins y cambios de mesas. No sabe cuántos comensales llegaron sin DiNNo, ni las ventas, ni las horas en que el restaurante estuvo abierto (no hay historial de Abierto/Cerrado).
+- El periodo incluye el día de hoy, que va por la mitad: temprano en el día, hoy cuenta como un día sin cambios manuales de mesas.
+- Cuenta las reservas **creadas** en el periodo por su estado **actual**. Una reserva activa que ya pasó su hora de vencimiento cuenta como activa hasta que el proceso periódico la vence (cada 15 s), no como vencida.
+- Los datos de prueba y de la demo se cuentan igual que los reales (punto 5 de la sección 15).
+
+**Precisión**
+- Con menos de 10 reservas resueltas no hay tasas, indicador ni recomendaciones: solo conteos y el aviso. Los umbrales (10, 70 %, 40 %) son valores iniciales sin calibrar.
+- Una reserva «vencida sin check-in» no prueba que el comensal no llegó: puede que el restaurante no validara el código. El texto lo dice así.
+- El indicador es una regla fija, no un modelo entrenado: no predice nada, resume lo que pasó.
+
+**Texto del modelo**
+- El modelo no escribe números: usa claves y el backend pone cada valor con su unidad (sección 6.3). Así un número nunca sale inventado ni con otra unidad. **Lo que sigue siendo posible:** que el modelo elija una clave equivocada en una frase (por ejemplo, poner `{reservas_canceladas}` donde quería hablar de las vencidas). Lo reducen los nombres explícitos de las claves, el significado de cada una en el mensaje y la marca de «generado automáticamente», pero ninguna validación automática lo descarta del todo sin entender el texto.
+- Con Claude Haiku 5.5, si el modelo se niega a responder no hay un modelo de respaldo en el servidor: el informe sale con plantillas.
+- Espera máximo 20 s, sin reintentos; después usa plantillas. Ese informe se guarda solo 5 minutos para volver a intentar pronto.
+
+**Cobertura**
+- Solo el restaurante dueño ve su informe; el comensal no ve nada de esto.
+- La recomendación es para el restaurante: la IA nunca cambia el estado de una reserva ni de una mesa, y el flujo principal funciona igual sin ella.
+
+**Recomendaciones**
+- Calibrar los umbrales con 2 a 4 semanas de datos del piloto.
+- Medir cuántos informes salen con plantillas por fallas del modelo (WARN `Informe de IA con plantillas` en el log); la meta propuesta es menos del 10 % (sección 11).
+- Si la calidad del texto no alcanza con Claude Haiku 5.5, probar `INSIGHTS_LLM_MODEL=claude-sonnet-5-5`, sin cambiar código.
