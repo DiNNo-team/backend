@@ -126,7 +126,7 @@ async function createApp() {
       });
       return Promise.resolve([[], 1]);
     }
-    if (sql.includes('generate_series')) {
+    if (sql.includes("interval '1 month'")) {
       return Promise.resolve(
         Array.from({ length: 12 }, (_, index) => {
           const month = new Date(Date.UTC(2025, 11 + index, 1))
@@ -247,6 +247,19 @@ async function createApp() {
           active: 1,
           average_party_size: 2.875,
         },
+      ]);
+    }
+    if (sql.includes('generate_series($3::date')) {
+      return Promise.resolve([
+        { date: '2026-11-01', reservations: 6 },
+        { date: '2026-11-02', reservations: 0 },
+        { date: '2026-11-03', reservations: 4 },
+      ]);
+    }
+    if (sql.includes('GROUP BY 1, 2')) {
+      return Promise.resolve([
+        { dayOfWeek: 5, hour: 13, reservations: 6 },
+        { dayOfWeek: 6, hour: 20, reservations: 4 },
       ]);
     }
     if (sql.includes('EXTRACT(HOUR')) {
@@ -725,6 +738,23 @@ describe('Panel del administrador: plataforma (e2e)', () => {
       expect(res.body.peakHours[13]).toEqual({ hour: 13, reservations: 6 });
       expect(res.body.peakHours[0]).toEqual({ hour: 0, reservations: 0 });
       expect(res.body.byDayOfWeek).toHaveLength(7);
+      // Aditivo: los dos desgloses nuevos.
+      expect(res.body.byDate).toEqual([
+        { date: '2026-11-01', reservations: 6 },
+        { date: '2026-11-02', reservations: 0 },
+        { date: '2026-11-03', reservations: 4 },
+      ]);
+      expect(res.body.byDayHour).toHaveLength(168);
+      expect(res.body.byDayHour[0]).toEqual({
+        dayOfWeek: 1,
+        hour: 0,
+        reservations: 0,
+      });
+      expect(res.body.byDayHour[4 * 24 + 13]).toEqual({
+        dayOfWeek: 5,
+        hour: 13,
+        reservations: 6,
+      });
       // Sin filtro de restaurante: toda la plataforma.
       for (const [sql] of query.mock.calls as [string][]) {
         expect(sql).not.toContain('"restaurant_id" = $1');

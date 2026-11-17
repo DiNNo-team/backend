@@ -379,6 +379,28 @@ export class DayDistributionDto {
   reservations: number;
 }
 
+export class DateDistributionDto {
+  @ApiProperty({
+    description: 'Día de Bogotá (AAAA-MM-DD).',
+    example: '2026-11-17',
+  })
+  date: string;
+
+  @ApiProperty({ type: 'integer', example: 4 })
+  reservations: number;
+}
+
+export class DayHourDistributionDto {
+  @ApiProperty({ description: '1 = lunes … 7 = domingo.', example: 5 })
+  dayOfWeek: number;
+
+  @ApiProperty({ description: 'Hora de Bogotá, de 0 a 23.', example: 13 })
+  hour: number;
+
+  @ApiProperty({ type: 'integer', example: 2 })
+  reservations: number;
+}
+
 export const METRICS_BASIS = 'reservations_created_at';
 
 export class PlatformMetricsDto {
@@ -413,6 +435,20 @@ export class PlatformMetricsDto {
     type: [DayDistributionDto],
   })
   byDayOfWeek: DayDistributionDto[];
+
+  @ApiProperty({
+    description:
+      'Una entrada por CADA día del periodo, en orden, con 0 en los días sin reservas (hasta 366). La suma es reservations.created.',
+    type: [DateDistributionDto],
+  })
+  byDate: DateDistributionDto[];
+
+  @ApiProperty({
+    description:
+      'Siempre 168 entradas (7 días × 24 horas): de lunes (1) a domingo (7) y, dentro de cada día, de la hora 0 a la 23, con ceros incluidos. La suma es reservations.created.',
+    type: [DayHourDistributionDto],
+  })
+  byDayHour: DayHourDistributionDto[];
 
   @ApiProperty({ example: '2026-11-17T15:00:00.000Z' })
   serverTime: string;

@@ -6,10 +6,13 @@ import {
 } from '../billing/billing-statement.service.js';
 import {
   byDayOfWeek,
+  dayHourDistribution,
   hourlyDistribution,
   peakHours,
   reservationRates,
   roundAverage,
+  type DateCount,
+  type DayHourCount,
   type DayOfWeekCount,
   type HourCount,
   type ReservationCounts,
@@ -40,6 +43,10 @@ export interface PlatformMetrics {
   averagePartySize: number | null;
   hourly: HourCount[];
   byDayOfWeek: DayOfWeekCount[];
+  // Reservas creadas por cada día del periodo (también los días en 0) y por
+  // día de la semana y hora (siempre 168 celdas), en hora de Bogotá.
+  byDate: DateCount[];
+  byDayHour: DayHourCount[];
 }
 
 interface ReservationCountsRow {
@@ -88,9 +95,54 @@ export class RestaurantMetricsService {
     return { ...metrics, peakHours: peakHours(hours) };
   }
 
+  // Las mismas consultas del restaurante sin su filtro, más los dos desgloses
+  // del panel. Todas cuentan las MISMAS reservas (el mismo WHERE de scopedRange),
+  // así que la suma de byDate y la de byDayHour son reservations.created.
   async forPlatform(period: ReportPeriod): Promise<PlatformMetrics> {
-    const { hours, ...metrics } = await this.compute(period);
-    return { ...metrics, hourly: hourlyDistribution(hours) };
+    const [{ hours, ...metrics }, byDate, dayHours] = await Promise.all([
+      this.compute(period),
+      this.reservationsByDate(period),
+      this.reservationsByDayHour(period),
+    ]);
+    return {
+      ...metrics,
+      hourly: hourlyDistribution(hours),
+      byDate,
+      byDayHour: dayHourDistribution(dayHours),
+    };
+  }
+
+  // Una entrada por CADA día del periodo (generate_series), con 0 en los días sin
+  // reservas. El día es el de Bogotá: created_at AT TIME ZONE 'America/Bogota'
+  // pasa a hora local y ::date toma su día. $3 y $4 son los días from y to del
+  // periodo (ya validados por parseReportPeriod).
+  private async reservationsByDate(period: ReportPeriod): Promise<DateCount[]> {
+    const range = scopedRange('created_at', period);
+    return this.dataSource.query<DateCount[]>(
+      `SELECT to_char(d."day", 'YYYY-MM-DD') AS "date", COALESCE(r."reservations", 0)::int AS "reservations"
+       FROM generate_series($3::date, $4::date, interval '1 day') AS d("day")
+       LEFT JOIN (
+         SELECT ("created_at" AT TIME ZONE '${REPORT_TIMEZONE}')::date AS "day", COUNT(*)::int AS "reservations"
+         FROM "reservations"
+         WHERE ${range.where}
+         GROUP BY 1
+       ) r ON r."day" = d."day"::date
+       ORDER BY d."day"`,
+      [...range.params, period.from, period.to],
+    );
+  }
+
+  private reservationsByDayHour(period: ReportPeriod): Promise<DayHourCount[]> {
+    const range = scopedRange('created_at', period);
+    return this.dataSource.query<DayHourCount[]>(
+      `SELECT EXTRACT(ISODOW FROM "created_at" AT TIME ZONE '${REPORT_TIMEZONE}')::int AS "dayOfWeek",
+              EXTRACT(HOUR FROM "created_at" AT TIME ZONE '${REPORT_TIMEZONE}')::int AS "hour",
+              COUNT(*)::int AS "reservations"
+       FROM "reservations"
+       WHERE ${range.where}
+       GROUP BY 1, 2`,
+      range.params,
+    );
   }
 
   private async compute(

@@ -252,6 +252,8 @@ export class PlatformReportsService {
       averagePartySize: metrics.averagePartySize,
       peakHours: metrics.hourly,
       byDayOfWeek: metrics.byDayOfWeek,
+      byDate: metrics.byDate,
+      byDayHour: metrics.byDayHour,
       serverTime: this.clock.now().toISOString(),
     };
   }

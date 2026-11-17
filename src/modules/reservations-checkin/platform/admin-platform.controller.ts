@@ -76,7 +76,7 @@ export class AdminPlatformController {
   @ApiOperation({
     summary: 'Métricas de reservas de toda la plataforma',
     description:
-      'Periodo en días de Bogotá, inclusivo (from..to, AAAA-MM-DD); por defecto, del día 1 del mes en curso hasta hoy; máximo 366 días. Antes de contar vence todas las reservas debidas. Todo se cuenta sobre las reservas creadas en el periodo (basis: reservations_created_at), por estado actual, con las mismas fórmulas del resumen del restaurante. peakHours: las 24 horas (0 a 23); byDayOfWeek: 7 entradas.',
+      'Periodo en días de Bogotá, inclusivo (from..to, AAAA-MM-DD); por defecto, del día 1 del mes en curso hasta hoy; máximo 366 días. Antes de contar vence todas las reservas debidas. Todo se cuenta sobre las reservas creadas en el periodo (basis: reservations_created_at), por estado actual, con las mismas fórmulas del resumen del restaurante. peakHours: las 24 horas (0 a 23); byDayOfWeek: 7 entradas; byDate: una entrada por cada día del periodo, con los días en 0; byDayHour: siempre 168 entradas (día de la semana × hora). Las sumas de byDate y byDayHour son reservations.created.',
   })
   @ApiOkResponse({ type: PlatformMetricsDto })
   @ApiBadRequestResponse({

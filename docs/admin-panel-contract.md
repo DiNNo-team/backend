@@ -252,6 +252,18 @@ Métricas de reservas de toda la plataforma. Por defecto, del día 1 del mes en 
     { "dayOfWeek": 1, "reservations": 12 },
     "… 7 entradas, 1 = lunes … 7 = domingo …"
   ],
+  "byDate": [
+    { "date": "2026-11-01", "reservations": 9 },
+    { "date": "2026-11-02", "reservations": 0 },
+    "… una entrada por CADA día del periodo, en orden …",
+    { "date": "2026-11-17", "reservations": 6 }
+  ],
+  "byDayHour": [
+    { "dayOfWeek": 1, "hour": 0, "reservations": 0 },
+    { "dayOfWeek": 1, "hour": 1, "reservations": 0 },
+    "… siempre 168 entradas: lunes a domingo y, dentro de cada día, la hora 0 a la 23 …",
+    { "dayOfWeek": 7, "hour": 23, "reservations": 1 }
+  ],
   "serverTime": "2026-11-17T15:00:00.000Z"
 }
 ```
@@ -259,6 +271,9 @@ Métricas de reservas de toda la plataforma. Por defecto, del día 1 del mes en 
 - **`basis: "reservations_created_at"`**: todo se cuenta sobre las reservas **creadas** en el periodo (hora de Bogotá), por su estado actual. Mostrarlo en pantalla, por ejemplo «Según la fecha en que se hizo la reserva».
 - `rates` con las mismas fórmulas del resumen del restaurante: `conversion` = completed / created; `noShow` = expired / (completed + expired); `cancellation` = cancelled / created. 4 decimales; `null` si el denominador es 0 (mostrar «Sin datos», nunca 0 ni NaN).
 - `peakHours`: **siempre 24 entradas** (a diferencia del resumen del restaurante, que trae las 3 mayores). `byDayOfWeek`: siempre 7.
+- **`byDate`** (aditivo): una entrada por **cada día del periodo** (`from`..`to`, inclusivo, hora de Bogotá), en orden ascendente y **con los días en 0 incluidos**; de 1 a 366 entradas. Sirve para la serie de tiempo.
+- **`byDayHour`** (aditivo): **siempre 168 entradas** (7 días × 24 horas), ordenadas de lunes (`dayOfWeek` 1) a domingo (7) y, dentro de cada día, de la hora 0 a la 23, **con los ceros incluidos**. Sirve para el mapa de calor (se puede pintar directo: índice = (`dayOfWeek` − 1) × 24 + `hour`).
+- **Mismas reservas, mismas sumas:** `byDate`, `byDayHour`, `peakHours` y `byDayOfWeek` cuentan las mismas reservas que `reservations.created` (las creadas en el periodo, hora de Bogotá, `basis: "reservations_created_at"`), así que **la suma de `byDate` = la suma de `byDayHour` = `reservations.created`**. Una reserva a las 23:30 de un día cuenta en ese día; a las 00:10, en el siguiente. Los campos de siempre no cambiaron.
 - Antes de contar, el backend vence las reservas que ya debían vencer.
 - `400` (lista) con los mensajes del periodo de siempre (`from` posterior a `to`, `to` en el futuro, más de 366 días, formato).
 
