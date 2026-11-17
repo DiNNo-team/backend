@@ -125,7 +125,7 @@ export class RestaurantProfileResponseDto extends RestaurantResponseDto {
       // The restaurant sees the reason only while suspended (the admin always).
       suspensionReason:
         restaurant.approvalStatus === SUSPENDED
-          ? restaurant.suspensionReason
+          ? (restaurant.suspensionReason ?? null)
           : null,
       contactPhone: restaurant.contactPhone,
     };

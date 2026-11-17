@@ -186,7 +186,7 @@ export class AdminRestaurantDetailDto extends AdminRestaurantItemDto {
           ? restaurant.rejectionReason
           : null,
       reviewedByEmail: emails.reviewedByEmail,
-      suspensionReason: restaurant.suspensionReason,
+      suspensionReason: restaurant.suspensionReason ?? null,
       suspendedAt: restaurant.suspendedAt?.toISOString() ?? null,
       suspendedByEmail: emails.suspendedByEmail,
       createdAt: restaurant.createdAt.toISOString(),

@@ -311,6 +311,7 @@ describe('POST /v1/restaurants/signup (e2e)', () => {
         activeReservationsCount: 0,
         approvalStatus: 'pending',
         rejectionReason: null,
+        suspensionReason: null,
         contactPhone: '+573001234567',
       });
       const created = db.users.filter((user) => user.firebaseUid === 'uid-new');
@@ -480,6 +481,7 @@ describe('POST /v1/restaurants/signup (e2e)', () => {
       expect(res.body).toMatchObject({
         approvalStatus: 'approved',
         rejectionReason: null,
+        suspensionReason: null,
         contactPhone: '+573001234567',
       });
       expect(

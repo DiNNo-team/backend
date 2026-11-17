@@ -40,7 +40,7 @@ export class RestaurantStatusResponseDto {
       approvalStatus: restaurant.approvalStatus,
       suspensionReason:
         restaurant.approvalStatus === SUSPENDED
-          ? restaurant.suspensionReason
+          ? (restaurant.suspensionReason ?? null)
           : null,
     };
   }

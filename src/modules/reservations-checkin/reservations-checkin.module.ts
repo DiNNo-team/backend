@@ -6,7 +6,6 @@ import {
   TableReservations,
 } from '../restaurant-operations/index.js';
 import { SearchAvailabilityModule } from '../search-availability/index.js';
-import { BillingPeriod } from './billing/billing-period.entity.js';
 import { BillingPeriodsService } from './billing/billing-periods.service.js';
 import { BillingStatementService } from './billing/billing-statement.service.js';
 import { checkInFeeConfigProvider } from './billing/checkin-fee.config.js';
@@ -43,7 +42,11 @@ import { RestaurantReportsService } from './reports/restaurant-reports.service.j
 // exportada por SearchAvailabilityModule, que la valida al arrancar.
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reservation, CheckIn, BillingPeriod]),
+    // billing_periods (BillingPeriod) is read and written with raw SQL only
+    // (PlatformBillingReader, BillingPeriodsService): it is not registered here,
+    // so the e2e tests that mount this module need no extra repository
+    // override. data-source.ts loads it by glob for the migrations.
+    TypeOrmModule.forFeature([Reservation, CheckIn]),
     IdentityAccessModule,
     SearchAvailabilityModule,
     RestaurantOperationsModule,

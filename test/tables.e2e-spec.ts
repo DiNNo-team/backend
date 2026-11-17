@@ -539,6 +539,7 @@ describe('Tables (e2e)', () => {
         'pendingApproval',
         'rejected',
         'restaurantRequired',
+        'suspended',
       ]);
       expect(forbidden.examples.dinerAccount.value).toEqual({
         statusCode: 403,

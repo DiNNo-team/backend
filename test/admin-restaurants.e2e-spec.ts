@@ -454,8 +454,8 @@ describe('Panel del administrador de DiNNo (e2e)', () => {
 
     it.each([
       [
-        'status=suspended',
-        'El estado de la solicitud (status) debe ser uno de estos: pending, approved, rejected.',
+        'status=archived',
+        'El estado de la solicitud (status) debe ser uno de estos: pending, approved, rejected, suspended.',
       ],
       [
         'page=0',
@@ -510,6 +510,9 @@ describe('Panel del administrador de DiNNo (e2e)', () => {
         ],
         rejectionReason: 'Motivo anterior.',
         reviewedByEmail: 'admin@example.com',
+        suspensionReason: null,
+        suspendedAt: null,
+        suspendedByEmail: null,
         createdAt: '2026-10-10T12:00:00.000Z',
       });
     });

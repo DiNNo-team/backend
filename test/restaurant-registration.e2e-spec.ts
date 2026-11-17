@@ -146,6 +146,7 @@ describe('Restaurant registration (e2e)', () => {
           address: 'Carrera 7 # 72-10',
           approvalStatus: 'approved',
           rejectionReason: null,
+          suspensionReason: null,
           contactPhone: null,
           createdAt: new Date('2026-10-04T12:00:00Z'),
           updatedAt: new Date('2026-10-04T12:00:00Z'),
@@ -220,6 +221,7 @@ describe('Restaurant registration (e2e)', () => {
         longitude: null,
         approvalStatus: 'approved',
         rejectionReason: null,
+        suspensionReason: null,
         contactPhone: null,
         activeReservationsCount: 0,
         schedules: [
@@ -353,6 +355,7 @@ describe('Restaurant registration (e2e)', () => {
         address: 'Carrera 7 # 72-10',
         approvalStatus: 'approved',
         rejectionReason: null,
+        suspensionReason: null,
         contactPhone: null,
         activeReservationsCount: 0,
         schedules: [
