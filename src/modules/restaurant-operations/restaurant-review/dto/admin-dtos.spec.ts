@@ -13,6 +13,10 @@ import {
   REJECTION_REASON_INVALID,
   RejectRestaurantDto,
 } from './reject-restaurant.dto.js';
+import {
+  SUSPENSION_REASON_INVALID,
+  SuspendRestaurantDto,
+} from './suspend-restaurant.dto.js';
 
 async function messagesOf<T extends object>(
   type: new () => T,
@@ -21,6 +25,32 @@ async function messagesOf<T extends object>(
   const errors = await validate(plainToInstance(type, plain));
   return errors.flatMap((error) => Object.values(error.constraints ?? {}));
 }
+
+describe('SuspendRestaurantDto', () => {
+  it('accepts a reason of 10 to 300 characters and trims it', async () => {
+    const dto = plainToInstance(SuspendRestaurantDto, {
+      reason: '   Reportes de mesas falsas.  ',
+    });
+
+    expect(await validate(dto)).toEqual([]);
+    expect(dto.reason).toBe('Reportes de mesas falsas.');
+    expect(
+      await messagesOf(SuspendRestaurantDto, { reason: 'a'.repeat(300) }),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ['missing', {}],
+    ['not text', { reason: 1234567890 }],
+    ['only spaces', { reason: '                 ' }],
+    ['9 characters after trimming', { reason: '  123456789  ' }],
+    ['301 characters', { reason: 'a'.repeat(301) }],
+  ])('rejects a reason %s', async (_case, plain) => {
+    expect(new Set(await messagesOf(SuspendRestaurantDto, plain))).toEqual(
+      new Set([SUSPENSION_REASON_INVALID]),
+    );
+  });
+});
 
 describe('RejectRestaurantDto', () => {
   it('accepts a reason of 10 to 300 characters and trims it', async () => {
@@ -77,8 +107,14 @@ describe('AdminRestaurantsQueryDto', () => {
 
   it('rejects an unknown status', async () => {
     expect(
-      await messagesOf(AdminRestaurantsQueryDto, { status: 'suspended' }),
+      await messagesOf(AdminRestaurantsQueryDto, { status: 'archived' }),
     ).toEqual([APPROVAL_STATUS_INVALID]);
+  });
+
+  it('accepts the suspended restaurants (panel del administrador)', async () => {
+    expect(
+      await messagesOf(AdminRestaurantsQueryDto, { status: 'suspended' }),
+    ).toEqual([]);
   });
 
   it.each(['0', '-1', '1.5', '', '0x10', '1e1', 'abc'])(

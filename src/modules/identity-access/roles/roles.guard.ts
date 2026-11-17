@@ -5,11 +5,15 @@ import {
   type ExecutionContext,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { unapprovedCode } from '../approval/unapproved-code.js';
+import {
+  unapprovedCode,
+  type UnapprovedCode,
+} from '../approval/unapproved-code.js';
 import type { RequestIdentity } from '../current-user/current-user-data.js';
 import type { RequestWithCurrentUser } from '../current-user/current-user.guard.js';
 import { accountForbidden, type AccountErrorCode } from './account-errors.js';
 import {
+  ALLOW_SUSPENDED_RESTAURANT_METADATA,
   ALLOW_UNAPPROVED_RESTAURANT_METADATA,
   ALLOW_UNREGISTERED_ACCOUNT_METADATA,
 } from './access-exceptions.decorator.js';
@@ -25,14 +29,25 @@ const WRONG_ROLE_CODE: Record<UserRole, AccountErrorCode> = {
   [UserRole.PLATFORM_ADMIN]: 'ADMIN_ACCOUNT',
 };
 
+// The exception list that lets each approval code through: pending and
+// rejected share one (@AllowUnapprovedRestaurant); a suspended restaurant has
+// its own (@AllowSuspendedRestaurant), because it may read its billing and
+// check in its active reservations but not edit or resubmit.
+const ALLOWED_BY_CODE: Record<UnapprovedCode, string> = {
+  ACCOUNT_PENDING_APPROVAL: ALLOW_UNAPPROVED_RESTAURANT_METADATA,
+  ACCOUNT_REJECTED: ALLOW_UNAPPROVED_RESTAURANT_METADATA,
+  RESTAURANT_SUSPENDED: ALLOW_SUSPENDED_RESTAURANT_METADATA,
+};
+
 // Runs after CurrentUserGuard (which already answered the 401s). Precedence of
 // its 403s (CLAUDE.md §11, "Aprobación de restaurantes"):
 //   1. account without profile → PROFILE_REQUIRED (route accepts diner) or
 //      ACCOUNT_NOT_ENABLED, unless the route allows it (@AllowUnregisteredAccount);
 //   2. role the route does not accept → DINER_ACCOUNT, RESTAURANT_ACCOUNT or
 //      ADMIN_ACCOUNT, by the caller's role;
-//   3. restaurant_admin whose restaurant is pending or rejected → the approval
-//      code, unless the route is in the list (@AllowUnapprovedRestaurant).
+//   3. restaurant_admin whose restaurant is pending, rejected or suspended →
+//      the approval code, unless the route is in its list
+//      (@AllowUnapprovedRestaurant or @AllowSuspendedRestaurant).
 // A restaurant_admin without a restaurant passes: requireRestaurant answers
 // RESTAURANT_REQUIRED later, as before. The generic 403 without errorCode is
 // only for a route whose CurrentUserGuard did not run.
@@ -64,7 +79,7 @@ export class RolesGuard implements CanActivate {
     const approvalCode = unapprovedCode(user);
     if (
       approvalCode !== null &&
-      !this.metadata<boolean>(context, ALLOW_UNAPPROVED_RESTAURANT_METADATA)
+      !this.metadata<boolean>(context, ALLOWED_BY_CODE[approvalCode])
     ) {
       throw accountForbidden(approvalCode);
     }

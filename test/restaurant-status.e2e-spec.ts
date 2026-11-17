@@ -127,6 +127,9 @@ describe('Restaurant status (e2e)', () => {
       rejectionReason: null,
       reviewedBy: null,
       reviewedAt: null,
+      suspensionReason: null,
+      suspendedAt: null,
+      suspendedBy: null,
       contactPhone: null,
       submittedAt: new Date('2026-10-04T12:00:00Z'),
       createdAt: new Date('2026-10-04T12:00:00Z'),
@@ -171,7 +174,11 @@ describe('Restaurant status (e2e)', () => {
       .get('/v1/restaurants/me/status')
       .expect(200);
 
-    expect(res.body).toEqual({ isOpen: true });
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
     expect(restaurants.findOneBy).toHaveBeenCalledWith({ id: RESTAURANT_ID });
   });
 
@@ -180,12 +187,20 @@ describe('Restaurant status (e2e)', () => {
       .patch('/v1/restaurants/me/status')
       .send({ isOpen: false })
       .expect(200);
-    expect(patch.body).toEqual({ isOpen: false });
+    expect(patch.body).toEqual({
+      isOpen: false,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
 
     const get = await request(app.getHttpServer())
       .get('/v1/restaurants/me/status')
       .expect(200);
-    expect(get.body).toEqual({ isOpen: false });
+    expect(get.body).toEqual({
+      isOpen: false,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
   });
 
   it('closing the restaurant does not touch its reservations (§12.2)', async () => {
@@ -214,7 +229,11 @@ describe('Restaurant status (e2e)', () => {
       .send({ isOpen: true })
       .expect(200);
 
-    expect(res.body).toEqual({ isOpen: true });
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
   });
 
   it('answers 200 when asked for the state it already has', async () => {
@@ -223,7 +242,11 @@ describe('Restaurant status (e2e)', () => {
       .send({ isOpen: true })
       .expect(200);
 
-    expect(res.body).toEqual({ isOpen: true });
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
     expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
   });
 
@@ -238,7 +261,11 @@ describe('Restaurant status (e2e)', () => {
       .set('x-dev-user-id', OTHER_OWNER_ID)
       .expect(200);
 
-    expect(res.body).toEqual({ isOpen: true });
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
     expect(stored.get(OTHER_RESTAURANT_ID)?.isOpen).toBe(true);
     expect(restaurants.update).toHaveBeenCalledTimes(1);
     expect(restaurants.update).toHaveBeenCalledWith(

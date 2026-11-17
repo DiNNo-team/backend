@@ -29,6 +29,9 @@ function createService(answers: Answers) {
   });
   const billing = {
     totals: vi.fn().mockResolvedValue({ checkIns: 4, amountCop: 9500 }),
+    platformTotals: vi
+      .fn()
+      .mockResolvedValue({ checkIns: 9, amountCop: 18000 }),
   };
   const service = new RestaurantMetricsService(
     { query } as unknown as DataSource,
@@ -147,5 +150,57 @@ describe('RestaurantMetricsService', () => {
     for (const sql of grouped) {
       expect(sql).toContain(`AT TIME ZONE 'America/Bogota'`);
     }
+  });
+
+  describe('forPlatform (panel del administrador)', () => {
+    it('uses the same queries without the restaurant filter, and the platform totals', async () => {
+      const { service, query, billing } = createService({
+        ...EMPTY,
+        hours: [{ hour: 13, reservations: 3 }],
+        days: [{ dayOfWeek: 5, reservations: 3 }],
+      });
+
+      const metrics = await service.forPlatform(period());
+
+      expect(billing.platformTotals).toHaveBeenCalledWith(period());
+      expect(billing.totals).not.toHaveBeenCalled();
+      expect(metrics.billing).toEqual({ checkIns: 9, amountCop: 18000 });
+      for (const [sql, params] of query.mock.calls) {
+        expect(sql).not.toContain('restaurant_id');
+        expect(sql).toContain('"created_at" >= $1 AND "created_at" < $2');
+        expect(params).toEqual([period().startsAt, period().endsBefore]);
+      }
+    });
+
+    it('returns the 24-hour distribution instead of the top 3', async () => {
+      const { service } = createService({
+        ...EMPTY,
+        hours: [
+          { hour: 13, reservations: 3 },
+          { hour: 19, reservations: 2 },
+          { hour: 12, reservations: 2 },
+          { hour: 20, reservations: 1 },
+        ],
+      });
+
+      const metrics = await service.forPlatform(period());
+
+      expect(metrics.hourly).toHaveLength(24);
+      expect(metrics.hourly[20]).toEqual({ hour: 20, reservations: 1 });
+      expect(metrics).not.toHaveProperty('peakHours');
+    });
+
+    it('forRestaurant keeps its top 3 and its restaurant filter', async () => {
+      const { service, query, billing } = createService(EMPTY);
+
+      const metrics = await service.forRestaurant(RESTAURANT_ID, period());
+
+      expect(metrics.peakHours).toEqual([]);
+      expect(metrics).not.toHaveProperty('hourly');
+      expect(billing.platformTotals).not.toHaveBeenCalled();
+      for (const [sql] of query.mock.calls) {
+        expect(sql).toContain('"restaurant_id" = $1');
+      }
+    });
   });
 });

@@ -6,6 +6,48 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 17 nov 2026 · Elizabeth · Panel del administrador: suspensión, cobro mensual y reportes de plataforma (Sprint 4) · rama `feat/sprint4-admin-panel` · **migración pendiente en producción**
+
+- **Qué hay (backend):** suspender y reactivar restaurantes aprobados, estado de cobro mensual por restaurante (pendiente / cobrado, marcado a mano), ingresos de la plataforma, directorio de restaurantes con su actividad y métricas de reservas de toda la plataforma. Contrato completo para la web en [`docs/admin-panel-contract.md`](docs/admin-panel-contract.md); reglas en `CLAUDE.md` §8, §10 y §11 («Administrador», «Suspensión», «Cobro mensual y reportes de plataforma»).
+- **Endpoints nuevos** (todos `platform_admin`, Swagger tag `admin`):
+  - `POST /v1/admin/restaurants/:id/suspend` `{ reason }` y `POST /v1/admin/restaurants/:id/reactivate`.
+  - `GET /v1/admin/overview?month`, `GET /v1/admin/billing?month&page&pageSize`, `GET /v1/admin/billing/:restaurantId?month&page&pageSize`, `POST /v1/admin/billing/:restaurantId/:month/mark-paid` y `.../mark-pending`.
+  - `GET /v1/admin/activity?month&page&pageSize` (no `/admin/restaurants/activity`: chocaría con `/admin/restaurants/:id`) y `GET /v1/admin/platform/metrics?from&to`.
+- **Cambios aditivos en respuestas existentes:**
+  - `approvalStatus` puede traer `suspended` (en `GET /v1/restaurants/me`, la lista y el detalle del admin y `GET /v1/admin/restaurants?status=suspended`).
+  - `RestaurantProfileResponseDto` agrega `suspensionReason` (solo mientras está suspendido; si no, `null`).
+  - `GET`/`PATCH /v1/restaurants/me/status` agregan `approvalStatus` y `suspensionReason` (`isOpen` no cambia).
+  - El detalle del admin agrega `suspensionReason`, `suspendedAt` y `suspendedByEmail` (la última suspensión, también después de reactivar).
+- **`errorCode` nuevos:**
+  - 403 `RESTAURANT_SUSPENDED`: también es `connect_error` del WebSocket, sin reintento.
+  - 409 `RESTAURANT_NOT_APPROVED`, `RESTAURANT_NOT_SUSPENDED`, `PERIOD_NOT_CLOSED`, `NOTHING_TO_BILL`, `PERIOD_ALREADY_PAID` y `PERIOD_NOT_PAID`.
+- **Cuenta suspendida:**
+  - Solo puede usar `GET /v1/me`, `GET /v1/restaurants/me`, `GET /v1/restaurants/me/status`, `GET /v1/restaurants/me/summary`, `GET /v1/restaurants/me/billing/check-ins`, `GET /v1/restaurants/me/reservations` y `POST /v1/restaurants/me/check-ins` (sus reservas activas se respetan hasta el check-in o el vencimiento).
+  - Todo lo demás responde `403 RESTAURANT_SUSPENDED`.
+  - Para el comensal no existe: búsqueda sin él; detalle y reserva con `404 RESTAURANT_NOT_FOUND`, igual que un restaurante inexistente.
+- **Límite de peticiones:** etiqueta nueva `adminReports`, 30 por minuto, en overview, cobro (lista y detalle), directorio y métricas (§12.14).
+- **Migraciones nuevas, en este orden** (aplicadas y probadas up → down → up en la base de **pruebas**; **pendientes en la base de desarrollo / producción**):
+  1. `1794700000000-AddRestaurantSuspension`: `suspended` en `CHK_restaurants_approval_status`, `suspension_reason`, `suspended_at`, `suspended_by` (FK) y `CHK_restaurants_suspension`.
+  2. `1794700000001-CreateBillingPeriods`: tabla `billing_periods`.
+  3. `1794700000002-AddPlatformReportIndexes`: `IDX_check_ins_checked_in_at` e `IDX_reservations_created_at`.
+  - **Sin la 1, responde 500 en Render toda ruta que lee el restaurante completo** (perfil, estado abierto/cerrado, edición, registro y panel del administrador): la entidad ya lee las columnas nuevas. Sin la 2, los endpoints de cobro del panel. Sin la 3 todo funciona, más lento. Hay que correrlas **antes** de fusionar a `develop`.
+- **Para Sebastián (web):**
+  - La web actual no conoce `suspended` ni `RESTAURANT_SUSPENDED`: el `AccessGuard` necesita una pantalla de «restaurante suspendido» (texto y motivo en `docs/admin-panel-contract.md`).
+  - Las pantallas nuevas del panel salen de ese mismo contrato.
+- **Para Sebastián (app):**
+  - Agregar `RESTAURANT_SUSPENDED` a los códigos del socket que no se reintentan (la app de comensal no lo recibe, pero el tipo lo lista).
+  - Del lado del comensal no cambia nada.
+- **Para todos:** §8 y §10 de `CLAUDE.md` cambiaron y deben quedar iguales en web y mobile el mismo día.
+- **Sin variables de entorno nuevas ni dependencias nuevas.**
+- **Riesgos aceptados (decididos con Elizabeth el 17 nov):**
+  - **Socket ya abierto:** un restaurante suspendido con el socket conectado no se desconecta (el token solo se revisa al conectar). Sigue recibiendo los eventos de sus reservas en curso, lo que le sirve para el check-in.
+  - **Reserva casi simultánea:** una reserva creada milisegundos después de suspender se crea igual (el mismo criterio del cierre del restaurante) y vence en máximo 15 minutos.
+  - **Índices sin `CONCURRENTLY`:** TypeORM corre las migraciones en una transacción; las tablas son pequeñas.
+  - **`down` de `AddRestaurantSuspension`:** se detiene si queda algún restaurante suspendido. Hay que reactivarlos antes de revertir.
+  - **Suspender no se ve en tiempo real en la app:** se emite el evento de disponibilidad como al aprobar, pero el listener no envía `availability.changed` de un restaurante que el comensal ya no puede ver. La app lo quita en su siguiente consulta (máximo 60 s) y el detalle y la reserva ya responden 404 al instante.
+
+---
+
 ## 16 nov 2026 · Sebastián · Límite de peticiones y cabeceras de seguridad (Sprint 4, tareas 6.1.3 y 6.1.4) · para revisar: Elizabeth
 
 - **Qué hay:** límite de peticiones en toda la API y en las conexiones del WebSocket, cabeceras de seguridad (helmet) y verificación del certificado de PostgreSQL con `sslmode=verify-full`. Contrato en §12.14 (igual en los tres repos) y detalle en §11, «Límite de peticiones y cabeceras de seguridad».

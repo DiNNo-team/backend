@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import type { ReportPeriod } from '../reports/report-period.js';
+import { scopedRange } from '../reports/scoped-range.js';
 
 export interface CheckInTotals {
   checkIns: number;
@@ -53,15 +54,28 @@ export class BillingStatementService {
 
   // Check-ins con checked_in_at dentro del periodo y la suma de la tarifa
   // guardada en cada uno (fee_cop). También la usa el resumen del restaurante.
-  async totals(
-    restaurantId: string,
-    period: ReportPeriod,
+  totals(restaurantId: string, period: ReportPeriod): Promise<CheckInTotals> {
+    return this.scopedTotals(period, restaurantId);
+  }
+
+  // Los mismos totales de toda la plataforma (panel del administrador): la
+  // misma consulta sin el filtro de restaurante, una sola regla de cobro.
+  platformTotals(
+    period: Pick<ReportPeriod, 'startsAt' | 'endsBefore'>,
   ): Promise<CheckInTotals> {
+    return this.scopedTotals(period);
+  }
+
+  private async scopedTotals(
+    period: Pick<ReportPeriod, 'startsAt' | 'endsBefore'>,
+    restaurantId?: string,
+  ): Promise<CheckInTotals> {
+    const range = scopedRange('checked_in_at', period, restaurantId);
     const [row] = await this.dataSource.query<CheckInTotalsRow[]>(
       `SELECT COUNT(*)::int AS "check_ins", COALESCE(SUM("fee_cop"), 0)::text AS "amount_cop"
        FROM "check_ins"
-       WHERE "restaurant_id" = $1 AND "checked_in_at" >= $2 AND "checked_in_at" < $3`,
-      [restaurantId, period.startsAt, period.endsBefore],
+       WHERE ${range.where}`,
+      range.params,
     );
     // La suma es bigint (texto en pg); cabe de sobra en un number.
     return { checkIns: row.check_ins, amountCop: Number(row.amount_cop) };

@@ -11,6 +11,7 @@ import {
 import { DEFAULT_PAGE } from '../../../common/dto/page-query.js';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowSuspendedRestaurant,
   CurrentUser,
   CurrentUserGuard,
   RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
@@ -76,6 +77,8 @@ export class RestaurantReportsController {
   constructor(private readonly reports: RestaurantReportsService) {}
 
   @Get('summary')
+  // Solo lectura para un suspendido: ve lo que se le cobra.
+  @AllowSuspendedRestaurant()
   @ApiOperation({
     summary: 'Resumen del restaurante: cobro y KPIs de un periodo',
     description:
@@ -91,6 +94,7 @@ export class RestaurantReportsController {
   }
 
   @Get('billing/check-ins')
+  @AllowSuspendedRestaurant()
   @ApiOperation({
     summary: 'Estado de cuenta: check-ins cobrados en un periodo',
     description:

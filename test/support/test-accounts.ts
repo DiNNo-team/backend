@@ -17,6 +17,8 @@ export const TEST_TOKENS: Record<string, Partial<DecodedIdToken>> = {
   // Restaurant approval (CLAUDE.md §11): see approvalTestUsers().
   pendingOwner: { uid: 'uid-pending', email: 'pendiente@example.com' },
   rejectedOwner: { uid: 'uid-rejected', email: 'rechazado@example.com' },
+  // Suspended by the DiNNo administrator (panel del administrador).
+  suspendedOwner: { uid: 'uid-suspended', email: 'suspendido@example.com' },
   platformAdmin: { uid: 'uid-admin', email: 'admin@example.com' },
 };
 
@@ -25,12 +27,15 @@ export const TEST_TOKENS: Record<string, Partial<DecodedIdToken>> = {
 // approvalReader.
 export const PENDING_RESTAURANT_ID = 'c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f';
 export const REJECTED_RESTAURANT_ID = 'd4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70';
+export const SUSPENDED_RESTAURANT_ID = 'e6f7a8b9-c0d1-4e2f-8a3b-4c5d6e7f8091';
 export const TEST_APPROVALS: Record<string, RestaurantApprovalStatus> = {
   [PENDING_RESTAURANT_ID]: 'pending',
   [REJECTED_RESTAURANT_ID]: 'rejected',
+  [SUSPENDED_RESTAURANT_ID]: 'suspended',
 };
 
-// The users rows of the owners of a pending and of a rejected restaurant, and
+// The users rows of the owners of a pending, a rejected and a suspended
+// restaurant, and
 // of a DiNNo administrator (platform_admin, without a restaurant).
 export function approvalTestUsers(): User[] {
   return [
@@ -49,6 +54,14 @@ export function approvalTestUsers(): User[] {
       role: UserRole.RESTAURANT_ADMIN,
       displayName: null,
       restaurantId: REJECTED_RESTAURANT_ID,
+    },
+    {
+      id: 'b9c0d1e2-f3a4-4b5c-8d6e-7f8091a2b3c4',
+      email: 'suspendido@example.com',
+      firebaseUid: 'uid-suspended',
+      role: UserRole.RESTAURANT_ADMIN,
+      displayName: null,
+      restaurantId: SUSPENDED_RESTAURANT_ID,
     },
     {
       id: 'a7b8c9d0-e1f2-4a3b-8c4d-5e6f708192a3',

@@ -18,6 +18,8 @@ export const ACCOUNT_ERROR_MESSAGES = {
     'Tu solicitud está en revisión. Te avisaremos cuando tu cuenta esté aprobada.',
   ACCOUNT_REJECTED:
     'Tu solicitud no fue aprobada. Revisa el motivo, corrige tus datos y vuelve a enviarla.',
+  RESTAURANT_SUSPENDED:
+    'Tu restaurante está suspendido y no aparece para los comensales. Revisa el motivo en tu cuenta o escríbenos a dinnoteam2026@gmail.com para reactivarlo.',
 } as const;
 
 export type AccountErrorCode = keyof typeof ACCOUNT_ERROR_MESSAGES;
@@ -57,6 +59,10 @@ export const RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES = {
   rejected: swaggerExample(
     'El restaurante no fue aprobado',
     'ACCOUNT_REJECTED',
+  ),
+  suspended: swaggerExample(
+    'El restaurante está suspendido',
+    'RESTAURANT_SUSPENDED',
   ),
 };
 

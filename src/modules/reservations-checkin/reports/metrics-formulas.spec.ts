@@ -1,5 +1,6 @@
 import {
   byDayOfWeek,
+  hourlyDistribution,
   peakHours,
   ratio,
   reservationRates,
@@ -110,5 +111,30 @@ describe('byDayOfWeek', () => {
 
   it('empty input gives seven zeros', () => {
     expect(byDayOfWeek([]).every((day) => day.reservations === 0)).toBe(true);
+  });
+});
+
+describe('hourlyDistribution', () => {
+  it('always has the 24 hours in order, with 0 where there is nothing', () => {
+    const hours = hourlyDistribution([
+      { hour: 13, reservations: 3 },
+      { hour: 0, reservations: 1 },
+      { hour: 23, reservations: 2 },
+    ]);
+
+    expect(hours).toHaveLength(24);
+    expect(hours.map((entry) => entry.hour)).toEqual(
+      Array.from({ length: 24 }, (_, hour) => hour),
+    );
+    expect(hours[0]).toEqual({ hour: 0, reservations: 1 });
+    expect(hours[13]).toEqual({ hour: 13, reservations: 3 });
+    expect(hours[23]).toEqual({ hour: 23, reservations: 2 });
+    expect(hours[12]).toEqual({ hour: 12, reservations: 0 });
+  });
+
+  it('with no data is 24 zeros, never an empty list', () => {
+    expect(
+      hourlyDistribution([]).every((entry) => entry.reservations === 0),
+    ).toBe(true);
   });
 });

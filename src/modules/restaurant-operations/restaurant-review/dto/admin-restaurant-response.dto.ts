@@ -133,6 +133,33 @@ export class AdminRestaurantDetailDto extends AdminRestaurantItemDto {
   reviewedByEmail: string | null;
 
   @ApiProperty({
+    description:
+      'Motivo de la última suspensión, también si ya se reactivó (no hay historial). null si nunca se suspendió.',
+    type: String,
+    nullable: true,
+    example: null,
+  })
+  suspensionReason: string | null;
+
+  @ApiProperty({
+    description:
+      'Fecha y hora (ISO 8601 UTC) de la última suspensión. null si nunca se suspendió.',
+    type: String,
+    nullable: true,
+    example: null,
+  })
+  suspendedAt: string | null;
+
+  @ApiProperty({
+    description:
+      'Correo del administrador de DiNNo que hizo la última suspensión. null si nunca se suspendió.',
+    type: String,
+    nullable: true,
+    example: null,
+  })
+  suspendedByEmail: string | null;
+
+  @ApiProperty({
     description: 'Fecha y hora (ISO 8601 UTC) en que se creó el restaurante.',
     example: '2026-11-15T14:30:00.000Z',
   })
@@ -141,7 +168,11 @@ export class AdminRestaurantDetailDto extends AdminRestaurantItemDto {
   static fromParts(
     restaurant: Restaurant,
     schedules: RestaurantSchedule[],
-    emails: { ownerEmail: string | null; reviewedByEmail: string | null },
+    emails: {
+      ownerEmail: string | null;
+      reviewedByEmail: string | null;
+      suspendedByEmail: string | null;
+    },
   ): AdminRestaurantDetailDto {
     return {
       ...AdminRestaurantItemDto.fromEntity(restaurant, emails.ownerEmail),
@@ -155,6 +186,9 @@ export class AdminRestaurantDetailDto extends AdminRestaurantItemDto {
           ? restaurant.rejectionReason
           : null,
       reviewedByEmail: emails.reviewedByEmail,
+      suspensionReason: restaurant.suspensionReason ?? null,
+      suspendedAt: restaurant.suspendedAt?.toISOString() ?? null,
+      suspendedByEmail: emails.suspendedByEmail,
       createdAt: restaurant.createdAt.toISOString(),
     };
   }

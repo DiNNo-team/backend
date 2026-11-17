@@ -1,5 +1,4 @@
 import type { QueryRunner } from 'typeorm';
-import { RESTAURANT_APPROVAL_STATUSES } from '../modules/identity-access/index.js';
 import {
   CONTACT_PHONE_MAX_LENGTH,
   REJECTION_REASON_MAX_LENGTH,
@@ -19,7 +18,9 @@ async function queriesOf(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddRestaurantApproval migration', () => {
-  it('checks approval_status against exactly RESTAURANT_APPROVAL_STATUSES', async () => {
+  // The three states of this migration. 'suspended' came later with its own
+  // migration (AddRestaurantSuspension, whose spec checks the current list).
+  it('checks approval_status against exactly the three original states', async () => {
     const check = (await queriesOf('up')).find((sql) =>
       sql.includes('"CHK_restaurants_approval_status"'),
     );
@@ -28,7 +29,7 @@ describe('AddRestaurantApproval migration', () => {
       .split(',')
       .map((value) => value.trim().replace(/'/g, ''));
 
-    expect(values).toEqual([...RESTAURANT_APPROVAL_STATUSES]);
+    expect(values).toEqual(['pending', 'approved', 'rejected']);
   });
 
   it('approves every existing restaurant and then drops the default', async () => {
