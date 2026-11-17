@@ -6,10 +6,13 @@
 //   pending  → registrado por POST /v1/restaurants/signup, en revisión.
 //   approved → visible para los comensales y operable.
 //   rejected → no aprobado; ve el motivo (rejection_reason).
+//   suspended → aprobado que el administrador de DiNNo suspendió: no es visible
+//               para los comensales ni opera; ve el motivo (suspension_reason).
 export const RESTAURANT_APPROVAL_STATUSES = [
   'pending',
   'approved',
   'rejected',
+  'suspended',
 ] as const;
 
 export type RestaurantApprovalStatus =
@@ -18,3 +21,4 @@ export type RestaurantApprovalStatus =
 export const APPROVED: RestaurantApprovalStatus = 'approved';
 export const PENDING: RestaurantApprovalStatus = 'pending';
 export const REJECTED: RestaurantApprovalStatus = 'rejected';
+export const SUSPENDED: RestaurantApprovalStatus = 'suspended';

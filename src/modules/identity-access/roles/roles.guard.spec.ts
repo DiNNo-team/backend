@@ -9,6 +9,7 @@ import {
 } from './account-errors.js';
 import type { RestaurantApprovalStatus } from '../approval/restaurant-approval-status.js';
 import {
+  AllowSuspendedRestaurant,
   AllowUnapprovedRestaurant,
   AllowUnregisteredAccount,
 } from './access-exceptions.decorator.js';
@@ -40,6 +41,7 @@ function registered(role: UserRole): RequestIdentity {
 
 interface RouteExceptions {
   unapproved?: boolean;
+  suspended?: boolean;
   unregistered?: boolean;
 }
 
@@ -54,6 +56,9 @@ function contextFor(
   }
   if (exceptions.unapproved) {
     AllowUnapprovedRestaurant()(TestController);
+  }
+  if (exceptions.suspended) {
+    AllowSuspendedRestaurant()(TestController);
   }
   if (exceptions.unregistered) {
     AllowUnregisteredAccount()(TestController);
@@ -227,6 +232,9 @@ describe('RolesGuard', () => {
       ['pending', true, 'allowed'],
       ['rejected', false, 'ACCOUNT_REJECTED'],
       ['rejected', true, 'allowed'],
+      // The pending/rejected list does not let a suspended restaurant in.
+      ['suspended', false, 'RESTAURANT_SUSPENDED'],
+      ['suspended', true, 'RESTAURANT_SUSPENDED'],
     ])(
       'a %s restaurant on a restaurant route (allow-listed: %s) → %s',
       (approval, allowListed, expected) => {
@@ -243,6 +251,7 @@ describe('RolesGuard', () => {
       ['approved', 'RESTAURANT_ACCOUNT'],
       ['pending', 'RESTAURANT_ACCOUNT'],
       ['rejected', 'RESTAURANT_ACCOUNT'],
+      ['suspended', 'RESTAURANT_ACCOUNT'],
     ])(
       'a %s restaurant on a diner route gets the role code first: %s',
       (approval, expected) => {
@@ -262,6 +271,46 @@ describe('RolesGuard', () => {
       expectOutcome(
         outcome(owner('pending'), BOTH_ROLES_ENDPOINT, { unapproved: true }),
         'allowed',
+      );
+    });
+
+    // Suspension (panel del administrador): its own list, separate from the
+    // pending/rejected one.
+    it.each<[RestaurantApprovalStatus, boolean, AccountErrorCode | 'allowed']>([
+      ['suspended', false, 'RESTAURANT_SUSPENDED'],
+      ['suspended', true, 'allowed'],
+      ['approved', true, 'allowed'],
+      // The suspended list does not let a pending or rejected restaurant in.
+      ['pending', true, 'ACCOUNT_PENDING_APPROVAL'],
+      ['rejected', true, 'ACCOUNT_REJECTED'],
+    ])(
+      'a %s restaurant on a restaurant route (suspended allow-list: %s) → %s',
+      (approval, allowListed, expected) => {
+        expectOutcome(
+          outcome(owner(approval), RESTAURANT_ENDPOINT, {
+            suspended: allowListed,
+          }),
+          expected,
+        );
+      },
+    );
+
+    it('a route on both lists lets pending, rejected and suspended in', () => {
+      for (const approval of ['pending', 'rejected', 'suspended'] as const) {
+        expectOutcome(
+          outcome(owner(approval), RESTAURANT_ENDPOINT, {
+            unapproved: true,
+            suspended: true,
+          }),
+          'allowed',
+        );
+      }
+    });
+
+    it('a suspended restaurant on a DiNNo admin route gets RESTAURANT_ACCOUNT, even allow-listed', () => {
+      expectOutcome(
+        outcome(owner('suspended'), ADMIN_ENDPOINT, { suspended: true }),
+        'RESTAURANT_ACCOUNT',
       );
     });
 

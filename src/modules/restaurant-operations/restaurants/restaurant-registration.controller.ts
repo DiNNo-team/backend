@@ -12,6 +12,7 @@ import {
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
 import {
+  AllowSuspendedRestaurant,
   AllowUnapprovedRestaurant,
   CurrentUser,
   CurrentUserGuard,
@@ -103,6 +104,8 @@ export class RestaurantRegistrationController {
   @Get('me')
   // A pending or rejected restaurant still sees its own data and status (§11).
   @AllowUnapprovedRestaurant()
+  // Un suspendido ve su restaurante y el motivo (suspensionReason).
+  @AllowSuspendedRestaurant()
   @ApiOperation({
     summary: 'Consultar el restaurante del usuario',
     description:

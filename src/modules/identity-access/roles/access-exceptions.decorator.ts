@@ -2,6 +2,8 @@ import { SetMetadata } from '@nestjs/common';
 
 export const ALLOW_UNAPPROVED_RESTAURANT_METADATA =
   'identity-access:allow-unapproved-restaurant';
+export const ALLOW_SUSPENDED_RESTAURANT_METADATA =
+  'identity-access:allow-suspended-restaurant';
 export const ALLOW_UNREGISTERED_ACCOUNT_METADATA =
   'identity-access:allow-unregistered-account';
 
@@ -14,6 +16,18 @@ export const ALLOW_UNREGISTERED_ACCOUNT_METADATA =
 // a whole controller, so a new route is blocked by default.
 export const AllowUnapprovedRestaurant = () =>
   SetMetadata(ALLOW_UNAPPROVED_RESTAURANT_METADATA, true);
+
+// Explicit and short list of the restaurant routes that a restaurant_admin
+// whose restaurant was suspended by DiNNo may still call (CLAUDE.md §11,
+// "Suspensión"): GET /v1/me, GET /v1/restaurants/me, GET
+// /v1/restaurants/me/status, GET /v1/restaurants/me/summary, GET
+// /v1/restaurants/me/billing/check-ins, GET /v1/restaurants/me/reservations and
+// POST /v1/restaurants/me/check-ins (only active reservations exist to check
+// in). Every other @Roles(RESTAURANT_ADMIN) route answers RESTAURANT_SUSPENDED.
+// Separate from AllowUnapprovedRestaurant on purpose: the two lists differ. On
+// the handler, never on a whole controller.
+export const AllowSuspendedRestaurant = () =>
+  SetMetadata(ALLOW_SUSPENDED_RESTAURANT_METADATA, true);
 
 // A route with @Roles that also accepts a Firebase account without a users row
 // (verified email, guaranteed by the resolver). Only GET /v1/geocode, which the
