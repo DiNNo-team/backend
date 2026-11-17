@@ -33,6 +33,7 @@ import { PlatformReportsService } from './platform/platform-reports.service.js';
 import { RestaurantReportsController } from './reports/restaurant-reports.controller.js';
 import { RestaurantMetricsService } from './reports/restaurant-metrics.service.js';
 import { RestaurantReportsService } from './reports/restaurant-reports.service.js';
+import { RestaurantSummaryReader } from './reports/restaurant-summary.reader.js';
 
 // Microreservas y check-in (Sprint 3), el cobro por check-in y, desde el
 // Sprint 4, los reportes de plataforma del administrador (son dueños de
@@ -66,6 +67,7 @@ import { RestaurantReportsService } from './reports/restaurant-reports.service.j
     BillingStatementService,
     RestaurantMetricsService,
     RestaurantReportsService,
+    RestaurantSummaryReader,
     PlatformBillingReader,
     PlatformReportsService,
     BillingPeriodsService,

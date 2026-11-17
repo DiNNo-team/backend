@@ -1,4 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  BILLING_STATUSES,
+  type BillingStatus,
+} from '../../billing/billing-status.js';
 import { REPORT_TIMEZONE } from '../report-period.js';
 
 export class ReportPeriodDto {
@@ -203,12 +207,193 @@ export class DayOfWeekDto {
   reservations: number;
 }
 
+export class SummaryBillingGuestsDto extends SummaryBillingDto {
+  @ApiProperty({
+    description:
+      'Suma de las personas (party_size) de las reservas de esos check-ins: los comensales que llegaron.',
+    type: 'integer',
+    example: 13,
+  })
+  guests: number;
+}
+
+export class SummaryComparableDto {
+  @ApiProperty({
+    description:
+      'El mismo tramo del periodo anterior. Si el periodo empieza el día 1 de un mes y no sale de él: del día 1 al mismo día del mes anterior (recortado a su último día; si el periodo llega al último día de su mes, el anterior también). Si no: los mismos N días justo antes.',
+    type: ReportPeriodDto,
+  })
+  period: ReportPeriodDto;
+
+  @ApiProperty({ type: 'integer', example: 15 })
+  reservationsCreated: number;
+
+  @ApiProperty({ type: 'integer', example: 4 })
+  checkIns: number;
+
+  @ApiProperty({ type: 'integer', example: 9 })
+  guests: number;
+
+  @ApiProperty({ type: 'integer', example: 8000 })
+  amountCop: number;
+}
+
+export class SummaryDayDto {
+  @ApiProperty({
+    description: 'Día de Bogotá (AAAA-MM-DD).',
+    example: '2026-11-08',
+  })
+  date: string;
+
+  @ApiProperty({
+    description: 'Reservas creadas ese día (hora de Bogotá).',
+    type: 'integer',
+    example: 4,
+  })
+  reservationsCreated: number;
+
+  @ApiProperty({
+    description: 'Check-ins hechos ese día (hora de Bogotá).',
+    type: 'integer',
+    example: 2,
+  })
+  checkIns: number;
+
+  @ApiProperty({
+    description: 'Personas de los check-ins hechos ese día.',
+    type: 'integer',
+    example: 4,
+  })
+  guests: number;
+
+  @ApiProperty({
+    description: 'De las reservas creadas ese día, las canceladas hoy.',
+    type: 'integer',
+    example: 1,
+  })
+  cancelled: number;
+
+  @ApiProperty({
+    description: 'De las reservas creadas ese día, las vencidas sin llegar.',
+    type: 'integer',
+    example: 1,
+  })
+  expired: number;
+}
+
+export class SummaryDayHourDto {
+  @ApiProperty({
+    description: '1 = lunes … 7 = domingo (Bogotá).',
+    type: 'integer',
+    example: 7,
+  })
+  dayOfWeek: number;
+
+  @ApiProperty({
+    description: 'Hora de 0 a 23 (Bogotá).',
+    type: 'integer',
+    example: 19,
+  })
+  hour: number;
+
+  @ApiProperty({ type: 'integer', example: 3 })
+  reservations: number;
+}
+
+export class SummaryMonthDto {
+  @ApiProperty({ description: 'Mes de Bogotá (AAAA-MM).', example: '2026-11' })
+  month: string;
+
+  @ApiProperty({
+    description: 'Comensales de los check-ins del mes.',
+    type: 'integer',
+    example: 13,
+  })
+  guests: number;
+
+  @ApiProperty({ type: 'integer', example: 6 })
+  checkIns: number;
+
+  @ApiProperty({
+    description: 'true para el mes en curso (todavía no termina).',
+    example: true,
+  })
+  inProgress: boolean;
+}
+
+export class SummaryPaymentMonthDto {
+  @ApiProperty({ description: 'Mes de Bogotá (AAAA-MM).', example: '2026-10' })
+  month: string;
+
+  @ApiProperty({
+    description:
+      'in_progress: el mes todavía no termina. pending: mes cerrado que el administrador no marcó como pagado. paid: marcado como pagado.',
+    enum: BILLING_STATUSES,
+    example: 'paid',
+  })
+  status: BillingStatus;
+
+  @ApiProperty({ type: 'integer', example: 4 })
+  checkIns: number;
+
+  @ApiProperty({
+    description:
+      'Total del mes completo (hasta hoy si está en curso), en COP: la suma de la tarifa guardada en cada check-in. Si está pagado, el valor guardado al marcarlo.',
+    type: 'integer',
+    example: 8000,
+  })
+  amountCop: number;
+}
+
+export class SummaryPaymentDto {
+  @ApiProperty({
+    description:
+      'El mes de `to`, solo si el periodo cae dentro de un único mes calendario y es de 2026-01 en adelante; si no, null.',
+    type: SummaryPaymentMonthDto,
+    nullable: true,
+  })
+  period: SummaryPaymentMonthDto | null;
+
+  @ApiProperty({
+    description: 'El mes anterior al mes de `to` (null antes de 2026-01).',
+    type: SummaryPaymentMonthDto,
+    nullable: true,
+  })
+  previousMonth: SummaryPaymentMonthDto | null;
+}
+
 export class RestaurantSummaryResponseDto {
   @ApiProperty({ type: ReportPeriodDto })
   period: ReportPeriodDto;
 
-  @ApiProperty({ type: SummaryBillingDto })
-  billing: SummaryBillingDto;
+  @ApiProperty({ type: SummaryBillingGuestsDto })
+  billing: SummaryBillingGuestsDto;
+
+  @ApiProperty({ type: SummaryComparableDto })
+  previousComparable: SummaryComparableDto;
+
+  @ApiProperty({
+    description:
+      'Una entrada por cada día del periodo (también los días en 0), del más antiguo al más reciente.',
+    type: [SummaryDayDto],
+  })
+  byDate: SummaryDayDto[];
+
+  @ApiProperty({
+    description: 'Siempre 168 celdas (7 días × 24 horas) de reservas creadas.',
+    type: [SummaryDayHourDto],
+  })
+  byDayHour: SummaryDayHourDto[];
+
+  @ApiProperty({
+    description:
+      'Los 6 meses que terminan en el mes de `to`, del más antiguo al más reciente (también los meses en 0).',
+    type: [SummaryMonthDto],
+  })
+  monthly: SummaryMonthDto[];
+
+  @ApiProperty({ type: SummaryPaymentDto })
+  payment: SummaryPaymentDto;
 
   @ApiProperty({ type: SummaryReservationsDto })
   reservations: SummaryReservationsDto;

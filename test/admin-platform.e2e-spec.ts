@@ -205,6 +205,17 @@ async function createApp() {
         })),
       );
     }
+    if (sql.includes('summary:totals')) {
+      return Promise.resolve([
+        { reservations_created: 0, check_ins: 0, guests: 0, amount_cop: '0' },
+      ]);
+    }
+    if (sql.includes('summary:daily')) {
+      return Promise.resolve([]);
+    }
+    if (sql.includes('summary:monthly')) {
+      return Promise.resolve([]);
+    }
     if (sql.includes('FROM "restaurants" WHERE "id" = $1')) {
       const header = headers[params[0] as string];
       return Promise.resolve(header ? [{ id: params[0], ...header }] : []);
