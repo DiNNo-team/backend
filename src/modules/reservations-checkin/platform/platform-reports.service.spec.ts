@@ -103,6 +103,8 @@ function createService({
         averagePartySize: null,
         hourly: [],
         byDayOfWeek: [],
+        byDate: [{ date: '2026-11-01', reservations: 0 }],
+        byDayHour: [{ dayOfWeek: 1, hour: 0, reservations: 0 }],
       });
     }),
   };
@@ -341,6 +343,11 @@ describe('PlatformReportsService', () => {
 
       expect(order).toEqual(['expire', 'metrics']);
       expect(metrics.basis).toBe('reservations_created_at');
+      // Los dos desgloses nuevos pasan tal cual y no cambian los de siempre.
+      expect(metrics.byDate).toEqual([{ date: '2026-11-01', reservations: 0 }]);
+      expect(metrics.byDayHour).toEqual([
+        { dayOfWeek: 1, hour: 0, reservations: 0 },
+      ]);
       expect(metrics.period).toEqual({
         from: '2026-11-01',
         to: '2026-11-17',

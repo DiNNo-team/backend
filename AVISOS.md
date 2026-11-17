@@ -6,6 +6,16 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 17 nov 2026 · Elizabeth · `GET /v1/admin/platform/metrics` agrega `byDate` y `byDayHour` (Sprint 4, panel del administrador) · rama `feat/sprint4-admin-panel`
+
+- **Qué cambia (aditivo):** la respuesta agrega dos campos y **no cambia ninguno de los que ya tenía**. `byDate`: `[{ date: "AAAA-MM-DD", reservations }]`, una entrada por cada día del periodo (de 1 a 366), en orden y con los días en 0. `byDayHour`: `[{ dayOfWeek: 1..7, hour: 0..23, reservations }]`, siempre 168 entradas (lunes primero), con los ceros.
+- **Mismo criterio:** `basis: "reservations_created_at"`, hora de America/Bogota y las mismas reservas que `reservations.created`: la suma de `byDate` = la suma de `byDayHour` = `reservations.created`. Contrato en [`docs/admin-panel-contract.md`](docs/admin-panel-contract.md), sección 5.
+- **Para Sebastián (web):** campos nuevos y opcionales de leer; el panel actual sigue funcionando igual. `byDayHour` se pinta directo como mapa de calor (índice = (`dayOfWeek` − 1) × 24 + `hour`).
+- **Código:** `RestaurantMetricsService.forPlatform` (dos consultas más, solo del camino de la plataforma; el resumen del restaurante no cambia) y `dayHourDistribution` (`reports/metrics-formulas.ts`).
+- **Sin migraciones, sin variables de entorno ni dependencias nuevas.** Usa los índices `IDX_reservations_created_at` ya existentes.
+
+---
+
 ## 17 nov 2026 · Elizabeth · Panel del administrador: suspensión, cobro mensual y reportes de plataforma (Sprint 4) · rama `feat/sprint4-admin-panel` · **migración pendiente en producción**
 
 - **Qué hay (backend):** suspender y reactivar restaurantes aprobados, estado de cobro mensual por restaurante (pendiente / cobrado, marcado a mano), ingresos de la plataforma, directorio de restaurantes con su actividad y métricas de reservas de toda la plataforma. Contrato completo para la web en [`docs/admin-panel-contract.md`](docs/admin-panel-contract.md); reglas en `CLAUDE.md` §8, §10 y §11 («Administrador», «Suspensión», «Cobro mensual y reportes de plataforma»).

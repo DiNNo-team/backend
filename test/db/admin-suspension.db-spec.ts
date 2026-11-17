@@ -81,7 +81,7 @@ describe('Suspensión de restaurantes con carreras (Postgres)', () => {
           result.status === 'rejected',
       );
       expect(loser?.reason).toBeInstanceOf(HttpException);
-      expect((loser?.reason as HttpException).getResponse()).toMatchObject({
+      expect((loser!.reason as HttpException).getResponse()).toMatchObject({
         statusCode: 409,
         errorCode: 'RESTAURANT_NOT_APPROVED',
       });
@@ -112,7 +112,7 @@ describe('Suspensión de restaurantes con carreras (Postgres)', () => {
         (result): result is PromiseRejectedResult =>
           result.status === 'rejected',
       );
-      expect((loser?.reason as HttpException).getResponse()).toMatchObject({
+      expect((loser!.reason as HttpException).getResponse()).toMatchObject({
         statusCode: 409,
         errorCode: 'RESTAURANT_NOT_SUSPENDED',
       });

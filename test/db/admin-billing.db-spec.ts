@@ -304,7 +304,7 @@ describe('Cobro de la plataforma (Postgres)', () => {
           result.status === 'rejected',
       );
       expect(loser?.reason).toBeInstanceOf(HttpException);
-      expect((loser?.reason as HttpException).getResponse()).toMatchObject({
+      expect((loser!.reason as HttpException).getResponse()).toMatchObject({
         statusCode: 409,
         errorCode: 'PERIOD_ALREADY_PAID',
       });
