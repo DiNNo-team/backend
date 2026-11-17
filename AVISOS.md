@@ -26,7 +26,7 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 ---
 
-## 17 nov 2026 · Elizabeth · Panel del administrador: suspensión, cobro mensual y reportes de plataforma (Sprint 4) · rama `feat/sprint4-admin-panel` · **migración pendiente en producción**
+## 17 nov 2026 · Elizabeth · Panel del administrador: suspensión, cobro mensual y reportes de plataforma (Sprint 4) · rama `feat/sprint4-admin-panel` · **migraciones aplicadas en producción**
 
 - **Qué hay (backend):** suspender y reactivar restaurantes aprobados, estado de cobro mensual por restaurante (pendiente / cobrado, marcado a mano), ingresos de la plataforma, directorio de restaurantes con su actividad y métricas de reservas de toda la plataforma. Contrato completo para la web en [`docs/admin-panel-contract.md`](docs/admin-panel-contract.md); reglas en `CLAUDE.md` §8, §10 y §11 («Administrador», «Suspensión», «Cobro mensual y reportes de plataforma»).
 - **Endpoints nuevos** (todos `platform_admin`, Swagger tag `admin`):
@@ -46,14 +46,13 @@ Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
   - Todo lo demás responde `403 RESTAURANT_SUSPENDED`.
   - Para el comensal no existe: búsqueda sin él; detalle y reserva con `404 RESTAURANT_NOT_FOUND`, igual que un restaurante inexistente.
 - **Límite de peticiones:** etiqueta nueva `adminReports`, 30 por minuto, en overview, cobro (lista y detalle), directorio y métricas (§12.14).
-- **Migraciones nuevas, en este orden** (aplicadas y probadas up → down → up en la base de **pruebas**; **pendientes en la base de desarrollo / producción**):
+- **Migraciones nuevas, en este orden** (probadas up → down → up en la base de **pruebas** y **ya aplicadas en producción** por Elizabeth el 17 nov):
   1. `1794700000000-AddRestaurantSuspension`: `suspended` en `CHK_restaurants_approval_status`, `suspension_reason`, `suspended_at`, `suspended_by` (FK) y `CHK_restaurants_suspension`.
   2. `1794700000001-CreateBillingPeriods`: tabla `billing_periods`.
   3. `1794700000002-AddPlatformReportIndexes`: `IDX_check_ins_checked_in_at` e `IDX_reservations_created_at`.
-  - **Sin la 1, responde 500 en Render toda ruta que lee el restaurante completo** (perfil, estado abierto/cerrado, edición, registro y panel del administrador): la entidad ya lee las columnas nuevas. Sin la 2, los endpoints de cobro del panel. Sin la 3 todo funciona, más lento. Hay que correrlas **antes** de fusionar a `develop`.
+  - **Ya están aplicadas:** el backend desplegado en Render responde con las tres. Para un entorno nuevo (otra base de desarrollo o la de Azure), correrlas en este orden **antes** de desplegar: sin la 1, toda ruta que lee el restaurante completo (perfil, estado abierto/cerrado, edición, registro y panel del administrador) responde 500 porque la entidad ya lee las columnas nuevas; sin la 2, fallan los endpoints de cobro del panel; sin la 3 todo funciona, más lento.
 - **Para Sebastián (web):**
-  - La web actual no conoce `suspended` ni `RESTAURANT_SUSPENDED`: el `AccessGuard` necesita una pantalla de «restaurante suspendido» (texto y motivo en `docs/admin-panel-contract.md`).
-  - Las pantallas nuevas del panel salen de ese mismo contrato.
+  - La web ya conoce `suspended` y `RESTAURANT_SUSPENDED`: la pantalla de «restaurante suspendido» y las pantallas del panel (Resumen, Solicitudes, Restaurantes y Cobros) están en la rama `feat/sprint4-admin-panel` del frontend, probadas contra este backend en Render; falta su PR a `develop`. Salen del mismo contrato (`docs/admin-panel-contract.md`).
 - **Para Sebastián (app):**
   - Agregar `RESTAURANT_SUSPENDED` a los códigos del socket que no se reintentan (la app de comensal no lo recibe, pero el tipo lo lista).
   - Del lado del comensal no cambia nada.

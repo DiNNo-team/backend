@@ -14,12 +14,12 @@ Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md
 > 4. `1794600000001-AddCheckInFee`: `check_ins.fee_cop` (2000 para los check-ins existentes, sin default después), `CHK_check_ins_fee_cop` e `IDX_check_ins_restaurant_id_checked_in_at`.
 > 5. `1794600000002-AddReservationsRestaurantCreatedAtIndex`: `IDX_reservations_restaurant_id_created_at`.
 >
-> **Pendientes de aplicar (rama `feat/sprint4-admin-panel`, Elizabeth, 17 nov 2026), en este orden:**
+> **Aplicadas en producción (rama `feat/sprint4-admin-panel`, Elizabeth, 17 nov 2026), en este orden:**
 > 1. `1794700000000-AddRestaurantSuspension`: `suspended` en `CHK_restaurants_approval_status`, `suspension_reason`, `suspended_at`, `suspended_by` y `CHK_restaurants_suspension`.
 > 2. `1794700000001-CreateBillingPeriods`: tabla `billing_periods`.
 > 3. `1794700000002-AddPlatformReportIndexes`: `IDX_check_ins_checked_in_at` e `IDX_reservations_created_at`.
 >
-> Aplicadas y probadas (up → down → up, y `migration:generate --check` sin diferencias) en la base de **pruebas**. Falta la base de desarrollo, **antes** de fusionar: sin la 1, toda ruta que lee el restaurante completo responde 500 en Render. Ver `AVISOS.md`.
+> Probadas (up → down → up, y `migration:generate --check` sin diferencias) en la base de **pruebas** y ya aplicadas en producción. En un entorno nuevo hay que correrlas en este orden antes de desplegar: sin la 1, toda ruta que lee el restaurante completo responde 500. Ver `AVISOS.md`.
 >
 > Ya aplicadas en la rama de pruebas de Neon. Falta la base de desarrollo, **antes** de fusionar: sin ellas, toda petición de un restaurante, toda búsqueda y todo check-in responden 500 en Render. Los timestamps `17946…` son posteriores a `1794500000000-CreatePushDevices` (rama `feat/sprint4-notificaciones`, sin fusionar) y no chocan con ningún archivo de las ramas remotas. Ver `AVISOS.md`.
 
