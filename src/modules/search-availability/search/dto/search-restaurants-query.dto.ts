@@ -23,13 +23,13 @@ import { ZONE_IDS, type ZoneId } from '../zones.js';
 
 export const SEARCH_RADII_KM = [1, 2, 5, 10] as const;
 export type SearchRadiusKm = (typeof SEARCH_RADII_KM)[number];
-export const DEFAULT_SEARCH_RADIUS_KM: SearchRadiusKm = 2;
 export const MIN_PARTY_SIZE = 1;
 export const MAX_PARTY_SIZE = 20;
 
 export const SEARCH_MESSAGES = {
   BOTH_ORIGINS: 'Busca por tu ubicación o por una zona, no por las dos.',
-  NO_ORIGIN: 'Envía tu ubicación (lat y lng) o una zona para buscar.',
+  RADIUS_WITHOUT_ORIGIN:
+    'El radio (radiusKm) necesita tu ubicación (lat y lng) o una zona. Sin radio se buscan todos los restaurantes.',
   ...LOCATION_MESSAGES,
   ZONE_UNKNOWN:
     'No conocemos esa zona. Usa una de las que da GET /v1/search/zones.',
@@ -42,10 +42,13 @@ interface SearchOrigin {
   lat?: unknown;
   lng?: unknown;
   zone?: unknown;
+  radiusKm?: unknown;
 }
 
-// The origin is the location (lat + lng) or a zone: exactly one of the two,
-// and the location complete. null when the combination is valid.
+// The origin is optional (Sprint 4: without it the search covers every
+// restaurant): the location (lat + lng) or a zone, never both, and the
+// location complete. A radius needs an origin to be measured from.
+// null when the combination is valid.
 export function searchOriginProblem(query: SearchOrigin): string | null {
   const hasLat = query.lat !== undefined;
   const hasLng = query.lng !== undefined;
@@ -53,18 +56,18 @@ export function searchOriginProblem(query: SearchOrigin): string | null {
   if (hasZone && (hasLat || hasLng)) {
     return SEARCH_MESSAGES.BOTH_ORIGINS;
   }
-  if (!hasZone && !hasLat && !hasLng) {
-    return SEARCH_MESSAGES.NO_ORIGIN;
-  }
   if (hasLat !== hasLng) {
     return SEARCH_MESSAGES.INCOMPLETE_LOCATION;
+  }
+  if (query.radiusKm !== undefined && !hasZone && !hasLat) {
+    return SEARCH_MESSAGES.RADIUS_WITHOUT_ORIGIN;
   }
   return null;
 }
 
 // class-validator has no class-level rules, so the origin rule sits on zone.
 // zone takes no @IsOptional on purpose: it would skip this rule when zone is
-// missing, which is exactly when lat and lng have to be checked.
+// missing, which is exactly when lat, lng and radiusKm have to be checked.
 function ValidSearchOrigin() {
   return ValidateBy({
     name: 'validSearchOrigin',
@@ -96,7 +99,7 @@ function IsZoneIdOrMissing() {
 export class SearchRestaurantsQueryDto {
   @ApiPropertyOptional({
     description:
-      'Latitud de la ubicación del comensal. Va junto con lng y sin zone. Puede estar fuera de Bogotá: en ese caso no hay resultados.',
+      'Latitud de la ubicación del comensal. Va junto con lng y sin zone. Opcional: con ella cada resultado trae distanceKm y se ordenan del más cercano al más lejano. Puede estar fuera de Bogotá.',
     minimum: -90,
     maximum: 90,
     example: 4.655671,
@@ -124,16 +127,16 @@ export class SearchRestaurantsQueryDto {
   zone?: ZoneId;
 
   @ApiPropertyOptional({
-    description: 'Radio de búsqueda en km.',
+    description:
+      'Radio de búsqueda en km alrededor de lat y lng o de la zona. Sin radio no hay límite de distancia: todos los restaurantes que se pueden reservar.',
     enum: SEARCH_RADII_KM,
-    default: DEFAULT_SEARCH_RADIUS_KM,
-    example: DEFAULT_SEARCH_RADIUS_KM,
+    example: 2,
   })
   @IsOptional()
   // Same strict parsing as lat, lng and partySize: "0x2" or "2e0" is not 2.
   @Transform(({ value }) => toNumberOrNaN(value))
   @IsIn(SEARCH_RADII_KM, { message: SEARCH_MESSAGES.RADIUS_INVALID })
-  radiusKm: SearchRadiusKm = DEFAULT_SEARCH_RADIUS_KM;
+  radiusKm?: SearchRadiusKm;
 
   @ApiPropertyOptional({
     description:

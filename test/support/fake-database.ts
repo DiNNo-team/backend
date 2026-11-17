@@ -13,7 +13,7 @@ export interface FindOptions {
 }
 
 // What Postgres does with the find options the readers send: Between and In
-// on a column (NULL never matches) and equality.
+// on a column (NULL never matches), Not(IsNull()) and equality.
 export function matches(row: Row, where: Record<string, unknown>): boolean {
   return Object.entries(where).every(([column, condition]) => {
     const value = row[column];
@@ -26,6 +26,13 @@ export function matches(row: Row, where: Record<string, unknown>): boolean {
     }
     if (condition.type === 'in') {
       return (condition.value as unknown as unknown[]).includes(value);
+    }
+    if (
+      condition.type === 'not' &&
+      condition.child instanceof FindOperator &&
+      condition.child.type === 'isNull'
+    ) {
+      return value !== null && value !== undefined;
     }
     throw new Error(`Operator not simulated: ${condition.type}`);
   });

@@ -5,6 +5,17 @@
 Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al CLAUDE.md y se borra de aquí.
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
+
+## 16 nov 2026 · Sebastián · La búsqueda ya puede traer todos los restaurantes (Sprint 4) · para revisar: Elizabeth
+
+- **Qué cambia en `GET /v1/search/restaurants`** (§10): `lat`/`lng` y `zone` pasan a ser **opcionales** y `radiusKm` **ya no tiene valor por defecto**. Sin `radiusKm` no hay límite de distancia: salen todos los restaurantes que se pueden reservar (máximo 500). Sin ubicación ni zona se ordenan por nombre y `distanceKm` llega en `null`. `radiusKm` sin ubicación ni zona → 400 «El radio (radiusKm) necesita tu ubicación…».
+- **Por qué:** la app de Sprint 4 ya no busca por zona, dirección ni radio: abre el mapa con todos los restaurantes y filtra por nombre en pantalla (pedido de Sebastián).
+- **Compatibilidad:** las búsquedas con `radiusKm` funcionan exactamente igual (máximo 50, por distancia). El APK anterior siempre envía `radiusKm`, así que no cambia. Lo único distinto: una búsqueda con ubicación o zona **sin** `radiusKm` antes usaba 2 km y ahora no tiene límite.
+- **Código:** `searchOriginProblem` (DTO), `RestaurantSearchService` (`findAll` sin radio, orden por nombre) y `RestaurantCandidatesReader.findAll` (`Not(IsNull())` en las coordenadas). Sin migraciones ni variables nuevas.
+- `/search/zones` y `/geocode` siguen igual (la web usa `/geocode`).
+
+---
+
 ## Acciones pendientes de todos
 
 - **Nuevo (15 nov 2026 · Elizabeth · Administrador, cobro y KPIs: backend desplegado y contratos):** contratos sincronizados en los tres repos.

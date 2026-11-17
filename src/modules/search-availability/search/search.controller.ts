@@ -26,6 +26,7 @@ import {
 } from './dto/search-responses.dto.js';
 import {
   RestaurantSearchService,
+  SEARCH_ALL_RESULTS_LIMIT,
   SEARCH_RESULTS_LIMIT,
 } from './restaurant-search.service.js';
 import { listZones } from './zones.js';
@@ -69,26 +70,26 @@ export class SearchController {
 
   @Get('restaurants')
   @ApiOperation({
-    summary: 'Buscar restaurantes por ubicación o por zona, con filtros',
-    description: `Restaurantes dentro del radio (por defecto 2 km) alrededor de la ubicación del comensal (lat y lng) o del centro de una zona (zone), nunca las dos. Solo aparecen los que tienen ubicación, están abiertos ahora (hora de Bogotá) y tienen al menos una mesa activa. Filtros opcionales y combinables: category (una categoría) y partySize (solo los que tienen una mesa libre y activa para todo el grupo). Ordenados por distancia, máximo ${SEARCH_RESULTS_LIMIT}. Sin resultados, []. Nunca se expone cuántas mesas hay ni cuántas están libres.`,
+    summary: 'Buscar restaurantes, con o sin ubicación, con filtros',
+    description: `Sin radiusKm: todos los restaurantes que se pueden reservar (máximo ${SEARCH_ALL_RESULTS_LIMIT}). Con radiusKm: los que están dentro del radio alrededor de la ubicación del comensal (lat y lng) o del centro de una zona (zone), máximo ${SEARCH_RESULTS_LIMIT}. Ubicación y zona son opcionales y nunca van juntas; el radio necesita una de las dos. Solo aparecen los que tienen ubicación, están abiertos ahora (hora de Bogotá) y tienen al menos una mesa activa. Filtros opcionales y combinables: category (una categoría) y partySize (solo los que tienen una mesa libre y activa para todo el grupo). Con ubicación o zona se ordenan por distancia y traen distanceKm; sin ellas, por nombre y con distanceKm null. Sin resultados, []. Nunca se expone cuántas mesas hay ni cuántas están libres.`,
   })
   @ApiOkResponse({
-    description: `Restaurantes del más cercano al más lejano, máximo ${SEARCH_RESULTS_LIMIT}.`,
+    description: `Del más cercano al más lejano (o por nombre sin ubicación), máximo ${SEARCH_RESULTS_LIMIT} con radio y ${SEARCH_ALL_RESULTS_LIMIT} sin radio.`,
     type: SearchResultDto,
     isArray: true,
   })
   @ApiBadRequestResponse({
     description:
-      'Faltan lat y lng o zone, llegan los dos modos, llega solo lat o solo lng, una coordenada no es válida, la zona no existe, radiusKm no es 1, 2, 5 ni 10, category no es de la lista, partySize no es un entero de 1 a 20, o llega un parámetro que no existe. message es una lista.',
+      'Llegan ubicación y zona a la vez, llega solo lat o solo lng, llega radiusKm sin ubicación ni zona, una coordenada no es válida, la zona no existe, radiusKm no es 1, 2, 5 ni 10, category no es de la lista, partySize no es un entero de 1 a 20, o llega un parámetro que no existe. message es una lista.',
     type: ErrorResponseDto,
     examples: {
       bothOrigins: badRequestExample(
         'Ubicación y zona a la vez',
         SEARCH_MESSAGES.BOTH_ORIGINS,
       ),
-      noOrigin: badRequestExample(
-        'Sin ubicación ni zona',
-        SEARCH_MESSAGES.NO_ORIGIN,
+      radiusWithoutOrigin: badRequestExample(
+        'Radio sin ubicación ni zona',
+        SEARCH_MESSAGES.RADIUS_WITHOUT_ORIGIN,
       ),
       incompleteLocation: badRequestExample(
         'Solo lat o solo lng',

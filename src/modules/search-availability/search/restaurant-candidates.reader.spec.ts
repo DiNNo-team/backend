@@ -1,4 +1,4 @@
-import { Between, type DataSource } from 'typeorm';
+import { Between, IsNull, Not, type DataSource } from 'typeorm';
 import {
   RestaurantCandidatesReader,
   toCandidate,
@@ -115,5 +115,32 @@ describe('RestaurantCandidatesReader', () => {
         expect(find.mock.calls[0][0].where).not.toHaveProperty('category');
       },
     );
+  });
+
+  it('findAll: every visible restaurant with coordinates, with the category', async () => {
+    const find = vi.fn().mockResolvedValue([ROW]);
+    const reader = new RestaurantCandidatesReader({
+      getRepository: vi.fn().mockReturnValue({ find }),
+    } as unknown as DataSource);
+
+    const candidates = await reader.findAll({ category: 'colombian' });
+
+    expect(find).toHaveBeenCalledWith({
+      where: {
+        approvalStatus: 'approved',
+        latitude: Not(IsNull()),
+        longitude: Not(IsNull()),
+        category: 'colombian',
+      },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        address: true,
+        latitude: true,
+        longitude: true,
+      },
+    });
+    expect(candidates).toEqual([EXPECTED]);
   });
 });
