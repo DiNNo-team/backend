@@ -44,7 +44,22 @@
 | `node-forge`, `zod`, `glob` (vía `@expo/cli`) | alta | **Anotado, solo herramientas:** no van dentro del APK ni de la app de iOS. |
 | `query-string` / `decode-uri-component` (vía `expo-router`) | alta | Anotado. El arreglo es `expo-router` 58, que exige Expo SDK 58: es un cambio mayor que no se hace antes de la demo. Las URL que lee la app son de DiNNo (los enlaces de la reserva). |
 
-## 3. Pendiente después de la presentación
+## 3. Permisos por rol (tarea 6.1.5)
+
+Revisión de todas las rutas (`src/**/*.controller.ts`), el 16 nov:
+
+- **Todas** las rutas, menos `GET /v1/health`, llevan `CurrentUserGuard`: sin un token válido de Firebase responden `401`.
+- **Todas** llevan `@Roles(...)`, salvo dos que a propósito aceptan una cuenta todavía sin perfil: `POST /v1/diners/me` (crea el comensal) y `POST /v1/restaurants/signup` (registro público). Las dos exigen el correo verificado.
+- **Comensal contra restaurante y al revés:** el guard responde `DINER_ACCOUNT`, `RESTAURANT_ACCOUNT` o `ADMIN_ACCOUNT` antes de entrar al controlador (§10). Lo prueban `test/accounts.e2e-spec.ts` y `test/restaurant-approval.e2e-spec.ts`.
+- **Datos de otro restaurante:** las rutas del restaurante toman el restaurante de la sesión, nunca del cliente (`/restaurants/me/*`, `requireRestaurant`). Una mesa, zona o bitácora de otro restaurante responde igual que una que no existe (404 o lista vacía): no se revela nada. Lo prueban `test/tables*.e2e-spec.ts`, `test/table-logs.e2e-spec.ts` y `test/table-areas.e2e-spec.ts`.
+- **Reserva de otro comensal:** `GET` y `cancel` responden el mismo `404 RESERVATION_NOT_FOUND` que una inexistente, y nunca vencen la reserva ajena (`test/reservations-read.e2e-spec.ts`, `test/reservations-cancel.e2e-spec.ts`).
+- **Restaurante pendiente o rechazado:** solo usa las rutas marcadas con `@AllowUnapprovedRestaurant()`, y el socket lo rechaza (CLAUDE.md §11, «Aprobación de restaurantes»).
+- **Errores sin información interna:** el filtro global responde los 500 en español sin stack (`test/unhandled-errors.e2e-spec.ts`).
+- **Ruta nueva (el informe de IA):** debe llevar `CurrentUserGuard`, `@Roles(UserRole.RESTAURANT_ADMIN)`, el restaurante de la sesión y `@RateLimit('ai')`.
+
+**Resultado:** sin hallazgos. Las pruebas contra Azure (rutas privadas sin sesión, rol incorrecto y exceso de peticiones) están en `docs/azure/seguridad-red.md`, §6.
+
+## 4. Pendiente después de la presentación
 
 - Subir `@nestjs/*` a la misma versión menor reciente (incluye multer 2.5.0).
 - Expo SDK 58 (`expo-router` 58).
