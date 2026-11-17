@@ -41,3 +41,6 @@ docker-compose.override.yml
 
 # Exportaciones de datos (export:data): pueden ser sensibles
 /exports
+
+# Resultados locales de k6 (load-tests/dinno.k6.js): el resumen va en docs/qa/pruebas-de-carga.md
+/load-tests/results
