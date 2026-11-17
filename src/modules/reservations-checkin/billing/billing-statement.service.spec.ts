@@ -116,4 +116,22 @@ describe('BillingStatementService', () => {
     // Nunca datos del comensal.
     expect(page?.[0]).not.toMatch(/diner|users|display_name|email/);
   });
+
+  it('platformTotals: the same SUM(fee_cop) query without the restaurant filter', async () => {
+    const { service, query } = createService(
+      { check_ins: 7, amount_cop: '13500' },
+      [],
+    );
+
+    expect(
+      await service.platformTotals(periodOf('2026-11-01', '2026-11-30')),
+    ).toEqual({ checkIns: 7, amountCop: 13500 });
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('COALESCE(SUM("fee_cop"), 0)');
+    expect(sql).not.toContain('restaurant_id');
+    expect(params).toEqual([
+      new Date('2026-11-01T05:00:00Z'),
+      new Date('2026-12-01T05:00:00Z'),
+    ]);
+  });
 });

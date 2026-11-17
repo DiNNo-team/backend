@@ -68,3 +68,14 @@ export function byDayOfWeek(counts: DayOfWeekCount[]): DayOfWeekCount[] {
     reservations: byDay.get(dayOfWeek)?.reservations ?? 0,
   }));
 }
+
+// Las 24 horas (0 a 23, Bogotá), en orden, con 0 en las horas sin reservas. Es
+// la distribución completa del panel del administrador; el resumen del
+// restaurante sigue mostrando solo las 3 horas pico.
+export function hourlyDistribution(counts: HourCount[]): HourCount[] {
+  const byHour = new Map(counts.map((count) => [count.hour, count]));
+  return Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    reservations: byHour.get(hour)?.reservations ?? 0,
+  }));
+}
