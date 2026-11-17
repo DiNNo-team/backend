@@ -132,8 +132,22 @@ export class RestaurantMetricsService {
     );
   }
 
-  private reservationsByDayHour(period: ReportPeriod): Promise<DayHourCount[]> {
-    const range = scopedRange('created_at', period);
+  // El mapa de calor del restaurante: las mismas 168 celdas del panel del
+  // administrador, con el mismo SQL y el filtro de su restaurante.
+  async dayHourForRestaurant(
+    restaurantId: string,
+    period: ReportPeriod,
+  ): Promise<DayHourCount[]> {
+    return dayHourDistribution(
+      await this.reservationsByDayHour(period, restaurantId),
+    );
+  }
+
+  private reservationsByDayHour(
+    period: ReportPeriod,
+    restaurantId?: string,
+  ): Promise<DayHourCount[]> {
+    const range = scopedRange('created_at', period, restaurantId);
     return this.dataSource.query<DayHourCount[]>(
       `SELECT EXTRACT(ISODOW FROM "created_at" AT TIME ZONE '${REPORT_TIMEZONE}')::int AS "dayOfWeek",
               EXTRACT(HOUR FROM "created_at" AT TIME ZONE '${REPORT_TIMEZONE}')::int AS "hour",

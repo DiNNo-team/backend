@@ -43,6 +43,7 @@ import {
 const OWNER_RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 // Domingo 2026-11-15 09:30 en Bogotá.
 const NOW = new Date('2026-11-15T14:30:00Z');
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function forbidden(code: AccountErrorCode) {
   return {
@@ -77,6 +78,30 @@ const BILLING_ROWS = [
   },
 ];
 
+const DAILY_ROWS = [
+  {
+    date: '2026-11-14',
+    reservations_created: 3,
+    check_ins: 1,
+    guests: 2,
+    cancelled: 1,
+    expired: 0,
+  },
+  {
+    date: '2026-11-15',
+    reservations_created: 0,
+    check_ins: 0,
+    guests: 0,
+    cancelled: 0,
+    expired: 0,
+  },
+];
+
+const MONTHLY_ROWS = [
+  { month: '2026-10', guests: 9, check_ins: 4 },
+  { month: '2026-11', guests: 13, check_ins: 6 },
+];
+
 // Lo que responde Postgres a las agregaciones del resumen.
 const WITH_DATA = {
   counts: {
@@ -98,6 +123,7 @@ const WITH_DATA = {
     { dayOfWeek: 6, reservations: 3 },
   ],
   totals: { check_ins: 2, amount_cop: '5500' },
+  dayHours: [{ dayOfWeek: 5, hour: 13, reservations: 3 }],
 };
 
 const NO_DATA = {
@@ -112,6 +138,7 @@ const NO_DATA = {
   hours: [],
   days: [],
   totals: { check_ins: 0, amount_cop: '0' },
+  dayHours: [],
 };
 
 async function createApp(
@@ -121,6 +148,38 @@ async function createApp(
   const queries: QueryCall[] = [];
   const query = (sql: string, params: unknown[]) => {
     queries.push({ sql, params });
+    if (sql.includes('summary:totals')) {
+      // El tramo anterior (octubre) y el periodo (noviembre).
+      const previous =
+        (params[1] as Date).getTime() < NOW.getTime() - 20 * DAY_MS;
+      return Promise.resolve([
+        previous
+          ? {
+              reservations_created: 15,
+              check_ins: 4,
+              guests: 9,
+              amount_cop: '8000',
+            }
+          : {
+              reservations_created: 18,
+              check_ins: 6,
+              guests: 13,
+              amount_cop: '12000',
+            },
+      ]);
+    }
+    if (sql.includes('summary:daily')) {
+      return Promise.resolve(DAILY_ROWS);
+    }
+    if (sql.includes('summary:monthly')) {
+      return Promise.resolve(MONTHLY_ROWS);
+    }
+    if (sql.includes('billing_periods')) {
+      return Promise.resolve([]);
+    }
+    if (sql.includes('"dayOfWeek"') && sql.includes('"hour"')) {
+      return Promise.resolve(data.dayHours);
+    }
     if (sql.includes('SUM("fee_cop")')) {
       return Promise.resolve([data.totals]);
     }
@@ -234,7 +293,23 @@ describe('Reportes del restaurante (e2e)', () => {
           to: '2026-11-15',
           timezone: 'America/Bogota',
         },
-        billing: { checkIns: 2, amountCop: 5500, currentFeeCop: 2000 },
+        billing: {
+          checkIns: 2,
+          amountCop: 5500,
+          guests: 13,
+          currentFeeCop: 2000,
+        },
+        previousComparable: {
+          period: {
+            from: '2026-10-01',
+            to: '2026-10-15',
+            timezone: 'America/Bogota',
+          },
+          reservationsCreated: 15,
+          checkIns: 4,
+          guests: 9,
+          amountCop: 8000,
+        },
         reservations: {
           created: 8,
           completed: 4,
@@ -258,8 +333,57 @@ describe('Reportes del restaurante (e2e)', () => {
           { dayOfWeek: 6, reservations: 3 },
           { dayOfWeek: 7, reservations: 0 },
         ],
+        byDate: [
+          {
+            date: '2026-11-14',
+            reservationsCreated: 3,
+            checkIns: 1,
+            guests: 2,
+            cancelled: 1,
+            expired: 0,
+          },
+          {
+            date: '2026-11-15',
+            reservationsCreated: 0,
+            checkIns: 0,
+            guests: 0,
+            cancelled: 0,
+            expired: 0,
+          },
+        ],
+        byDayHour: expect.any(Array),
+        monthly: [
+          { month: '2026-10', guests: 9, checkIns: 4, inProgress: false },
+          { month: '2026-11', guests: 13, checkIns: 6, inProgress: true },
+        ],
+        payment: {
+          period: {
+            month: '2026-11',
+            status: 'in_progress',
+            checkIns: 2,
+            amountCop: 5500,
+          },
+          previousMonth: {
+            month: '2026-10',
+            status: 'pending',
+            checkIns: 2,
+            amountCop: 5500,
+          },
+        },
         serverTime: NOW.toISOString(),
       });
+      // El mapa de calor trae siempre las 168 celdas, con la reserva sembrada.
+      expect(res.body.byDayHour).toHaveLength(168);
+      expect(
+        res.body.byDayHour.find(
+          (cell: { dayOfWeek: number; hour: number }) =>
+            cell.dayOfWeek === 5 && cell.hour === 13,
+        ),
+      ).toEqual({ dayOfWeek: 5, hour: 13, reservations: 3 });
+    });
+
+    it('un restaurante suspendido ve su resumen (solo lectura)', async () => {
+      await get(PATH, 'suspendedOwner').expect(200);
     });
 
     it('vence las reservas debidas del restaurante antes de contar', async () => {
@@ -271,14 +395,12 @@ describe('Reportes del restaurante (e2e)', () => {
       const [first] =
         expiration.expireDueForRestaurant.mock.invocationCallOrder;
       expect(first).toBeGreaterThan(0);
-      // Cuatro consultas, todas del restaurante de la sesión y del periodo.
-      expect(queries).toHaveLength(4);
+      // Trece consultas (métricas, mapa de calor, días, totales del periodo y
+      // del tramo anterior, meses y estado de pago), todas del restaurante de la
+      // sesión: ninguna lleva otro id.
+      expect(queries).toHaveLength(13);
       for (const { params } of queries) {
-        expect(params).toEqual([
-          OWNER_RESTAURANT_ID,
-          new Date('2026-11-01T05:00:00Z'),
-          new Date('2026-11-16T05:00:00Z'),
-        ]);
+        expect(params).toContain(OWNER_RESTAURANT_ID);
       }
     });
 

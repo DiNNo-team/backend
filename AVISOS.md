@@ -6,6 +6,17 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 17 nov 2026 · Elizabeth · `GET /v1/restaurants/me/summary` agrega lo de la nueva pantalla Resumen del restaurante (Sprint 4) · rama `feat/sprint4-admin-panel`
+
+- **Qué cambia (aditivo):** no se tocó ningún campo existente. Se agregan `billing.guests` (personas de los check-ins), `previousComparable` (el mismo tramo del periodo anterior: 1–17 nov contra 1–17 oct; 1–31 mar contra 1–28 feb; un periodo que no empieza el día 1, los mismos N días justo antes), `byDate[]` (una entrada por día del periodo, con ceros: reservas creadas, check-ins, comensales, canceladas y vencidas), `byDayHour[]` (168 celdas), `monthly[]` (6 meses de comensales; el mes en curso con `inProgress`) y `payment` (estado de pago del mes del periodo, solo si cabe en un mes, y del mes anterior: `in_progress`, `pending` o `paid`, con monto).
+- **Ruta nueva:** ninguna. El detalle de un día es `GET /v1/restaurants/me/billing/check-ins?from=día&to=día&pageSize=200` (el día es el de Bogotá).
+- **Quién la ve:** igual que antes; un restaurante **suspendido** la sigue viendo (solo lectura). Pendiente y rechazado, su `403`.
+- **Base de datos:** sin migraciones. 13 consultas agregadas en paralelo, todas del restaurante de la sesión, con los índices que ya existen.
+- **Para Sebastián (web):** contrato en [`docs/restaurant-summary-contract.md`](docs/restaurant-summary-contract.md); cópialo idéntico en `frontend/docs/`. «Pagado» es el estado que el administrador llama «Cobrado»: es el mismo dato visto por quien paga. **Mobile:** no consume este endpoint; no hay nada que hacer.
+- **Código:** `reports/restaurant-summary.reader.ts`, `reports/comparable-period.ts`, `billing/billing-status.ts` (la regla de estado de cobro, ahora compartida con el panel del administrador, sin cambiar su comportamiento) y `RestaurantMetricsService.dayHourForRestaurant`.
+
+---
+
 ## 17 nov 2026 · Santiago · Informe inteligente del restaurante: backend de la IA (Sprint 4, tareas 2.1.1 y 2.1.3) · para revisar: Santiago
 
 - **Ruta nueva:** `GET /v1/restaurants/me/insights?refresh=true|false`, solo `restaurant_admin` **aprobado** (pendiente, rechazado o suspendido: su `403`; un suspendido recibe `RESTAURANT_SUSPENDED`), con `@RateLimit('ai')` (10 por minuto). Contrato completo en CLAUDE.md §12.16 y en Swagger (tag `insights`).
