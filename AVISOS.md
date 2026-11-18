@@ -6,6 +6,14 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 18 nov 2026 · Santiago · Informe de IA: recomendaciones menos genéricas (Sprint 4, tarea 2.1.3) · para revisar: Elizabeth
+
+- **Qué cambia:** solo lo que se le manda al modelo. La respuesta de `GET /v1/restaurants/me/insights` no cambia (ni campos ni forma), así que la web de Sergio no tiene que tocar nada.
+- **Instrucción al modelo:** cada recomendación debe apoyarse en un dato y proponer una acción que existe en DiNNo (validar el código o escanear el QR, cambiar las mesas a Ocupada o Disponible, tener mesas Disponibles en las franjas con más reservas, revisar la capacidad de las mesas, abrir o cerrar a tiempo). Prohíbe consejos de relleno (promociones, redes sociales, «mejorar el servicio»). Si algo va bien, lo reconoce y dice cómo mantenerlo.
+- **Datos nuevos para el modelo** (ya se calculaban, no hay consultas nuevas): la semana anterior (reservas y porcentaje con check-in) y si subió o bajó, el promedio de personas por reserva, los días sin cambios manuales de mesas («lunes y viernes») y si cada tasa es alta, media o baja. Lo bueno o malo lo decide el backend con las reglas que ya existían (70 %, 40 %, 25 %, 30 %), no el modelo.
+- **Sin cambios:** la privacidad (siguen saliendo solo datos agregados, sin ids, nombres, fechas ni comensales), la validación del texto y el respaldo con plantillas.
+- **Falta comprobar:** la calidad del texto solo se ve con la llave real y datos variados (local contra Neon o Azure). Las pruebas automáticas aseguran que no salgan números inventados, no que el consejo sea bueno.
+
 ## 17 nov 2026 · Jacobo · El backend se despliega en Azure en cada push a `develop` (Sprint 4, tarea 3.1.1) · para revisar: Elizabeth
 
 - **Qué hay:** job nuevo `deploy-azure` en `.github/workflows/ci-cd.yml`. Después de `checks`, y solo en un push a `develop` (un PR fusionado), construye la imagen, la sube al registro de Azure, actualiza `ca-dinno-backend` y espera a que `/v1/health` responda el commit del push (SHA corto). Detalle en CLAUDE.md §11, «Despliegue».

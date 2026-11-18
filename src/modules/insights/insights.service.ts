@@ -65,7 +65,12 @@ export class InsightsService {
       periodDays(current),
     );
     const reliability = reliabilityOf(metrics);
-    const narrative = await this.narrative.write(metrics, reliability);
+    const previousMetrics = buildPreviousMetrics(previousSummary);
+    const narrative = await this.narrative.write(
+      metrics,
+      reliability,
+      previousMetrics,
+    );
 
     const report: RestaurantInsightsResponseDto = {
       period: periodDto(current),
@@ -74,7 +79,7 @@ export class InsightsService {
       dataSufficiency: dataSufficiency(metrics.resolved),
       minResolved: INSIGHTS_MIN_RESOLVED,
       metrics,
-      previous: buildPreviousMetrics(previousSummary),
+      previous: previousMetrics,
       reliability,
       narrative,
     };

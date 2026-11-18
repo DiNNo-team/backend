@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { InsightsMetrics } from '../metrics/insights-metrics.js';
+import type {
+  InsightsMetrics,
+  PreviousMetrics,
+} from '../metrics/insights-metrics.js';
 import type { Reliability } from '../reliability/reliability.js';
 import { LlmClient } from './llm-client.js';
 import {
@@ -39,6 +42,7 @@ export class NarrativeService {
   async write(
     metrics: InsightsMetrics,
     reliability: Reliability,
+    previous: PreviousMetrics,
   ): Promise<Narrative> {
     const template = (fallback: NarrativeFallback): Narrative => ({
       text: templateNarrative(metrics),
@@ -51,7 +55,7 @@ export class NarrativeService {
     if (!this.llm.enabled) {
       return template('llm_disabled');
     }
-    const placeholders = narrativePlaceholders(metrics, reliability);
+    const placeholders = narrativePlaceholders(metrics, reliability, previous);
     const result = await this.llm.complete({
       system: NARRATIVE_SYSTEM_PROMPT,
       user: llmUserMessage(placeholders),

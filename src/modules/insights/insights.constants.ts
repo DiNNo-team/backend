@@ -16,7 +16,8 @@ export const INSIGHTS_MIN_RESOLVED = 10;
 export const HIGH_CHECK_IN_RATE = 0.7;
 export const LOW_CHECK_IN_RATE = 0.4;
 
-// Plantillas (respaldo): cuándo una tasa merece una recomendación.
+// Cuándo una tasa es alta: la usan las plantillas (respaldo) para elegir
+// recomendaciones y las claves nivel_ que recibe el modelo.
 export const HIGH_NO_SHOW_RATE = 0.3;
 export const HIGH_CANCELLATION_RATE = 0.25;
 
