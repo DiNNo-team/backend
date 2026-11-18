@@ -14,6 +14,7 @@ import { ReservationExpiryModule } from './modules/reservations-checkin/index.js
 import { ReservationsCheckinModule } from './modules/reservations-checkin/reservations-checkin.module.js';
 import { SearchAvailabilityModule } from './modules/search-availability/search-availability.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { InsightsModule } from './modules/insights/index.js';
 import { databaseSsl } from './config/database-ssl.js';
 
 const logger = new Logger('Database');
@@ -55,6 +56,8 @@ const logger = new Logger('Database');
     ReservationExpiryModule,
     SearchAvailabilityModule,
     NotificationsModule,
+    // Informe inteligente del restaurante (IA, Sprint 4): solo lectura.
+    InsightsModule,
   ],
   controllers: [AppController],
   providers: [

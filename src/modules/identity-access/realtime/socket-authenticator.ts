@@ -13,7 +13,7 @@ import { UserRole } from '../roles/user-role.js';
 // client reads them in error.message. UNAUTHORIZED only exists here; in HTTP it
 // is the 401 without errorCode. RESTAURANT_REQUIRED is the same code as the HTTP
 // 403 of restaurant-operations (this module cannot import it); ADMIN_ACCOUNT,
-// ACCOUNT_PENDING_APPROVAL and ACCOUNT_REJECTED are the same as the HTTP 403s of
+// ACCOUNT_PENDING_APPROVAL, ACCOUNT_REJECTED and RESTAURANT_SUSPENDED are the same as the HTTP 403s of
 // RolesGuard. A test keeps them equal.
 export const SOCKET_REJECTION_CODES = [
   'UNAUTHORIZED',
@@ -23,6 +23,7 @@ export const SOCKET_REJECTION_CODES = [
   'ADMIN_ACCOUNT',
   'ACCOUNT_PENDING_APPROVAL',
   'ACCOUNT_REJECTED',
+  'RESTAURANT_SUSPENDED',
 ] as const;
 export type SocketRejectionCode = (typeof SOCKET_REJECTION_CODES)[number];
 

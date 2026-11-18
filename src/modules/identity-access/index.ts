@@ -14,6 +14,7 @@ export type {
 export { Roles } from './roles/roles.decorator.js';
 // Exceptions to RolesGuard, route by route (§11 "Aprobación de restaurantes").
 export {
+  AllowSuspendedRestaurant,
   AllowUnapprovedRestaurant,
   AllowUnregisteredAccount,
 } from './roles/access-exceptions.decorator.js';
@@ -24,6 +25,7 @@ export {
   PENDING,
   REJECTED,
   RESTAURANT_APPROVAL_STATUSES,
+  SUSPENDED,
   type RestaurantApprovalStatus,
 } from './approval/restaurant-approval-status.js';
 export { RestaurantApprovalReader } from './approval/restaurant-approval.reader.js';

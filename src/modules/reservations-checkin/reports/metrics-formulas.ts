@@ -68,3 +68,41 @@ export function byDayOfWeek(counts: DayOfWeekCount[]): DayOfWeekCount[] {
     reservations: byDay.get(dayOfWeek)?.reservations ?? 0,
   }));
 }
+
+// Las 24 horas (0 a 23, Bogotá), en orden, con 0 en las horas sin reservas. Es
+// la distribución completa del panel del administrador; el resumen del
+// restaurante sigue mostrando solo las 3 horas pico.
+export function hourlyDistribution(counts: HourCount[]): HourCount[] {
+  const byHour = new Map(counts.map((count) => [count.hour, count]));
+  return Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    reservations: byHour.get(hour)?.reservations ?? 0,
+  }));
+}
+
+export interface DateCount {
+  date: string;
+  reservations: number;
+}
+
+export interface DayHourCount {
+  dayOfWeek: number;
+  hour: number;
+  reservations: number;
+}
+
+// Siempre 168 entradas (7 días × 24 horas), de lunes (1) a domingo (7) y de la
+// hora 0 a la 23 dentro de cada día, con 0 donde no hay reservas. Es el mapa de
+// calor del panel del administrador; suma lo mismo que las horas y los días.
+export function dayHourDistribution(counts: DayHourCount[]): DayHourCount[] {
+  const byCell = new Map(
+    counts.map((count) => [`${count.dayOfWeek}-${count.hour}`, count]),
+  );
+  return [1, 2, 3, 4, 5, 6, 7].flatMap((dayOfWeek) =>
+    Array.from({ length: 24 }, (_, hour) => ({
+      dayOfWeek,
+      hour,
+      reservations: byCell.get(`${dayOfWeek}-${hour}`)?.reservations ?? 0,
+    })),
+  );
+}

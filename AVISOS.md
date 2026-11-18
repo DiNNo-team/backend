@@ -6,6 +6,94 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 17 nov 2026 · Elizabeth · `GET /v1/restaurants/me/summary` agrega lo de la nueva pantalla Resumen del restaurante (Sprint 4) · rama `feat/sprint4-admin-panel`
+
+- **Qué cambia (aditivo):** no se tocó ningún campo existente. Se agregan `billing.guests` (personas de los check-ins), `previousComparable` (el mismo tramo del periodo anterior: 1–17 nov contra 1–17 oct; 1–31 mar contra 1–28 feb; un periodo que no empieza el día 1, los mismos N días justo antes), `byDate[]` (una entrada por día del periodo, con ceros: reservas creadas, check-ins, comensales, canceladas y vencidas), `byDayHour[]` (168 celdas), `monthly[]` (6 meses de comensales; el mes en curso con `inProgress`) y `payment` (estado de pago del mes del periodo, solo si cabe en un mes, y del mes anterior: `in_progress`, `pending` o `paid`, con monto).
+- **Ruta nueva:** ninguna. El detalle de un día es `GET /v1/restaurants/me/billing/check-ins?from=día&to=día&pageSize=200` (el día es el de Bogotá).
+- **Quién la ve:** igual que antes; un restaurante **suspendido** la sigue viendo (solo lectura). Pendiente y rechazado, su `403`.
+- **Base de datos:** sin migraciones. 13 consultas agregadas en paralelo, todas del restaurante de la sesión, con los índices que ya existen.
+- **Para Sebastián (web):** contrato en [`docs/restaurant-summary-contract.md`](docs/restaurant-summary-contract.md); cópialo idéntico en `frontend/docs/`. «Pagado» es el estado que el administrador llama «Cobrado»: es el mismo dato visto por quien paga. **Mobile:** no consume este endpoint; no hay nada que hacer.
+- **Código:** `reports/restaurant-summary.reader.ts`, `reports/comparable-period.ts`, `billing/billing-status.ts` (la regla de estado de cobro, ahora compartida con el panel del administrador, sin cambiar su comportamiento) y `RestaurantMetricsService.dayHourForRestaurant`.
+
+---
+
+## 17 nov 2026 · Santiago · Informe inteligente del restaurante: backend de la IA (Sprint 4, tareas 2.1.1 y 2.1.3) · para revisar: Santiago
+
+- **Ruta nueva:** `GET /v1/restaurants/me/insights?refresh=true|false`, solo `restaurant_admin` **aprobado** (pendiente, rechazado o suspendido: su `403`; un suspendido recibe `RESTAURANT_SUSPENDED`), con `@RateLimit('ai')` (10 por minuto). Contrato completo en CLAUDE.md §12.16 y en Swagger (tag `insights`).
+- **Qué devuelve:** métricas de los **últimos 7 días de Bogotá, hoy incluido**, comparadas con los 7 anteriores; una serie por día (`metrics.daily`, para gráficos); el indicador de confiabilidad (`reliability.level`: `high`, `medium`, `low` o `null`) con sus motivos; y 2 o 3 recomendaciones (`narrative.text`).
+- **El respaldo nunca rompe la pantalla:** si no hay llave, el modelo falla, tarda más de 20 s o el texto no pasa la validación, la respuesta sigue siendo `200` con `narrative.source = "template"` y `narrative.fallback` con el motivo (`llm_disabled`, `llm_unavailable`, `llm_invalid`). Con menos de 10 reservas resueltas: `dataSufficiency = "insufficient"`, tasas y nivel en `null` y `fallback = "insufficient_data"`.
+- **Para Sergio (web):** decidir por `dataSufficiency`, `reliability.level` y `narrative.source`/`fallback`, nunca por el texto. El texto es generado automáticamente: la pantalla lo marca así. El botón «Actualizar» usa `refresh=true` (cuenta para el límite de 10 por minuto; con `429` se muestra el texto propio y no se reintenta solo).
+- **Privacidad:** al modelo solo salen números agregados del restaurante: ni ids, ni nombre, ni dirección, ni datos de comensales (lo fijan `llm-prompt.spec.ts` y `test/insights.e2e-spec.ts`). Nunca cambia una reserva ni una mesa.
+- **Caché en Redis** (sin migración): una hora si el texto lo redactó el modelo, 5 minutos si salió de plantillas; la clave lleva el día. Si Redis falla, el informe se calcula igual.
+- **Variables nuevas, opcionales:** `INSIGHTS_LLM_API_KEY` (**secreto**, en Azure va en Key Vault; Santiago se la pasa a Jacobo por privado) e `INSIGHTS_LLM_MODEL` (por defecto `claude-haiku-5-5`). Sin la llave la API arranca igual, con plantillas.
+- **Dependencia nueva:** `@anthropic-ai/sdk` (1.9.0), el SDK oficial del proveedor (decisión del equipo: Claude). Después del pull corre `npm install`.
+- **Base de datos:** sin migraciones. Lee `reservations`, `check_ins`, `table_logs` y `tables` solo para consultar (reutiliza `RestaurantMetricsService` y agrega 4 consultas de lectura en `insights/metrics/insights-activity.reader.ts`). **Elizabeth:** revisar si esa lectura con SQL directo te sirve como modelo de lectura (docs/ia-diseno.md §6.1, opción a).
+- **Contrato común (§12.16):** se agregó en el `CLAUDE.md` del backend. Hay que copiarlo igual en los de frontend y mobile (§12 es igual en los tres repos); el de frontend lo copia Sergio en su PR de la pantalla.
+- **Demo (paso 7, respaldo):** para mostrar el respaldo en vivo, quitar `INSIGHTS_LLM_API_KEY` del Container App (crea una revisión nueva) o esperar a que el modelo falle; luego «Actualizar». Coordinarlo con Jacobo antes del ensayo.
+
+---
+
+## 17 nov 2026 · Jacobo · Imagen del backend para Azure y commit en el health (Sprint 4, tareas 3.1.1 y 3.1.2) · para revisar: Elizabeth
+
+- **Qué hay:** `Dockerfile` (Node 24, dos etapas, corre como usuario `node`, `NODE_ENV=production` dentro de la imagen) y `.dockerignore` (ningún `.env` de ninguna carpeta entra a la imagen). Es la imagen que se desplegará en Azure Container Apps. Detalle en §11, «Migración a Azure».
+- **Variable nueva: `GIT_COMMIT`.** `GET /v1/health` devuelve en `commit` el valor de `GIT_COMMIT` y, si falta o está vacía, `RENDER_GIT_COMMIT`, como hasta ahora. La define el pipeline de Azure (otro PR); **en Render no se define** y nada cambia allí. Está en `.env.example`.
+- **Sin cambios** de API, base de datos ni dependencias. La respuesta del health es la misma: `{ "status": "ok", "commit": "..." }`. En Azure, `commit` trae el SHA **corto** (7 caracteres); en Render sigue el completo.
+- **En local no cambia nada:** `npm run start:dev` sigue escuchando en `127.0.0.1`. Solo la imagen de Docker escucha en `0.0.0.0`, y por eso **no arranca** con `DEV_USER_ENABLED=true` (la protección de siempre en un ambiente desplegado). Para probar la imagen en tu equipo usa un archivo de entorno aparte, con Postgres y Redis locales, nunca tu `.env` (apunta a Neon).
+- **Render y Vercel siguen siendo producción** hasta que Azure pase las pruebas; después quedan como plan B hasta el sábado.
+
+---
+
+## 17 nov 2026 · Elizabeth · `GET /v1/admin/platform/metrics` agrega `byDate` y `byDayHour` (Sprint 4, panel del administrador) · rama `feat/sprint4-admin-panel`
+
+- **Qué cambia (aditivo):** la respuesta agrega dos campos y **no cambia ninguno de los que ya tenía**. `byDate`: `[{ date: "AAAA-MM-DD", reservations }]`, una entrada por cada día del periodo (de 1 a 366), en orden y con los días en 0. `byDayHour`: `[{ dayOfWeek: 1..7, hour: 0..23, reservations }]`, siempre 168 entradas (lunes primero), con los ceros.
+- **Mismo criterio:** `basis: "reservations_created_at"`, hora de America/Bogota y las mismas reservas que `reservations.created`: la suma de `byDate` = la suma de `byDayHour` = `reservations.created`. Contrato en [`docs/admin-panel-contract.md`](docs/admin-panel-contract.md), sección 5.
+- **Para Sebastián (web):** campos nuevos y opcionales de leer; el panel actual sigue funcionando igual. `byDayHour` se pinta directo como mapa de calor (índice = (`dayOfWeek` − 1) × 24 + `hour`).
+- **Código:** `RestaurantMetricsService.forPlatform` (dos consultas más, solo del camino de la plataforma; el resumen del restaurante no cambia) y `dayHourDistribution` (`reports/metrics-formulas.ts`).
+- **Sin migraciones, sin variables de entorno ni dependencias nuevas.** Usa los índices `IDX_reservations_created_at` ya existentes.
+
+---
+
+## 17 nov 2026 · Elizabeth · Panel del administrador: suspensión, cobro mensual y reportes de plataforma (Sprint 4) · rama `feat/sprint4-admin-panel` · **migraciones aplicadas en producción**
+
+- **Qué hay (backend):** suspender y reactivar restaurantes aprobados, estado de cobro mensual por restaurante (pendiente / cobrado, marcado a mano), ingresos de la plataforma, directorio de restaurantes con su actividad y métricas de reservas de toda la plataforma. Contrato completo para la web en [`docs/admin-panel-contract.md`](docs/admin-panel-contract.md); reglas en `CLAUDE.md` §8, §10 y §11 («Administrador», «Suspensión», «Cobro mensual y reportes de plataforma»).
+- **Endpoints nuevos** (todos `platform_admin`, Swagger tag `admin`):
+  - `POST /v1/admin/restaurants/:id/suspend` `{ reason }` y `POST /v1/admin/restaurants/:id/reactivate`.
+  - `GET /v1/admin/overview?month`, `GET /v1/admin/billing?month&page&pageSize`, `GET /v1/admin/billing/:restaurantId?month&page&pageSize`, `POST /v1/admin/billing/:restaurantId/:month/mark-paid` y `.../mark-pending`.
+  - `GET /v1/admin/activity?month&page&pageSize` (no `/admin/restaurants/activity`: chocaría con `/admin/restaurants/:id`) y `GET /v1/admin/platform/metrics?from&to`.
+- **Cambios aditivos en respuestas existentes:**
+  - `approvalStatus` puede traer `suspended` (en `GET /v1/restaurants/me`, la lista y el detalle del admin y `GET /v1/admin/restaurants?status=suspended`).
+  - `RestaurantProfileResponseDto` agrega `suspensionReason` (solo mientras está suspendido; si no, `null`).
+  - `GET`/`PATCH /v1/restaurants/me/status` agregan `approvalStatus` y `suspensionReason` (`isOpen` no cambia).
+  - El detalle del admin agrega `suspensionReason`, `suspendedAt` y `suspendedByEmail` (la última suspensión, también después de reactivar).
+- **`errorCode` nuevos:**
+  - 403 `RESTAURANT_SUSPENDED`: también es `connect_error` del WebSocket, sin reintento.
+  - 409 `RESTAURANT_NOT_APPROVED`, `RESTAURANT_NOT_SUSPENDED`, `PERIOD_NOT_CLOSED`, `NOTHING_TO_BILL`, `PERIOD_ALREADY_PAID` y `PERIOD_NOT_PAID`.
+- **Cuenta suspendida:**
+  - Solo puede usar `GET /v1/me`, `GET /v1/restaurants/me`, `GET /v1/restaurants/me/status`, `GET /v1/restaurants/me/summary`, `GET /v1/restaurants/me/billing/check-ins`, `GET /v1/restaurants/me/reservations` y `POST /v1/restaurants/me/check-ins` (sus reservas activas se respetan hasta el check-in o el vencimiento).
+  - Todo lo demás responde `403 RESTAURANT_SUSPENDED`.
+  - Para el comensal no existe: búsqueda sin él; detalle y reserva con `404 RESTAURANT_NOT_FOUND`, igual que un restaurante inexistente.
+- **Límite de peticiones:** etiqueta nueva `adminReports`, 30 por minuto, en overview, cobro (lista y detalle), directorio y métricas (§12.14).
+- **Migraciones nuevas, en este orden** (probadas up → down → up en la base de **pruebas** y **ya aplicadas en producción** por Elizabeth el 17 nov):
+  1. `1794700000000-AddRestaurantSuspension`: `suspended` en `CHK_restaurants_approval_status`, `suspension_reason`, `suspended_at`, `suspended_by` (FK) y `CHK_restaurants_suspension`.
+  2. `1794700000001-CreateBillingPeriods`: tabla `billing_periods`.
+  3. `1794700000002-AddPlatformReportIndexes`: `IDX_check_ins_checked_in_at` e `IDX_reservations_created_at`.
+  - **Ya están aplicadas:** el backend desplegado en Render responde con las tres. Para un entorno nuevo (otra base de desarrollo o la de Azure), correrlas en este orden **antes** de desplegar: sin la 1, toda ruta que lee el restaurante completo (perfil, estado abierto/cerrado, edición, registro y panel del administrador) responde 500 porque la entidad ya lee las columnas nuevas; sin la 2, fallan los endpoints de cobro del panel; sin la 3 todo funciona, más lento.
+- **Para Sebastián (web):**
+  - La web ya conoce `suspended` y `RESTAURANT_SUSPENDED`: la pantalla de «restaurante suspendido» y las pantallas del panel (Resumen, Solicitudes, Restaurantes y Cobros) están en la rama `feat/sprint4-admin-panel` del frontend, probadas contra este backend en Render; falta su PR a `develop`. Salen del mismo contrato (`docs/admin-panel-contract.md`).
+- **Para Sebastián (app):**
+  - Agregar `RESTAURANT_SUSPENDED` a los códigos del socket que no se reintentan (la app de comensal no lo recibe, pero el tipo lo lista).
+  - Del lado del comensal no cambia nada.
+- **Para todos:** §8 y §10 de `CLAUDE.md` cambiaron y deben quedar iguales en web y mobile el mismo día.
+- **Sin variables de entorno nuevas ni dependencias nuevas.**
+- **Riesgos aceptados (decididos con Elizabeth el 17 nov):**
+  - **Socket ya abierto:** un restaurante suspendido con el socket conectado no se desconecta (el token solo se revisa al conectar). Sigue recibiendo los eventos de sus reservas en curso, lo que le sirve para el check-in.
+  - **Reserva casi simultánea:** una reserva creada milisegundos después de suspender se crea igual (el mismo criterio del cierre del restaurante) y vence en máximo 15 minutos.
+  - **Índices sin `CONCURRENTLY`:** TypeORM corre las migraciones en una transacción; las tablas son pequeñas.
+  - **`down` de `AddRestaurantSuspension`:** se detiene si queda algún restaurante suspendido. Hay que reactivarlos antes de revertir.
+  - **Suspender no se ve en tiempo real en la app:** se emite el evento de disponibilidad como al aprobar, pero el listener no envía `availability.changed` de un restaurante que el comensal ya no puede ver. La app lo quita en su siguiente consulta (máximo 60 s) y el detalle y la reserva ya responden 404 al instante.
+
+---
+
 ## 16 nov 2026 · Sebastián · Límite de peticiones y cabeceras de seguridad (Sprint 4, tareas 6.1.3 y 6.1.4) · para revisar: Elizabeth
 
 - **Qué hay:** límite de peticiones en toda la API y en las conexiones del WebSocket, cabeceras de seguridad (helmet) y verificación del certificado de PostgreSQL con `sslmode=verify-full`. Contrato en §12.14 (igual en los tres repos) y detalle en §11, «Límite de peticiones y cabeceras de seguridad».
