@@ -43,6 +43,7 @@ const APPROVAL_VALUES_SQL = RESTAURANT_APPROVAL_STATUSES.map(
 ).join(', ');
 
 export const REJECTION_REASON_MAX_LENGTH = 300;
+export const SUSPENSION_REASON_MAX_LENGTH = 300;
 export const CONTACT_PHONE_MAX_LENGTH = 20;
 
 @Entity({ name: 'restaurants' })
@@ -64,6 +65,13 @@ export const CONTACT_PHONE_MAX_LENGTH = 20;
 @Check(
   'CHK_restaurants_approval_status',
   `"approval_status" IN (${APPROVAL_VALUES_SQL})`,
+)
+// A suspended restaurant always has its reason, when and who (migration
+// 1794700000000-AddRestaurantSuspension). Reactivating keeps them as "the last
+// suspension", so the other states require nothing.
+@Check(
+  'CHK_restaurants_suspension',
+  `"approval_status" <> 'suspended' OR ("suspension_reason" IS NOT NULL AND "suspended_at" IS NOT NULL AND "suspended_by" IS NOT NULL)`,
 )
 export class Restaurant {
   @PrimaryGeneratedColumn('uuid')
@@ -143,6 +151,24 @@ export class Restaurant {
     nullable: true,
   })
   contactPhone: string | null;
+
+  // The last suspension by a platform_admin (panel del administrador, Sprint
+  // 4): the reason the restaurant sees while suspended, when and who. There is
+  // no audit table: suspending again overwrites it, and reactivating keeps it.
+  @Column({
+    name: 'suspension_reason',
+    type: 'varchar',
+    length: SUSPENSION_REASON_MAX_LENGTH,
+    nullable: true,
+  })
+  suspensionReason: string | null;
+
+  @Column({ name: 'suspended_at', type: 'timestamptz', nullable: true })
+  suspendedAt: Date | null;
+
+  @Column({ name: 'suspended_by', type: 'uuid', nullable: true })
+  @ForeignKey('User', { name: 'FK_restaurants_suspended_by' })
+  suspendedBy: string | null;
 
   // When the approval request was sent, or sent again after a rejection
   // (resubmit). The administrator's pending list is ordered by it; updated_at is

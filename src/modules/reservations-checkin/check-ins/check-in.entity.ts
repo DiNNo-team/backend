@@ -21,6 +21,9 @@ import { Reservation } from '../reservations/reservation.entity.js';
   'restaurantId',
   'checkedInAt',
 ])
+// Cobro de toda la plataforma (panel del administrador): solo por fecha
+// (1794700000002-AddPlatformReportIndexes).
+@Index('IDX_check_ins_checked_in_at', ['checkedInAt'])
 export class CheckIn {
   @PrimaryGeneratedColumn('uuid')
   id: string;

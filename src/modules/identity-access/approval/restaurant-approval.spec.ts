@@ -45,16 +45,23 @@ function documentedErrorCodes(): string[] {
 }
 
 describe('restaurant approval constants', () => {
-  it('has exactly the three approval states', () => {
+  it('has exactly the four approval states (suspended since the admin panel)', () => {
     expect(RESTAURANT_APPROVAL_STATUSES).toEqual([
       'pending',
       'approved',
       'rejected',
+      'suspended',
     ]);
   });
 
   it('adds platform_admin to the account roles', () => {
     expect(USER_ROLES).toEqual(['restaurant_admin', 'diner', 'platform_admin']);
+  });
+
+  it('has the suspension code with its contract text', () => {
+    expect(ACCOUNT_ERROR_MESSAGES.RESTAURANT_SUSPENDED).toBe(
+      'Tu restaurante está suspendido y no aparece para los comensales. Revisa el motivo en tu cuenta o escríbenos a dinnoteam2026@gmail.com para reactivarlo.',
+    );
   });
 
   it('has the three new account codes with their contract texts', () => {
@@ -91,6 +98,7 @@ describe('unapprovedCode', () => {
     ['approved', null],
     ['pending', 'ACCOUNT_PENDING_APPROVAL'],
     ['rejected', 'ACCOUNT_REJECTED'],
+    ['suspended', 'RESTAURANT_SUSPENDED'],
   ] as const)('a restaurant %s → %s', (status, expected) => {
     expect(unapprovedCode(owner(status))).toBe(expected);
   });

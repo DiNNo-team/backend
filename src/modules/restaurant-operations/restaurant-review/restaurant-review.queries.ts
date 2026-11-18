@@ -4,6 +4,7 @@ import type { FindOptionsOrder } from 'typeorm';
 import { Repository } from 'typeorm';
 import {
   PENDING,
+  SUSPENDED,
   UsersService,
   type RestaurantApprovalStatus,
 } from '../../identity-access/index.js';
@@ -23,11 +24,15 @@ export interface AdminRestaurantsPage {
 }
 
 // Orden de la lista: las pendientes, la que más lleva esperando primero; las
-// revisadas, la última revisión primero (las aprobadas sin revisión, por la
-// migración o por el equipo, al final). id desempata siempre.
+// suspendidas, la última suspensión primero; las revisadas, la última revisión
+// primero (las aprobadas sin revisión, por la migración o por el equipo, al
+// final). id desempata siempre.
 export function adminListOrder(
   status: RestaurantApprovalStatus,
 ): FindOptionsOrder<Restaurant> {
+  if (status === SUSPENDED) {
+    return { suspendedAt: 'DESC', id: 'ASC' };
+  }
   return status === PENDING
     ? { submittedAt: 'ASC', id: 'ASC' }
     : {
@@ -79,21 +84,24 @@ export class RestaurantReviewQueries {
     if (!restaurant) {
       throw restaurantNotFound();
     }
-    const [schedules, owners, reviewers] = await Promise.all([
+    // Quién revisó y quién suspendió: los dos correos en una sola consulta.
+    const adminIds = [restaurant.reviewedBy, restaurant.suspendedBy].filter(
+      (adminId): adminId is string => adminId !== null,
+    );
+    const [schedules, owners, admins] = await Promise.all([
       this.schedules.find({
         where: { restaurantId: id },
         order: { dayOfWeek: 'ASC' },
       }),
       this.users.findRestaurantOwnerEmails([id]),
-      this.users.findPlatformAdminEmailsByIds(
-        restaurant.reviewedBy ? [restaurant.reviewedBy] : [],
-      ),
+      this.users.findPlatformAdminEmailsByIds(adminIds),
     ]);
+    const emailOf = (adminId: string | null) =>
+      adminId === null ? null : (admins.get(adminId) ?? null);
     return AdminRestaurantDetailDto.fromParts(restaurant, schedules, {
       ownerEmail: owners.get(id) ?? null,
-      reviewedByEmail: restaurant.reviewedBy
-        ? (reviewers.get(restaurant.reviewedBy) ?? null)
-        : null,
+      reviewedByEmail: emailOf(restaurant.reviewedBy),
+      suspendedByEmail: emailOf(restaurant.suspendedBy),
     });
   }
 }
