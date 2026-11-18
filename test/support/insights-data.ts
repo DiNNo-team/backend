@@ -3,10 +3,11 @@ import type { InsightsActivity } from '../../src/modules/insights/metrics/insigh
 import type {
   DailyActivity,
   InsightsMetrics,
+  PreviousMetrics,
 } from '../../src/modules/insights/metrics/insights-metrics.js';
 
 // Datos de prueba del informe de IA (unitarias y e2e). Los días son la semana
-// del martes 2026-11-11 al lunes 2026-11-17 de Bogotá.
+// del miércoles 2026-11-11 al martes 2026-11-17 de Bogotá.
 export const INSIGHTS_DAYS = [
   '2026-11-11',
   '2026-11-12',
@@ -112,4 +113,16 @@ export function insufficientMetrics(
     topSlots: [{ dayOfWeek: 2, hour: 12, reservations: 2 }],
     ...overrides,
   });
+}
+
+// La semana anterior a enoughMetrics: menos reservas y menos check-in.
+export function previousMetrics(
+  overrides: Partial<PreviousMetrics> = {},
+): PreviousMetrics {
+  return {
+    reservationsCreated: 35,
+    resolved: 33,
+    checkInRate: 0.55,
+    ...overrides,
+  };
 }

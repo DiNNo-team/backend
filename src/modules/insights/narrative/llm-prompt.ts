@@ -1,16 +1,41 @@
-import { DAY_NAMES, MAX_NARRATIVE_LENGTH } from '../insights.constants.js';
-import type { InsightsMetrics } from '../metrics/insights-metrics.js';
+import {
+  DAY_NAMES,
+  HIGH_CANCELLATION_RATE,
+  HIGH_CHECK_IN_RATE,
+  HIGH_NO_SHOW_RATE,
+  LOW_CHECK_IN_RATE,
+  MAX_NARRATIVE_LENGTH,
+} from '../insights.constants.js';
+import type {
+  InsightsMetrics,
+  PreviousMetrics,
+} from '../metrics/insights-metrics.js';
 import { percent, type Reliability } from '../reliability/reliability.js';
 import { formatHour } from './template-narrative.js';
 
 // Instrucción fija para el modelo. El modelo nunca escribe números: escribe
 // marcadores ({clave}) y el backend pone el valor con su unidad. Así un dato no
 // puede aparecer con otra unidad ni con otro valor (docs/ia-diseno.md §6.3).
+// Para que las recomendaciones no sean genéricas: cada una se apoya en un dato
+// y propone una acción que existe en DiNNo; lo bueno se reconoce; y si un dato
+// es bueno o malo lo deciden las claves nivel_ y cambio_ (reglas del backend),
+// no el modelo.
 export const NARRATIVE_SYSTEM_PROMPT =
   'Eres el asistente de DiNNo, una plataforma de microreservas de mesas en restaurantes de Bogotá. ' +
   'Recibes en JSON los datos de un restaurante en un periodo: cada clave tiene su valor y lo que significa. ' +
   'Escribe 2 o 3 recomendaciones para el dueño del restaurante: en español de Colombia, tuteando, en texto ' +
   'plano, sin viñetas, sin numeración y sin títulos. ' +
+  'Empieza por lo que más afecta al restaurante. Si algo va bien (por ejemplo un nivel alto de check-in o ' +
+  'más reservas que la semana anterior), reconócelo y di cómo mantenerlo o aprovecharlo; no inventes problemas. ' +
+  'Para saber si un dato es bueno o malo usa las claves que empiezan por nivel_ o por cambio_; no compares ' +
+  'cifras por tu cuenta. ' +
+  'Cada recomendación debe apoyarse en al menos una clave del JSON y proponer una acción concreta que el ' +
+  'restaurante pueda hacer en DiNNo: validar el código o escanear el QR apenas llega el comensal; cambiar ' +
+  'sus mesas a Ocupada o Disponible apenas cambian, sobre todo los días sin cambios manuales; tener mesas ' +
+  'Disponibles y activas en las franjas con más reservas; revisar que la capacidad de sus mesas corresponda ' +
+  'al promedio de personas por reserva; marcar el restaurante como Abierto o Cerrado a tiempo. ' +
+  'No des consejos genéricos ni que dependan de cosas fuera de DiNNo, como promociones, descuentos, ' +
+  'publicidad, redes sociales, contratar personal o mejorar la atención o el servicio. ' +
   'NUNCA escribas números, cifras, porcentajes ni horas. Cuando necesites un dato, escribe su clave exacta ' +
   'entre llaves, por ejemplo {porcentaje_con_check_in} o {franja_1_hora}: el sistema pone el valor con su ' +
   'unidad (el signo % y el formato de hora ya vienen incluidos, no los escribas). Usa cada clave solo con el ' +
@@ -48,6 +73,7 @@ function decimal(value: number): string {
 export function narrativePlaceholders(
   metrics: InsightsMetrics,
   reliability: Reliability,
+  previous: PreviousMetrics,
 ): Placeholders {
   const placeholders: Placeholders = {
     dias_del_periodo: count(
@@ -121,6 +147,25 @@ export function narrativePlaceholders(
       `reservas creadas en la franja número ${n}`,
     );
   });
+  if (metrics.averagePartySize !== null) {
+    placeholders.promedio_personas_por_reserva = {
+      value: decimal(metrics.averagePartySize),
+      meaning: 'personas por reserva en promedio',
+    };
+  }
+  const quietDays = daysWithoutManualUpdates(metrics);
+  if (quietDays !== null) {
+    placeholders.dias_sin_cambios_manuales_nombres = {
+      value: quietDays,
+      meaning:
+        'días de la semana en que el restaurante no cambió a mano ninguna mesa',
+    };
+  }
+  Object.assign(
+    placeholders,
+    levelPlaceholders(metrics),
+    previousPlaceholders(metrics, previous),
+  );
   const level = reliabilityLabel(reliability);
   if (level !== null) {
     placeholders.confiabilidad_de_la_disponibilidad = {
@@ -130,6 +175,105 @@ export function narrativePlaceholders(
     };
   }
   return placeholders;
+}
+
+// Si cada tasa es buena o mala, con las reglas del backend (las mismas del
+// indicador y de las plantillas): el modelo no decide qué es «alto».
+function levelPlaceholders(metrics: InsightsMetrics): Placeholders {
+  const levels: Placeholders = {};
+  if (metrics.checkInRate !== null) {
+    levels.nivel_check_in = {
+      value:
+        metrics.checkInRate >= HIGH_CHECK_IN_RATE
+          ? 'alto'
+          : metrics.checkInRate < LOW_CHECK_IN_RATE
+            ? 'bajo'
+            : 'medio',
+      meaning:
+        'qué tan bueno es el porcentaje con check-in (alto es bueno, bajo es un problema)',
+    };
+  }
+  if (metrics.cancellationRate !== null) {
+    levels.nivel_cancelaciones = {
+      value:
+        metrics.cancellationRate >= HIGH_CANCELLATION_RATE ? 'alto' : 'normal',
+      meaning: 'si el porcentaje de canceladas es alto (un problema) o normal',
+    };
+  }
+  if (metrics.noShowRate !== null) {
+    levels.nivel_vencidas_sin_check_in = {
+      value: metrics.noShowRate >= HIGH_NO_SHOW_RATE ? 'alto' : 'normal',
+      meaning:
+        'si el porcentaje de reservas que vencieron sin check-in es alto (un problema) o normal',
+    };
+  }
+  return levels;
+}
+
+// La semana anterior, para que el modelo diga si el restaurante mejoró o
+// empeoró. El sentido del cambio lo calcula el backend.
+function previousPlaceholders(
+  metrics: InsightsMetrics,
+  previous: PreviousMetrics,
+): Placeholders {
+  const result: Placeholders = {
+    reservas_creadas_semana_anterior: count(
+      previous.reservationsCreated,
+      'reservas creadas en los siete días anteriores al periodo',
+    ),
+    cambio_reservas_creadas: {
+      value: direction(
+        metrics.reservationsCreated,
+        previous.reservationsCreated,
+      ),
+      meaning:
+        'cómo cambiaron las reservas creadas frente a los siete días anteriores',
+    },
+  };
+  if (previous.checkInRate !== null && metrics.checkInRate !== null) {
+    result.porcentaje_con_check_in_semana_anterior = pct(
+      previous.checkInRate,
+      'porcentaje con check-in de los siete días anteriores al periodo',
+    );
+    result.cambio_porcentaje_con_check_in = {
+      value: direction(
+        percent(metrics.checkInRate),
+        percent(previous.checkInRate),
+      ),
+      meaning:
+        'cómo cambió el porcentaje con check-in frente a los siete días anteriores',
+    };
+  }
+  return result;
+}
+
+function direction(current: number, before: number): string {
+  if (current > before) return 'subió';
+  if (current < before) return 'bajó';
+  return 'se mantuvo igual';
+}
+
+// "lunes, miércoles y sábado": los días del periodo sin cambios manuales, de
+// lunes a domingo. Solo si hubo algunos (todos o ninguno ya lo dicen los
+// conteos).
+function daysWithoutManualUpdates(metrics: InsightsMetrics): string | null {
+  const quiet = metrics.daily.filter((day) => day.manualUpdates === 0);
+  if (quiet.length === 0 || quiet.length === metrics.daily.length) {
+    return null;
+  }
+  const names = quiet
+    .map((day) => isoWeekday(day.date))
+    .sort((a, b) => a - b)
+    .map((weekday) => DAY_NAMES[weekday]);
+  return names.length === 1
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`;
+}
+
+// "2026-11-17" → 2 (martes). 1 = lunes … 7 = domingo.
+function isoWeekday(date: string): number {
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return day === 0 ? 7 : day;
 }
 
 function reliabilityLabel({ level }: Reliability): string | null {

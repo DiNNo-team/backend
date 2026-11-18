@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import {
   enoughMetrics,
   insufficientMetrics,
+  previousMetrics,
 } from '../../../../test/support/insights-data.js';
 import { reliabilityOf } from '../reliability/reliability.js';
 import { LlmClient, type LlmResult } from './llm-client.js';
@@ -17,6 +18,7 @@ function llmAnswering(result: LlmResult, enabled = true) {
 describe('NarrativeService', () => {
   const metrics = enoughMetrics();
   const reliability = reliabilityOf(metrics);
+  const previous = previousMetrics();
   let warn: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -34,7 +36,7 @@ describe('NarrativeService', () => {
     });
 
     await expect(
-      new NarrativeService(llm).write(metrics, reliability),
+      new NarrativeService(llm).write(metrics, reliability, previous),
     ).resolves.toEqual({
       text: 'El 25 % de tus reservas venció sin check-in.',
       source: 'llm',
@@ -55,7 +57,7 @@ describe('NarrativeService', () => {
     const few = insufficientMetrics();
 
     await expect(
-      new NarrativeService(llm).write(few, reliabilityOf(few)),
+      new NarrativeService(llm).write(few, reliabilityOf(few), previous),
     ).resolves.toEqual({
       text: templateNarrative(few),
       source: 'template',
@@ -71,7 +73,7 @@ describe('NarrativeService', () => {
     );
 
     await expect(
-      new NarrativeService(llm).write(metrics, reliability),
+      new NarrativeService(llm).write(metrics, reliability, previous),
     ).resolves.toMatchObject({ source: 'template', fallback: 'llm_disabled' });
     expect(complete).not.toHaveBeenCalled();
   });
@@ -83,7 +85,7 @@ describe('NarrativeService', () => {
     });
 
     await expect(
-      new NarrativeService(llm).write(metrics, reliability),
+      new NarrativeService(llm).write(metrics, reliability, previous),
     ).resolves.toEqual({
       text: templateNarrative(metrics),
       source: 'template',
@@ -101,7 +103,7 @@ describe('NarrativeService', () => {
     });
 
     await expect(
-      new NarrativeService(llm).write(metrics, reliability),
+      new NarrativeService(llm).write(metrics, reliability, previous),
     ).resolves.toMatchObject({ source: 'template', fallback: 'llm_invalid' });
     expect(warn).toHaveBeenCalledWith(
       'Informe de IA con plantillas: el texto escribe números o signos en vez de claves: 9 %.',
@@ -112,7 +114,7 @@ describe('NarrativeService', () => {
     const { llm } = llmAnswering({ ok: true, text: '' });
 
     await expect(
-      new NarrativeService(llm).write(metrics, reliability),
+      new NarrativeService(llm).write(metrics, reliability, previous),
     ).resolves.toMatchObject({ source: 'template', fallback: 'llm_invalid' });
   });
 });
