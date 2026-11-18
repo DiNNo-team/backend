@@ -2,7 +2,7 @@ name: CI/CD
 
 on:
   # PRs to develop are checked before merging; a push to develop (a merged PR)
-  # is checked again and then Render's deployment is verified.
+  # is checked again, deployed to Azure, and Render's deployment is verified.
   pull_request:
     branches:
       - develop
@@ -46,6 +46,86 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Deploys develop to Azure Container Apps: builds the image, pushes it to the
+  # registry and points the Container App at it, then waits until /v1/health
+  # serves the pushed commit. Signs in with OIDC (identity id-gh-backend): the
+  # federated credential only trusts this repo's develop branch, so the job
+  # must not declare an `environment` (that would change the token subject).
+  deploy-azure:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Only the latest commit of develop matters: a newer push cancels an older
+    # deployment that is still running.
+    concurrency:
+      group: deploy-azure-develop
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RESOURCE_GROUP: rg-dinno
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # The health check returns the first 7 characters of the commit.
+      - name: Set image tag
+        run: |
+          echo "COMMIT=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "IMAGE=${{ vars.ACR_NAME }}.azurecr.io/dinno-backend:${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push the image
+        run: |
+          az acr login --name "${{ vars.ACR_NAME }}"
+          docker build --tag "$IMAGE" .
+          docker push "$IMAGE"
+
+      # Only the image and GIT_COMMIT change: secrets, the other variables and
+      # the scale stay as they are in Azure.
+      - name: Deploy to Container Apps
+        run: |
+          az extension add --name containerapp --upgrade --only-show-errors
+          az containerapp update \
+            --name "${{ vars.APP_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$IMAGE" \
+            --set-env-vars "GIT_COMMIT=$COMMIT" \
+            --only-show-errors --output none
+
+      # Status alone is not enough: if the new revision fails to start, the
+      # previous one keeps answering "ok" with the old commit.
+      - name: Wait for Azure to serve this commit
+        run: |
+          fqdn=$(az containerapp show --name "${{ vars.APP_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn --output tsv)
+          url="https://$fqdn/v1/health"
+          deadline=$((SECONDS + 10 * 60))
+          last="sin respuesta"
+          until [ "$SECONDS" -ge "$deadline" ]; do
+            if body=$(curl --silent --fail --max-time 30 "$url"); then
+              served=$(echo "$body" | jq -r '.commit // "null"')
+              if [ "$served" = "$COMMIT" ]; then
+                echo "Azure sirve el commit $COMMIT."
+                exit 0
+              fi
+              last="responde el commit $served"
+            fi
+            echo "Esperando el commit $COMMIT ($last)."
+            sleep 15
+          done
+          echo "::error::En 10 minutos, $url no respondió el commit $COMMIT ($last). Revisa la revisión nueva: az containerapp revision list -n ${{ vars.APP_NAME }} -g $RESOURCE_GROUP y sus logs."
+          exit 1
 
   # Render deploys develop on its own; this job does not deploy, it only checks
   # that Render is serving the pushed commit and records the result as a

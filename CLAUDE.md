@@ -688,17 +688,22 @@ Dos scripts de línea de comandos para la IA y la demo. **Solo los corre Elizabe
 - Cada servicio nuevo con pruebas de casos felices y de error (por ejemplo: mesa de otro restaurante, datos inválidos, mesa inactiva).
 
 ### Despliegue
-- **Render**, con despliegue automático en cada push a `develop`. URL: https://dinno-backend.onrender.com (health: `/v1/health`).
-- `.github/workflows/ci-cd.yml` tiene dos jobs. `checks` corre en cada PR hacia `develop` y en cada push a `develop`: Node 24, `npm ci`, lint, typecheck, test, test:e2e y build. `verify-deployment` corre solo en cada push a `develop`, después de `checks`, y espera a que `/v1/health` devuelva el commit del push.
-- `PORT` lo asigna Render; no lo fijes. Las variables se configuran en el panel de Render, nunca en el repositorio.
+- **Azure Container Apps** (`ca-dinno-backend`, `westus2`), desplegado por el CI en cada push a `develop`. URL: https://ca-dinno-backend.icyrock-d101225d.westus2.azurecontainerapps.io (health: `/v1/health`). Recursos, red y operación: `docs/azure/`.
+- **Render** sigue desplegando `develop` solo, como **plan B** hasta después de la presentación. URL: https://dinno-backend.onrender.com.
+- `.github/workflows/ci-cd.yml` tiene tres jobs:
+  - `checks` corre en cada PR hacia `develop` y en cada push a `develop`: Node 24, `npm ci`, lint, typecheck, test, test:e2e y build.
+  - `deploy-azure` corre solo en cada push a `develop`, después de `checks`: entra a Azure con OIDC (identidad `id-gh-backend`, sin claves en GitHub), construye la imagen con el `Dockerfile`, la sube a `acrdinno4821` con el SHA corto, actualiza el Container App (solo la imagen y `GIT_COMMIT`) y espera hasta 10 minutos a que `/v1/health` devuelva ese commit. Usa las variables del repo `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME` y `APP_NAME`. **No declara `environment`:** la credencial federada solo confía en `repo:DiNNo-team/backend:ref:refs/heads/develop`, y con un `environment` el token cambiaría y el login fallaría.
+  - `verify-deployment` corre solo en cada push a `develop`, después de `checks`, y espera a que Render devuelva el commit completo del push.
+- Un PR con una prueba rota no despliega: `deploy-azure` necesita `checks`.
+- Las variables y secretos de Azure se configuran en el Container App (secretos como referencias a Key Vault), nunca en el repositorio ni en GitHub. En Azure, `PORT=3000`. En Render, `PORT` lo asigna la plataforma.
 
 ### Migración a Azure (en curso, Sprint 4)
 Azure Container Apps (`westus2`, grupo `rg-dinno`) con la imagen del `Dockerfile`; Render queda como plan B. Operación y red: `docs/azure/`.
 - **Imagen:** `Dockerfile` en dos etapas con Node 24 (`npm ci`, `npm run build`, `npm prune --omit=dev`, `node dist/main.js` como usuario `node`). `.dockerignore` deja fuera todo `.env` de cualquier carpeta y los `*.tsbuildinfo` (con uno viejo, el build incremental deja `dist` vacío).
 - **Ambiente desplegado:** `isDeployedEnvironment` (`identity-access/auth/deployed-environment.ts`) lo detecta por `RENDER` o `NODE_ENV=production`. En Azure no existe `RENDER`: la imagen define `NODE_ENV=production`, y el Container App también. Si faltara, el usuario de desarrollo y el emulador de Firebase no se bloquearían al arrancar, y la API escucharía solo en `127.0.0.1` (el ingress no le llega). No hay variable `HOST`.
-- **Commit desplegado:** el pipeline de Azure define `GIT_COMMIT` con el SHA corto; `app.service.ts` la lee antes que `RENDER_GIT_COMMIT` (ver "Configuración y variables de entorno").
+- **Commit desplegado:** el job `deploy-azure` define `GIT_COMMIT` con el SHA corto (7 caracteres); `app.service.ts` la lee antes que `RENDER_GIT_COMMIT` (ver "Configuración y variables de entorno").
 - **IP real y TLS:** detrás del ingress de Container Apps, `TRUST_PROXY_HOPS` se deja sin definir (1). `DATABASE_URL` de Azure Database for PostgreSQL va con `sslmode=verify-full` (ver "Límite de peticiones y cabeceras de seguridad").
-- **WebSocket:** en Azure App Service hay que activar *Web sockets*. Con más de una instancia hace falta ARR affinity (sesiones pegajosas) y un adaptador compartido de Socket.IO (por ejemplo Redis), porque las salas viven en la memoria del proceso (ver "Tiempo real: eventos y WebSocket").
+- **WebSocket:** el ingress de Container Apps lo acepta por el mismo puerto (`transport: auto`), sin configuración extra. Con más de una réplica hacen falta afinidad de sesión (`sticky`) y un adaptador compartido de Socket.IO (Redis), porque las salas viven en la memoria del proceso (ver "Tiempo real: eventos y WebSocket"). Mientras no estén, el backend corre con una réplica.
 
 ### Sprint 2 · Notas de implementación
 - `UserRole` tiene `RESTAURANT_ADMIN` y `DINER`. Nada de literales `'restaurant_admin'` en el código; `users.role` lleva un check con los dos valores.
