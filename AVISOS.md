@@ -6,6 +6,18 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 17 nov 2026 · Jacobo · El backend se despliega en Azure en cada push a `develop` (Sprint 4, tarea 3.1.1) · para revisar: Elizabeth
+
+- **Qué hay:** job nuevo `deploy-azure` en `.github/workflows/ci-cd.yml`. Después de `checks`, y solo en un push a `develop` (un PR fusionado), construye la imagen, la sube al registro de Azure, actualiza `ca-dinno-backend` y espera a que `/v1/health` responda el commit del push (SHA corto). Detalle en CLAUDE.md §11, «Despliegue».
+- **API en Azure:** https://ca-dinno-backend.icyrock-d101225d.westus2.azurecontainerapps.io (sin `/v1`; Swagger en `/docs`). Ya responde, con los datos copiados de Neon el 17 nov (conteos idénticos, las 20 migraciones aplicadas).
+- **Sin claves en GitHub:** entra con OIDC (identidad `id-gh-backend`, que solo puede subir imágenes y cambiar `ca-dinno-backend`). En el repo hay cinco **variables** con identificadores (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME`, `APP_NAME`) y ningún secreto. No le agreguen `environment` al job: el login fallaría.
+- **Render no cambia:** sigue desplegando `develop` solo y `verify-deployment` sigue igual. Es el **plan B** hasta después de la presentación. Mientras tanto hay **dos backends** con bases distintas (Render con Neon, Azure con la suya): lo que se haga en uno no aparece en el otro.
+- **Un PR con una prueba rota no despliega** en ninguno de los dos (`checks` va primero).
+- **Migraciones:** el job **no** corre `migration:run`. Una migración nueva se aplica a mano en Azure (Jacobo, con el administrador) **y** en Neon (Elizabeth) antes de fusionar; si no, Azure responde 500 en lo que use las columnas nuevas.
+- **Sin cambios** de código de la app, API, base de datos, variables de entorno ni dependencias.
+
+---
+
 ## 17 nov 2026 · Elizabeth · `GET /v1/restaurants/me/summary` agrega lo de la nueva pantalla Resumen del restaurante (Sprint 4) · rama `feat/sprint4-admin-panel`
 
 - **Qué cambia (aditivo):** no se tocó ningún campo existente. Se agregan `billing.guests` (personas de los check-ins), `previousComparable` (el mismo tramo del periodo anterior: 1–17 nov contra 1–17 oct; 1–31 mar contra 1–28 feb; un periodo que no empieza el día 1, los mismos N días justo antes), `byDate[]` (una entrada por día del periodo, con ceros: reservas creadas, check-ins, comensales, canceladas y vencidas), `byDayHour[]` (168 celdas), `monthly[]` (6 meses de comensales; el mes en curso con `inProgress`) y `payment` (estado de pago del mes del periodo, solo si cabe en un mes, y del mes anterior: `in_progress`, `pending` o `paid`, con monto).
