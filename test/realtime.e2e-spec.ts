@@ -294,7 +294,11 @@ describe('Real time: availability.changed (e2e)', () => {
 
     const next = nextEvent(socket);
     const again = await status(false);
-    expect(again.body).toEqual({ isOpen: false });
+    expect(again.body).toEqual({
+      isOpen: false,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
     await status(true);
 
     await expect(next).resolves.toEqual({

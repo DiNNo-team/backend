@@ -13,7 +13,10 @@ import type { CurrentUserData } from '../current-user/current-user-data.js';
 import { CurrentUser } from '../current-user/current-user.decorator.js';
 import { CurrentUserGuard } from '../current-user/current-user.guard.js';
 import { ACCOUNT_ERROR_MESSAGES } from '../roles/account-errors.js';
-import { AllowUnapprovedRestaurant } from '../roles/access-exceptions.decorator.js';
+import {
+  AllowSuspendedRestaurant,
+  AllowUnapprovedRestaurant,
+} from '../roles/access-exceptions.decorator.js';
 import { Roles } from '../roles/roles.decorator.js';
 import { UserRole } from '../roles/user-role.js';
 import { MeResponseDto } from './dto/me-response.dto.js';
@@ -32,6 +35,7 @@ export class MeController {
   @RateLimit('account')
   // A restaurant pending or rejected still reads its own account (§11).
   @AllowUnapprovedRestaurant()
+  @AllowSuspendedRestaurant()
   @ApiOperation({
     summary: 'Consultar la cuenta de la sesión',
     description:

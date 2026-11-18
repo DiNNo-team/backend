@@ -14,6 +14,7 @@ import { configureApp } from './../src/app.setup.js';
 import { FIREBASE_AUTH } from './../src/modules/identity-access/auth/firebase-admin.provider.js';
 import {
   ACCOUNT_ERROR_MESSAGES,
+  type RestaurantApprovalStatus,
   UserRole,
 } from './../src/modules/identity-access/index.js';
 import { User } from './../src/modules/identity-access/users/user.entity.js';
@@ -33,7 +34,6 @@ import {
   fakeFirebaseAuth,
   testUsers,
   usersRepository,
-  approvalReader,
 } from './support/test-accounts.js';
 import { createMetadataOnlyDataSource } from './support/typeorm-metadata.js';
 import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
@@ -85,6 +85,8 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
   let app: INestApplication<App>;
   let stored: Row[];
   let metadataDataSource: DataSource;
+  // Aprobación del restaurante de la sesión; una prueba la cambia a suspended.
+  let approval: RestaurantApprovalStatus = 'approved';
 
   const expiration = {
     expireIfDue: vi.fn((id: string) => {
@@ -276,7 +278,7 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
             : fakeFirebaseAuth.verifyIdToken(token),
       }))
       .overrideProvider(RestaurantApprovalReader)
-      .useValue(approvalReader('approved'))
+      .useValue({ statusOf: () => Promise.resolve(approval) })
       .overrideProvider(getRepositoryToken(User))
       .useValue({
         ...usersRepository([
@@ -341,6 +343,7 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
   });
 
   afterEach(async () => {
+    approval = 'approved';
     vi.restoreAllMocks();
     await app.close();
   });
@@ -498,6 +501,40 @@ describe('Check-in y reservas del restaurante (e2e)', () => {
         '55555555-5555-4555-8555-555555555555',
       );
       expect(checkInsRepo.insert).not.toHaveBeenCalled();
+    });
+  });
+
+  // Suspensión (panel del administrador): las reservas activas se respetan
+  // hasta su check-in o vencimiento, así que un suspendido puede validarlas y
+  // ver quién viene en camino.
+  describe('restaurante suspendido con una reserva activa previa', () => {
+    beforeEach(() => {
+      approval = 'suspended';
+    });
+
+    it('hace el check-in (200) y la mesa pasa a ocupada', async () => {
+      const res = await checkIn({ code: 'K7M4QX' }).expect(200);
+
+      expect(res.body).toMatchObject({
+        reservationId: ACTIVE_ID,
+        checkedInAt: NOW.toISOString(),
+      });
+      expect(stored.find((row) => row.id === ACTIVE_ID)?.status).toBe(
+        'completed',
+      );
+    });
+
+    it('ve la lista de reservas activas (solo lectura)', async () => {
+      const res = await list().expect(200);
+
+      expect(res.body.map((row: Row) => row.id)).toContain(ACTIVE_ID);
+    });
+
+    it('solo valida reservas activas: repetir el check-in responde 409', async () => {
+      await checkIn({ code: 'K7M4QX' }).expect(200);
+      const res = await checkIn({ code: 'K7M4QX' }).expect(409);
+
+      expect(res.body.errorCode).toBe('RESERVATION_ALREADY_USED');
     });
   });
 

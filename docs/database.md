@@ -3,18 +3,25 @@
 Esquema vigente de PostgreSQL (Neon). **Se actualiza en el mismo PR que cambia el esquema.**
 Cómo crear y correr migraciones, y quién las corre: sección 11 del [CLAUDE.md](../CLAUDE.md), subsección "Migraciones".
 
-Última migración aplicada en Neon: `1793840000003-AddTableLogSource` (2026-11-05). Todas las migraciones del repositorio están aplicadas en la base de desarrollo y en la de pruebas (verificado con `migration:run` y `migration:show`).
+Última migración aplicada en Neon: `1793840000003-AddTableLogSource` (2026-11-05). Todas las migraciones del repositorio están aplicadas en producción y en la base de pruebas (verificado con `migration:show`, 17 nov 2026).
 
-> Migraciones aplicadas en Neon, en orden: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15), `1793084146913-AddTablePlan` (plano de mesas, manual de identidad v2.0; agrega `tables.plan_x`, `plan_y` y `plan_shape`; aplicada el 2026-10-27) y las tres del Sprint 3, todas de Elizabeth y aplicadas el 2026-11-05: `1793840000001-CreateReservations` (crea `reservations`), `1793840000002-CreateCheckIns` (crea `check_ins`) y `1793840000003-AddTableLogSource` (agrega `table_logs.source` y deja `table_logs.user_id` nullable). Todo lo que se documenta abajo existe en Neon, **salvo** `1794300000000-CreateTableAreas` (zonas de mesas, Sebastián; crea `table_areas` y agrega `tables.area_id`), que **todavía no está aplicada en Neon**: hay que correrla antes de fusionar el PR que la trae, o todas las rutas de `/v1/tables` responden 500 en Render.
+> Migraciones aplicadas en Neon, en orden: `CreateInitialTables`, `1791250327133-AddRestaurantProfile` (Santiago, PBI 3; agrega `category` y `address` a `restaurants` y crea `restaurant_schedules`; aplicada el 2026-10-05), `1791268910540-AddFirebaseUidToUsers` (agrega `users.firebase_uid`; aplicada el 2026-10-06), `1791340136261-CreateTableLogs` (Sergio, PBI 9; crea `table_logs`), `1791342586330-AddRestaurantIsOpen` (Sergio, PBI 8; agrega `restaurants.is_open`; aplicada el 2026-10-08) y `1792087341885-AddDinerRoleAndRestaurantLocation` (Sprint 2, Elizabeth; agrega `restaurants.latitude` y `restaurants.longitude`, `users.display_name` y los checks `CHK_restaurants_location_pair`, `CHK_restaurants_latitude`, `CHK_restaurants_longitude`, `CHK_users_role` y `CHK_users_email_normalized`; aplicada el 2026-10-15), `1793084146913-AddTablePlan` (plano de mesas, manual de identidad v2.0; agrega `tables.plan_x`, `plan_y` y `plan_shape`; aplicada el 2026-10-27) y las tres del Sprint 3, todas de Elizabeth y aplicadas el 2026-11-05: `1793840000001-CreateReservations` (crea `reservations`), `1793840000002-CreateCheckIns` (crea `check_ins`) y `1793840000003-AddTableLogSource` (agrega `table_logs.source` y deja `table_logs.user_id` nullable). Todo lo que se documenta abajo existe en Neon; `1794300000000-CreateTableAreas` (zonas de mesas, Sebastián; crea `table_areas` y agrega `tables.area_id`) también está aplicada.
 
-> **Pendientes de aplicar (rama `feat/admin-approval`, Elizabeth), en este orden:**
+> **Aplicadas en producción (rama `feat/admin-approval`, Elizabeth), en este orden:**
 > 1. `1794400000000-AddRestaurantApproval`: columnas de aprobación en `restaurants`; deja **todos** los restaurantes existentes en `approved`.
 > 2. `1794400000001-AddPlatformAdminRole`: agrega `platform_admin` a `CHK_users_role`.
 > 3. `1794600000000-AddRestaurantSubmittedAt`: `restaurants.submitted_at` (fecha de envío de la solicitud), llenada con `created_at`.
 > 4. `1794600000001-AddCheckInFee`: `check_ins.fee_cop` (2000 para los check-ins existentes, sin default después), `CHK_check_ins_fee_cop` e `IDX_check_ins_restaurant_id_checked_in_at`.
 > 5. `1794600000002-AddReservationsRestaurantCreatedAtIndex`: `IDX_reservations_restaurant_id_created_at`.
 >
-> Ya aplicadas en la rama de pruebas de Neon. Falta la base de desarrollo, **antes** de fusionar: sin ellas, toda petición de un restaurante, toda búsqueda y todo check-in responden 500 en Render. Los timestamps `17946…` son posteriores a `1794500000000-CreatePushDevices` (rama `feat/sprint4-notificaciones`, sin fusionar) y no chocan con ningún archivo de las ramas remotas. Ver `AVISOS.md`.
+> **Aplicadas en producción (rama `feat/sprint4-admin-panel`, Elizabeth, 17 nov 2026), en este orden:**
+> 1. `1794700000000-AddRestaurantSuspension`: `suspended` en `CHK_restaurants_approval_status`, `suspension_reason`, `suspended_at`, `suspended_by` y `CHK_restaurants_suspension`.
+> 2. `1794700000001-CreateBillingPeriods`: tabla `billing_periods`.
+> 3. `1794700000002-AddPlatformReportIndexes`: `IDX_check_ins_checked_in_at` e `IDX_reservations_created_at`.
+>
+> Probadas (up → down → up, y `migration:generate --check` sin diferencias) en la base de **pruebas** y ya aplicadas en producción. En un entorno nuevo hay que correrlas en este orden antes de desplegar: sin la 1, toda ruta que lee el restaurante completo responde 500. Ver `AVISOS.md`.
+>
+> Las ocho migraciones de este bloque están aplicadas en producción y en la base de pruebas. Los timestamps `17946…` son posteriores a `1794500000000-CreatePushDevices` y no chocan con ningún archivo de las ramas remotas.
 
 ## Tablas
 
@@ -36,13 +43,17 @@ Todas las tablas tienen `id`, `created_at` y `updated_at`:
 | `is_open` | `boolean` | NOT NULL, por defecto `true`. Estado Abierto/Cerrado del restaurante (PBI 8); ver "Decisiones" |
 | `latitude` | `numeric(9,6)` | NULL. Entre -90 y 90 (`CHK_restaurants_latitude`). Sprint 2 |
 | `longitude` | `numeric(9,6)` | NULL. Entre -180 y 180 (`CHK_restaurants_longitude`). Sprint 2 |
-| `approval_status` | `varchar(20)` | NOT NULL, **sin valor por defecto**. `'pending'`, `'approved'` o `'rejected'` (`CHK_restaurants_approval_status`; valores de `RESTAURANT_APPROVAL_STATUSES`). Aprobación de restaurantes; ver "Decisiones" |
+| `approval_status` | `varchar(20)` | NOT NULL, **sin valor por defecto**. `'pending'`, `'approved'`, `'rejected'` o `'suspended'` (`CHK_restaurants_approval_status`; valores de `RESTAURANT_APPROVAL_STATUSES`; `suspended` desde `AddRestaurantSuspension`). Aprobación y suspensión de restaurantes; ver "Decisiones" |
 | `rejection_reason` | `varchar(300)` | NULL. Motivo del rechazo, que ve el restaurante |
 | `reviewed_by` | `uuid` | NULL. FK → `users.id` (`FK_restaurants_reviewed_by`, sin `ON DELETE`): el `platform_admin` que lo revisó |
 | `reviewed_at` | `timestamptz` | NULL. Cuándo se revisó |
 | `contact_phone` | `varchar(20)` | NULL. Teléfono de contacto normalizado (dígitos y un `+` inicial opcional, de 7 a 15 dígitos; lo valida la API). Obligatorio en el registro público |
+| `suspension_reason` | `varchar(300)` | NULL. Motivo de la **última** suspensión; el restaurante lo ve solo mientras está suspendido. Reactivar lo conserva (`AddRestaurantSuspension`) |
+| `suspended_at` | `timestamptz` | NULL. Cuándo fue la última suspensión |
+| `suspended_by` | `uuid` | NULL. FK → `users.id` (`FK_restaurants_suspended_by`, sin `ON DELETE`): el `platform_admin` que lo suspendió |
 | `submitted_at` | `timestamptz` | NOT NULL, por defecto `now()`. Cuándo se envió la solicitud de aprobación, o se reenvió después de un rechazo (`POST /v1/restaurants/me/resubmit`). La lista de pendientes del administrador se ordena por ella. Las filas que existían al migrar quedaron con su `created_at` (`AddRestaurantSubmittedAt`) |
 
+- `CHK_restaurants_suspension`: un restaurante `suspended` tiene siempre `suspension_reason`, `suspended_at` y `suspended_by`. Los demás estados no exigen nada (un reactivado conserva su última suspensión).
 - `CHK_restaurants_location_pair`: las dos coordenadas o ninguna. Sin coordenadas, el restaurante no aparece en la búsqueda del comensal.
 - La base solo exige rangos válidos en el planeta; **la restricción a Bogotá la pone la API** (contrato del Sprint 2, `CLAUDE.md` sección 10).
 - `numeric` llega del driver `pg` como texto: la entidad lo convierte a `number | null` con `coordinateTransformer` (`restaurants/restaurant.entity.ts`).
@@ -153,6 +164,7 @@ Microreservas (CLAUDE.md §12.1 y §12.4). Código en `src/modules/reservations-
 | `no_show` | `boolean` | NOT NULL, por defecto `false`. `true` si venció sin que el comensal llegara |
 
 - **Índices únicos parciales (`WHERE "status" = 'active'`), la defensa final contra la concurrencia:** `UQ_reservations_active_table` (una activa por mesa), `UQ_reservations_active_diner` (una por comensal) y `UQ_reservations_active_code` (código único entre las activas). Una reserva cancelada, vencida o cumplida no bloquea nada; el código puede repetirse después.
+- Índice `IDX_reservations_created_at` sobre `(created_at)` (`AddPlatformReportIndexes`): métricas de toda la plataforma, sin restaurante.
 - Índices de apoyo: `IDX_reservations_restaurant_status_expires_at` sobre `(restaurant_id, status, expires_at)` (lista del restaurante y proceso de vencimiento), `IDX_reservations_diner_id_created_at` sobre `(diner_id, created_at)` e `IDX_reservations_restaurant_id_created_at` sobre `(restaurant_id, created_at)` (resumen del restaurante: reservas creadas en un periodo; `AddReservationsRestaurantCreatedAtIndex`).
 - Las tres FK son `ON DELETE NO ACTION`. Los valores de los checks son `RESERVATION_STATUSES` y `RESERVATION_CODE_ALPHABET` (`reservations/reservation.constants.ts`); como todo check, cambiarlos exige una migración escrita a mano.
 
@@ -170,9 +182,29 @@ El evento facturable (§12.6): un registro por check-in válido.
 | `fee_cop` | `integer` | NOT NULL, **sin valor por defecto**, `>= 0` (`CHK_check_ins_fee_cop`). Tarifa en pesos colombianos cobrada por este check-in: `CHECKIN_FEE_COP` en ese momento (snapshot). Cambiar la tarifa no altera las filas anteriores. Los check-ins que existían al migrar quedaron con 2000 (`AddCheckInFee`) |
 
 - `IDX_check_ins_restaurant_id_checked_in_at` sobre `(restaurant_id, checked_in_at)`: el estado de cuenta y el resumen filtran por restaurante y rango de `checked_in_at`.
+- `IDX_check_ins_checked_in_at` sobre `(checked_in_at)` (`AddPlatformReportIndexes`): el cobro y los ingresos de toda la plataforma filtran solo por fecha.
 - Un `INSERT` a mano o en una prueba debe incluir `fee_cop`: sin default, falla por NOT NULL (igual criterio que `approval_status`).
 
 Las FK no tienen cascada (`ON DELETE NO ACTION`): no se puede borrar un restaurante que tenga mesas o usuarios, ni una mesa o un usuario que tenga registros en la bitácora.
+
+### `billing_periods` · entidad `BillingPeriod` (Sprint 4, panel del administrador)
+
+Estado de cobro de un restaurante en un mes, marcado a mano por el administrador de DiNNo (no hay pasarela de pagos). Migración `1794700000001-CreateBillingPeriods`. Se lee y se escribe con SQL directo (`PlatformBillingReader`, `BillingPeriodsService`); la entidad existe para las migraciones y la comprobación del esquema.
+
+| Columna | Tipo | Reglas |
+|---|---|---|
+| `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` (`FK_billing_periods_restaurant_id`) |
+| `period_month` | `date` | NOT NULL. Siempre el día 1 del mes (`CHK_billing_periods_month_first_day`). Mes de Bogotá |
+| `status` | `varchar(10)` | NOT NULL, **sin valor por defecto**: `'pending'` o `'paid'` (`CHK_billing_periods_status`) |
+| `amount_cop_snapshot` | `integer` | NULL. `SUM(check_ins.fee_cop)` del mes al marcarlo cobrado |
+| `check_ins_snapshot` | `integer` | NULL. Cuántos check-ins había al marcarlo |
+| `marked_paid_at` | `timestamptz` | NULL. Cuándo se marcó cobrado |
+| `marked_paid_by` | `uuid` | NULL. FK → `users.id` (`FK_billing_periods_marked_paid_by`): el `platform_admin` que lo marcó |
+
+- **Una fila por restaurante y mes:** `UQ_billing_periods_restaurant_id_period_month`. **Sin fila = mes pendiente:** la fila nace al marcar el mes como cobrado.
+- `CHK_billing_periods_paid_fields`: `paid` exige los cuatro campos del pago (snapshot, quién y cuándo); `pending` los exige en NULL (deshacer los limpia). `CHK_billing_periods_snapshots`: los snapshots no son negativos.
+- **El monto del mes siempre se recalcula** de `check_ins.fee_cop`. Si un mes cobrado no coincide con su snapshot, la API devuelve los dos valores y `amountMismatch: true`; nunca se corrige solo.
+- Marcar es un `INSERT ... ON CONFLICT ... DO UPDATE ... WHERE status = 'pending'` y deshacer un `UPDATE ... WHERE status = 'paid'`: con dos administradores a la vez, uno gana y el otro recibe 409.
 
 ### `push_devices` · entidad `PushDevice` (Sprint 4, notificaciones)
 
@@ -190,7 +222,7 @@ No guarda nada de la reserva ni del contenido de las notificaciones. Los tokens 
 
 | Tabla | Dueño | Qué agrega (cada uno con su propia migración de `ALTER`) |
 |---|---|---|
-| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: `is_open` (estado abierto/cerrado). Elizabeth: aprobación (`approval_status`, `rejection_reason`, `reviewed_by`, `reviewed_at`, `contact_phone`; `AddRestaurantApproval`; `submitted_at`, `AddRestaurantSubmittedAt`) |
+| `restaurants` | Elizabeth (mínimo: `name`) | Santiago: `category` y `address`. Sergio: `is_open` (estado abierto/cerrado). Elizabeth: aprobación (`approval_status`, `rejection_reason`, `reviewed_by`, `reviewed_at`, `contact_phone`; `AddRestaurantApproval`; `submitted_at`, `AddRestaurantSubmittedAt`) y suspensión (`suspension_reason`, `suspended_at`, `suspended_by`; `AddRestaurantSuspension`) |
 | `restaurant_schedules` | Santiago | Tabla nueva para los horarios del restaurante |
 | `users` | Elizabeth (esquema base) | Jacobo: `firebase_uid` (ya aplicada) y lo que más necesite para enlazar con Firebase |
 | `tables` | Elizabeth | Sebastián (editar y desactivar) trabaja sobre `identifier`, `capacity` e `is_active` |
@@ -198,6 +230,7 @@ No guarda nada de la reserva ni del contenido de las notificaciones. Los tokens 
 | `reservations`, `check_ins` | Elizabeth | Sprint 3 (`CreateReservations`, `CreateCheckIns`). Cobro y resumen: `check_ins.fee_cop` (`AddCheckInFee`) e `IDX_reservations_restaurant_id_created_at` |
 | `table_areas` y `tables.area_id` | Sebastián | Zonas de mesas (`CreateTableAreas`) |
 | `push_devices` | Sebastián | Notificaciones del Sprint 4 (`CreatePushDevices`) |
+| `billing_periods` | Elizabeth | Cobro mensual del panel del administrador (`CreateBillingPeriods`). Índices por fecha en `check_ins` y `reservations` (`AddPlatformReportIndexes`) |
 
 Nadie recrea una tabla ni toca columnas de otra persona.
 
@@ -227,7 +260,7 @@ Nadie recrea una tabla ni toca columnas de otra persona.
 - **`category` y `address` son NULL en la base a propósito:** ya hay restaurantes creados solo con nombre, de antes del registro completo. El seed le fija a Casa 72 categoría, dirección, coordenadas y horarios en cada corrida (es la fuente de verdad de ese restaurante de prueba). Que sean obligatorios lo impone el endpoint de registro, no la base. No tienen valor por defecto.
 - **Un día cerrado es un día sin fila** en `restaurant_schedules`; no hay columna de "cerrado".
 - **`restaurants.is_open` es un interruptor manual**, independiente de `restaurant_schedules`: en el Sprint 1 no se calcula a partir de los horarios. Nace en `true` (decisión tomada: el restaurante recién registrado queda Abierto), y los restaurantes que ya existían quedaron en `true` al aplicar la migración.
-- **Aprobación de restaurantes (`approval_status`):** solo un restaurante `approved` aparece en la búsqueda, el detalle público y las reservas, y solo su dueño opera (CLAUDE.md §11, "Aprobación de restaurantes").
+- **Aprobación de restaurantes (`approval_status`):** solo un restaurante `approved` aparece en la búsqueda, el detalle público y las reservas, y solo su dueño opera (CLAUDE.md §11, "Aprobación de restaurantes"). Un `suspended` (suspendido por el administrador, solo desde `approved`) tampoco aparece ni opera; vuelve a `approved` al reactivarlo. Revertir `AddRestaurantSuspension` se detiene si queda algún restaurante suspendido.
   - **Sin valor por defecto, a propósito:** la migración agrega la columna con `DEFAULT 'approved'` para que **todos** los restaurantes existentes queden aprobados en la misma sentencia, y en seguida quita el default. Así, todo `INSERT` que no fije el estado falla por NOT NULL y ningún restaurante nace aprobado por accidente: el código siempre lo fija. Un `INSERT` a mano o en una prueba debe incluir `approval_status`.
   - Quién fija qué: `POST /v1/restaurants/signup` → `pending`; `POST /v1/restaurants` (usuario habilitado por el equipo) → `approved`, con `reviewed_by` y `reviewed_at` en NULL porque nadie lo revisó; el seed → `approved`.
   - Sin tabla de auditoría: la última revisión queda en `reviewed_by` y `reviewed_at`. Aprobar o rechazar solo desde `pending`; reenviar (`rejected` → `pending`) vuelve a poner en NULL `rejection_reason`, `reviewed_by` y `reviewed_at` y mueve `submitted_at` a ahora.

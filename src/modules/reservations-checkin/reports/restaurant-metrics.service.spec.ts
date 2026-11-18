@@ -18,10 +18,16 @@ interface Answers {
   counts: object;
   hours: object[];
   days: object[];
+  dates?: object[];
+  dayHours?: object[];
 }
 
 function createService(answers: Answers) {
   const query = vi.fn((sql: string, _params: unknown[]) => {
+    if (sql.includes('generate_series'))
+      return Promise.resolve(answers.dates ?? []);
+    if (sql.includes('GROUP BY 1, 2'))
+      return Promise.resolve(answers.dayHours ?? []);
     if (sql.includes('FILTER')) return Promise.resolve([answers.counts]);
     if (sql.includes('EXTRACT(HOUR')) return Promise.resolve(answers.hours);
     if (sql.includes('EXTRACT(ISODOW')) return Promise.resolve(answers.days);
@@ -29,6 +35,9 @@ function createService(answers: Answers) {
   });
   const billing = {
     totals: vi.fn().mockResolvedValue({ checkIns: 4, amountCop: 9500 }),
+    platformTotals: vi
+      .fn()
+      .mockResolvedValue({ checkIns: 9, amountCop: 18000 }),
   };
   const service = new RestaurantMetricsService(
     { query } as unknown as DataSource,
@@ -147,5 +156,136 @@ describe('RestaurantMetricsService', () => {
     for (const sql of grouped) {
       expect(sql).toContain(`AT TIME ZONE 'America/Bogota'`);
     }
+  });
+
+  describe('forPlatform (panel del administrador)', () => {
+    it('uses the same queries without the restaurant filter, and the platform totals', async () => {
+      const { service, query, billing } = createService({
+        ...EMPTY,
+        hours: [{ hour: 13, reservations: 3 }],
+        days: [{ dayOfWeek: 5, reservations: 3 }],
+      });
+
+      const metrics = await service.forPlatform(period());
+
+      expect(billing.platformTotals).toHaveBeenCalledWith(period());
+      expect(billing.totals).not.toHaveBeenCalled();
+      expect(metrics.billing).toEqual({ checkIns: 9, amountCop: 18000 });
+      for (const [sql, params] of query.mock.calls) {
+        expect(sql).not.toContain('restaurant_id');
+        expect(sql).toContain('"created_at" >= $1 AND "created_at" < $2');
+        expect(params.slice(0, 2)).toEqual([
+          period().startsAt,
+          period().endsBefore,
+        ]);
+      }
+    });
+
+    it('byDate: generate_series over the days of the period, in Bogotá, with the same WHERE as the counts', async () => {
+      const { service, query } = createService({
+        ...EMPTY,
+        dates: [
+          { date: '2026-11-01', reservations: 2 },
+          { date: '2026-11-02', reservations: 0 },
+        ],
+      });
+
+      const metrics = await service.forPlatform(period());
+
+      expect(metrics.byDate).toEqual([
+        { date: '2026-11-01', reservations: 2 },
+        { date: '2026-11-02', reservations: 0 },
+      ]);
+      const [sql, params] = query.mock.calls.find(([text]) =>
+        text.includes('generate_series'),
+      ) as [string, unknown[]];
+      expect(sql).toContain(
+        `("created_at" AT TIME ZONE 'America/Bogota')::date`,
+      );
+      expect(sql).toContain(
+        "generate_series($3::date, $4::date, interval '1 day')",
+      );
+      expect(sql).toContain('LEFT JOIN');
+      expect(sql).toContain('"created_at" >= $1 AND "created_at" < $2');
+      // Los días from y to del periodo, tal como se pidieron.
+      expect(params).toEqual([
+        period().startsAt,
+        period().endsBefore,
+        '2026-11-01',
+        '2026-11-15',
+      ]);
+    });
+
+    it('byDayHour: always 168 cells, Monday first, hour 0 to 23, zeros included', async () => {
+      const { service } = createService({
+        ...EMPTY,
+        dayHours: [
+          { dayOfWeek: 5, hour: 13, reservations: 3 },
+          { dayOfWeek: 1, hour: 0, reservations: 1 },
+          { dayOfWeek: 7, hour: 23, reservations: 2 },
+        ],
+      });
+
+      const { byDayHour } = await service.forPlatform(period());
+
+      expect(byDayHour).toHaveLength(168);
+      expect(byDayHour[0]).toEqual({ dayOfWeek: 1, hour: 0, reservations: 1 });
+      expect(byDayHour[4 * 24 + 13]).toEqual({
+        dayOfWeek: 5,
+        hour: 13,
+        reservations: 3,
+      });
+      expect(byDayHour[167]).toEqual({
+        dayOfWeek: 7,
+        hour: 23,
+        reservations: 2,
+      });
+      expect(byDayHour.reduce((sum, cell) => sum + cell.reservations, 0)).toBe(
+        6,
+      );
+    });
+
+    it('the restaurant path does not run the two new queries', async () => {
+      const { service, query } = createService(EMPTY);
+
+      await service.forRestaurant(RESTAURANT_ID, period());
+
+      expect(query).toHaveBeenCalledTimes(3);
+      for (const [sql] of query.mock.calls) {
+        expect(sql).not.toContain('generate_series');
+        expect(sql).not.toContain('GROUP BY 1, 2');
+      }
+    });
+
+    it('returns the 24-hour distribution instead of the top 3', async () => {
+      const { service } = createService({
+        ...EMPTY,
+        hours: [
+          { hour: 13, reservations: 3 },
+          { hour: 19, reservations: 2 },
+          { hour: 12, reservations: 2 },
+          { hour: 20, reservations: 1 },
+        ],
+      });
+
+      const metrics = await service.forPlatform(period());
+
+      expect(metrics.hourly).toHaveLength(24);
+      expect(metrics.hourly[20]).toEqual({ hour: 20, reservations: 1 });
+      expect(metrics).not.toHaveProperty('peakHours');
+    });
+
+    it('forRestaurant keeps its top 3 and its restaurant filter', async () => {
+      const { service, query, billing } = createService(EMPTY);
+
+      const metrics = await service.forRestaurant(RESTAURANT_ID, period());
+
+      expect(metrics.peakHours).toEqual([]);
+      expect(metrics).not.toHaveProperty('hourly');
+      expect(billing.platformTotals).not.toHaveBeenCalled();
+      for (const [sql] of query.mock.calls) {
+        expect(sql).toContain('"restaurant_id" = $1');
+      }
+    });
   });
 });

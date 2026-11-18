@@ -1,0 +1,18 @@
+# Secretos: ningún .env entra a la imagen, en ninguna carpeta (también src/.env).
+**/.env
+**/.env.*
+!.env.example
+
+# Se generan dentro de la imagen. Un *.tsbuildinfo viejo hace que el build
+# incremental crea que todo está compilado y deje dist vacío.
+node_modules
+dist
+*.tsbuildinfo
+
+.git
+.github
+.claude
+coverage
+exports
+load-tests/results
+ai-prototype

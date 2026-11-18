@@ -1,5 +1,7 @@
 import {
   byDayOfWeek,
+  dayHourDistribution,
+  hourlyDistribution,
   peakHours,
   ratio,
   reservationRates,
@@ -110,5 +112,64 @@ describe('byDayOfWeek', () => {
 
   it('empty input gives seven zeros', () => {
     expect(byDayOfWeek([]).every((day) => day.reservations === 0)).toBe(true);
+  });
+});
+
+describe('hourlyDistribution', () => {
+  it('always has the 24 hours in order, with 0 where there is nothing', () => {
+    const hours = hourlyDistribution([
+      { hour: 13, reservations: 3 },
+      { hour: 0, reservations: 1 },
+      { hour: 23, reservations: 2 },
+    ]);
+
+    expect(hours).toHaveLength(24);
+    expect(hours.map((entry) => entry.hour)).toEqual(
+      Array.from({ length: 24 }, (_, hour) => hour),
+    );
+    expect(hours[0]).toEqual({ hour: 0, reservations: 1 });
+    expect(hours[13]).toEqual({ hour: 13, reservations: 3 });
+    expect(hours[23]).toEqual({ hour: 23, reservations: 2 });
+    expect(hours[12]).toEqual({ hour: 12, reservations: 0 });
+  });
+
+  it('with no data is 24 zeros, never an empty list', () => {
+    expect(
+      hourlyDistribution([]).every((entry) => entry.reservations === 0),
+    ).toBe(true);
+  });
+});
+
+describe('dayHourDistribution', () => {
+  it('always has 168 cells: Monday to Sunday, hour 0 to 23 inside each day', () => {
+    const cells = dayHourDistribution([
+      { dayOfWeek: 3, hour: 12, reservations: 4 },
+      { dayOfWeek: 7, hour: 23, reservations: 1 },
+    ]);
+
+    expect(cells).toHaveLength(168);
+    expect(cells[0]).toEqual({ dayOfWeek: 1, hour: 0, reservations: 0 });
+    expect(cells[2 * 24 + 12]).toEqual({
+      dayOfWeek: 3,
+      hour: 12,
+      reservations: 4,
+    });
+    expect(cells[167]).toEqual({ dayOfWeek: 7, hour: 23, reservations: 1 });
+    expect(cells.map((cell) => [cell.dayOfWeek, cell.hour])).toEqual(
+      [1, 2, 3, 4, 5, 6, 7].flatMap((day) =>
+        Array.from({ length: 24 }, (_, hour) => [day, hour]),
+      ),
+    );
+  });
+
+  it('with no data is 168 zeros, and keeps the total of what it was given', () => {
+    expect(
+      dayHourDistribution([]).every((cell) => cell.reservations === 0),
+    ).toBe(true);
+    const total = dayHourDistribution([
+      { dayOfWeek: 1, hour: 1, reservations: 2 },
+      { dayOfWeek: 2, hour: 2, reservations: 3 },
+    ]).reduce((sum, cell) => sum + cell.reservations, 0);
+    expect(total).toBe(5);
   });
 });

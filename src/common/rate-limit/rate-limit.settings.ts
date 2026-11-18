@@ -15,6 +15,7 @@ export const RATE_LIMIT_TAGS = [
   'checkIn',
   'geocode',
   'ai',
+  'adminReports',
 ] as const;
 export type RateLimitTag = (typeof RATE_LIMIT_TAGS)[number];
 
@@ -45,6 +46,9 @@ export const RATE_LIMIT_RULES: Record<
   checkIn: { limit: 30, ttlMs: MINUTE },
   geocode: { limit: 20, ttlMs: MINUTE },
   ai: { limit: 10, ttlMs: MINUTE },
+  // Lecturas pesadas del panel del administrador (agregaciones de toda la
+  // plataforma): overview, cobro, directorio y métricas.
+  adminReports: { limit: 30, ttlMs: MINUTE },
 };
 
 // Conexiones nuevas de WebSocket por IP. Alto por la misma razón que `ip`:

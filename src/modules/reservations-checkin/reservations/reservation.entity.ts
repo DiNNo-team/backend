@@ -63,6 +63,9 @@ const ONLY_ACTIVE = `"status" = 'active'`;
   'restaurantId',
   'createdAt',
 ])
+// Métricas de toda la plataforma (panel del administrador): solo por fecha
+// (1794700000002-AddPlatformReportIndexes).
+@Index('IDX_reservations_created_at', ['createdAt'])
 export class Reservation {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -12,6 +12,7 @@ import {
 const PENDING_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
 const REJECTED_ID = '1d2c3b4a-5f6e-4d7c-8b9a-0a1b2c3d4e5f';
 const ADMIN_ID = 'a7b8c9d0-e1f2-4a3b-8c4d-5e6f708192a3';
+const SECOND_ADMIN_ID = 'b8c9d0e1-f2a3-4b4c-9d5e-6f708192a3b4';
 
 function restaurant(fields: Partial<Restaurant>): Restaurant {
   return {
@@ -26,6 +27,9 @@ function restaurant(fields: Partial<Restaurant>): Restaurant {
     rejectionReason: null,
     reviewedBy: null,
     reviewedAt: null,
+    suspensionReason: null,
+    suspendedAt: null,
+    suspendedBy: null,
     contactPhone: '+573001234567',
     submittedAt: new Date('2026-11-14T15:00:00Z'),
     createdAt: new Date('2026-11-14T15:00:00Z'),
@@ -73,8 +77,11 @@ function createQueries(rows: Restaurant[], total = rows.length) {
       Promise.resolve(
         new Map(
           ids
-            .filter((id) => id === ADMIN_ID)
-            .map((id) => [id, 'admin@example.com']),
+            .filter((id) => id === ADMIN_ID || id === SECOND_ADMIN_ID)
+            .map((id) => [
+              id,
+              id === ADMIN_ID ? 'admin@example.com' : 'otro.admin@example.com',
+            ]),
         ),
       ),
     ),
@@ -107,7 +114,70 @@ describe('adminListOrder', () => {
   );
 });
 
+describe('adminListOrder (suspended)', () => {
+  it('suspended: the latest suspension first', () => {
+    expect(adminListOrder('suspended')).toEqual({
+      suspendedAt: 'DESC',
+      id: 'ASC',
+    });
+  });
+});
+
 describe('RestaurantReviewQueries', () => {
+  it('the detail shows the last suspension with both admin emails from one query', async () => {
+    const { queries, users } = createQueries([
+      restaurant({
+        approvalStatus: 'suspended',
+        reviewedBy: ADMIN_ID,
+        reviewedAt: new Date('2026-11-02T15:00:00Z'),
+        suspensionReason: 'Varios comensales reportaron mesas inexistentes.',
+        suspendedBy: SECOND_ADMIN_ID,
+        suspendedAt: new Date('2026-11-16T20:00:00Z'),
+      }),
+    ]);
+
+    const detail = await queries.detail(PENDING_ID);
+
+    expect(detail).toMatchObject({
+      approvalStatus: 'suspended',
+      reviewedByEmail: 'admin@example.com',
+      suspensionReason: 'Varios comensales reportaron mesas inexistentes.',
+      suspendedAt: '2026-11-16T20:00:00.000Z',
+      suspendedByEmail: 'otro.admin@example.com',
+    });
+    expect(users.findPlatformAdminEmailsByIds).toHaveBeenCalledExactlyOnceWith([
+      ADMIN_ID,
+      SECOND_ADMIN_ID,
+    ]);
+  });
+
+  it('a reactivated restaurant keeps its last suspension in the admin detail', async () => {
+    const { queries } = createQueries([
+      restaurant({
+        approvalStatus: 'approved',
+        suspensionReason: 'Motivo de la última suspensión.',
+        suspendedBy: ADMIN_ID,
+        suspendedAt: new Date('2026-11-16T20:00:00Z'),
+      }),
+    ]);
+
+    expect(await queries.detail(PENDING_ID)).toMatchObject({
+      approvalStatus: 'approved',
+      suspensionReason: 'Motivo de la última suspensión.',
+      suspendedByEmail: 'admin@example.com',
+    });
+  });
+
+  it('a never-suspended restaurant has no suspension data', async () => {
+    const { queries } = createQueries([restaurant({})]);
+
+    expect(await queries.detail(PENDING_ID)).toMatchObject({
+      suspensionReason: null,
+      suspendedAt: null,
+      suspendedByEmail: null,
+    });
+  });
+
   it('lists one page of one status, with skip and take from page and pageSize', async () => {
     const { queries, restaurants } = createQueries([restaurant({})], 41);
 
