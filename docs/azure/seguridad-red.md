@@ -114,7 +114,8 @@ El Container App lee los secretos con **su propia identidad** y referencias a Ke
 | Identidad | La usa | Roles (cada uno solo sobre ese recurso) |
 |---|---|---|
 | `id-dinno-backend` (administrada de usuario) | el Container App `ca-dinno-backend` | **Key Vault Secrets User** sobre `kv-dinno-4821` (solo lee secretos) y **AcrPull** sobre `acrdinno4821` (solo baja imágenes) |
-| `id-gh-backend` (administrada de usuario, credencial federada de GitHub) | el job `deploy-azure` de `ci-cd.yml` | **AcrPush** sobre `acrdinno4821` y **Contributor** solo sobre `ca-dinno-backend` |
+| `id-gh-backend` (administrada de usuario, credencial federada de GitHub) | el job `deploy-azure` de `ci-cd.yml` del backend | **AcrPush** sobre `acrdinno4821` y **Contributor** solo sobre `ca-dinno-backend` |
+| `id-gh-frontend` (administrada de usuario, credencial federada de GitHub) | el job `deploy` de `web-ci-cd.yml` del frontend | **Contributor** solo sobre `swa-dinno` |
 
 - `id-dinno-backend` se crea **antes** que el Container App: sus roles ya están aplicados cuando arranca la primera revisión (con la identidad del sistema, la primera revisión suele fallar al bajar la imagen o leer los secretos).
 - Son dos identidades para que el pipeline no pueda leer secretos y el backend no pueda publicar imágenes ni cambiar su propia configuración.
@@ -167,25 +168,39 @@ az containerapp update -g $RG -n $APP --set-env-vars \
 
 Cada repo tiene **su propia identidad**, con una credencial federada solo para su rama o su entorno, y el rol mínimo **solo sobre su recurso**. En GitHub quedan identificadores (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`), nunca una clave.
 
+**Decidido (17 nov):**
+
+| Repo | Workflow y job | Despliega | Subject de la credencial federada |
+|---|---|---|---|
+| backend | `ci-cd.yml`, job `deploy-azure` (sin `environment`) | cada push a **`develop`** | `repo:DiNNo-team@329297407/backend@1391461154:ref:refs/heads/develop` |
+| frontend | `web-ci-cd.yml` (Sebastián), job `deploy` con `environment: production` | cada push a **`main`** (el PR `develop` → `main`) | `repo:DiNNo-team@329297407/frontend@1393536492:environment:production` |
+
+- **Formato del subject:** los dos repos usan el formato de GitHub con **IDs fijos** (`organización@id/repo@id`), no `repo:DiNNo-team/<repo>:…`. Con el formato sin IDs, Azure rechaza el login con `AADSTS700213: No matching federated identity record found`, y ese mismo error muestra el subject que presentó GitHub. Para ver el prefijo de un repo: `gh api repos/DiNNo-team/<repo>/actions/oidc/customization/sub` (`sub_claim_prefix`).
+- **El entorno va como lo escribe el workflow** (`production`, en minúscula), aunque GitHub lo muestre como `Production` en la configuración. Comprobado con un `workflow_dispatch` el 17 nov.
+- **Si un job cambia** (agrega o quita `environment`, o despliega desde otra rama), su subject cambia y hay que actualizar la credencial antes de fusionar; si no, el despliegue falla en el login.
+
 ```bash
-# Web (frontend): despliega dist en Static Web Apps desde el entorno «production»
-az identity create -g $RG -n id-gh-frontend
+# Web (frontend): web-ci-cd.yml despliega dist en Static Web Apps desde main, en el entorno «production»
+az identity create -g $RG -n id-gh-frontend -l $LOCATION
 az identity federated-credential create -g $RG --identity-name id-gh-frontend --name github-production \
   --issuer https://token.actions.githubusercontent.com \
-  --subject repo:DiNNo-team/frontend:environment:production \
+  --subject "repo:DiNNo-team@329297407/frontend@1393536492:environment:production" \
   --audiences api://AzureADTokenExchange
 SWA_ID=$(az staticwebapp show -g $RG -n $SWA --query id -o tsv)
 az role assignment create --assignee-object-id $(az identity show -g $RG -n id-gh-frontend --query principalId -o tsv) \
   --assignee-principal-type ServicePrincipal --role Contributor --scope $SWA_ID
 az identity show -g $RG -n id-gh-frontend --query clientId -o tsv   # → variable AZURE_CLIENT_ID del repo frontend
+# Variables del repo frontend que lee web-ci-cd.yml: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+# AZURE_RESOURCE_GROUP (rg-dinno), AZURE_STATIC_WEB_APP_NAME (swa-dinno) y los VITE_* del build
 
 # Backend: job deploy-azure de ci-cd.yml (needs: checks, solo en push a develop, SIN environment en el job),
 # así que el subject es la rama, no un entorno. Sube la imagen y actualiza el Container App.
-az identity create -g $RG -n id-gh-backend
+az identity create -g $RG -n id-gh-backend -l $LOCATION
 az identity federated-credential create -g $RG --identity-name id-gh-backend --name github-develop \
   --issuer https://token.actions.githubusercontent.com \
-  --subject repo:DiNNo-team/backend:ref:refs/heads/develop \
+  --subject "repo:DiNNo-team@329297407/backend@1391461154:ref:refs/heads/develop" \
   --audiences api://AzureADTokenExchange
+# Variables del repo backend: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_NAME y APP_NAME
 GH_PRINCIPAL=$(az identity show -g $RG -n id-gh-backend --query principalId -o tsv)
 az role assignment create --assignee-object-id $GH_PRINCIPAL --assignee-principal-type ServicePrincipal \
   --role AcrPush --scope $(az acr show -n $ACR --query id -o tsv)
@@ -195,7 +210,7 @@ az role assignment create --assignee-object-id $GH_PRINCIPAL --assignee-principa
 ```
 
 - **Comprobar:** `az role assignment list --assignee <clientId> --all -o table` muestra solo esos permisos. Ninguna identidad tiene *Owner* ni *Contributor* sobre el grupo o la suscripción.
-- En GitHub: Settings → Environments → `production` (frontend), y Settings → Variables con los identificadores.
+- En GitHub: el entorno `production` del frontend ya existe (lo usa `web-ci-cd.yml`); el backend no usa entornos. Los identificadores van en Settings → Secrets and variables → Actions → **Variables**; ningún repo tiene secretos de Azure.
 
 ---
 
