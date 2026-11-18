@@ -111,6 +111,6 @@ Presupuesto sobre la suscripción con alertas de costo real al 25 %, 50 % y 75 %
 
 ## 9. Pendientes de este documento
 
-- [ ] Nombres reales del backend, PostgreSQL y Redis.
-- [ ] Monitoreo: Log Analytics conectado al entorno, consultas guardadas y panel.
-- [ ] Checklist del día de la presentación (documento aparte).
+- [x] Nombres reales del backend, PostgreSQL y Redis (tabla de la sección 1).
+- [ ] Monitoreo: Log Analytics ya está conectado al entorno (`diag-dinno`); faltan las consultas guardadas, el panel y las alertas.
+- [x] Checklist del día de la presentación: [`checklist-presentacion.md`](checklist-presentacion.md). Costos: [`azure-costos.md`](azure-costos.md).
