@@ -10,13 +10,16 @@
 |---|---|---|---|---|
 | Grupo de recursos | `rg-dinno` | eastus | No | Existe |
 | Entorno de Container Apps (consumo) | `managedEnvironment-rgdinno-8310` | westus2 | No | Existe |
-| App de prueba (hello world) | `ca-dinno-prueba` | westus2 | No (escala a 0) | Existe · se elimina cuando el backend real esté arriba |
-| Backend | `<por confirmar con Elizabeth>` | westus2 | Solo con réplicas > 0 | Pendiente |
-| PostgreSQL Flexible Server | `<por confirmar>` | westus2 | **Sí, mientras está encendido** (el almacenamiento cobra siempre) | Pendiente |
-| Redis administrado | `<por confirmar>` | westus2 | **Sí, siempre** (no se puede pausar) | Pendiente · decisión del equipo |
-| Log Analytics | `log-dinno` | westus2 | Por GB ingerido (tope diario) | Pendiente |
+| App de prueba (hello world) | `ca-dinno-prueba` | westus2 | — | **Eliminada** (17 nov), cuando el backend real respondió el health |
+| Container Registry (Basic) | `acrdinno4821` | westus2 | **Sí**, tarifa diaria fija | Existe (17 nov) · sin usuario administrador: se entra con identidades |
+| Key Vault (Standard, RBAC) | `kv-dinno-4821` | westus2 | No (centavos por operación) | Existe (17 nov) · soft-delete de 7 días, sin protección de purga |
+| Identidad del backend | `id-dinno-backend` | westus2 | No | Existe (17 nov) · Key Vault Secrets User sobre `kv-dinno-4821` y AcrPull sobre `acrdinno4821` ([`seguridad-red.md`](seguridad-red.md) §2) |
+| Backend (Container App, consumo) | `ca-dinno-backend` | westus2 | Solo con réplicas > 0 | Existe (17 nov) · imagen `dinno-backend:5add132`, 0,5 vCPU y 1 GiB, 1 réplica, ingress externo solo HTTPS (HTTP → 301) en el puerto 3000. URL: `https://ca-dinno-backend.icyrock-d101225d.westus2.azurecontainerapps.io`. Secretos como referencias a Key Vault (`database-url`, `redis-url`, `google-geocoding-api-key`, `firebase-service-account-json`: notificaciones push activas). Sin `INSIGHTS_LLM_API_KEY`: el informe de IA usa plantillas |
+| PostgreSQL Flexible Server (Burstable B1ms) | `pg-d4821-westcentralus-1ms` | **westcentralus** | **Sí, mientras está encendido** (el almacenamiento cobra siempre) | Existe (17 nov) · PostgreSQL 17, 32 GB, sin alta disponibilidad, respaldos de 7 días sin redundancia geográfica. Base `dinno`, administrador `dinnoadmin` (clave en Key Vault: `pg-admin-password`). Firewall: solo la regla «servicios de Azure» (`0.0.0.0`). **Otra región a propósito:** westus2, westus y westus3 no tenían capacidad de B1ms para la cuenta; cada consulta del backend suma unos milisegundos (decisión en [`seguridad-red.md`](seguridad-red.md) §1) |
+| Azure Managed Redis (Balanced B0) | `redis-dinno-4821` | westus2 | **Sí, siempre** (no se puede pausar) | Existe (17 nov) · base `default` en el puerto 10000, solo TLS 1.2+ (`rediss://`), clúster Enterprise (un solo punto de conexión, cliente normal), claves de acceso, sin alta disponibilidad ni persistencia, eviction `VolatileLRU`. La URL va en Key Vault (`redis-url`, paso 9) |
+| Log Analytics | `log-dinno` | westus2 | Por GB ingerido (tope de 0,1 GB/día; retención de 30 días incluida) | Existe (17 nov) · recibe del entorno, con `diag-dinno`, `ContainerAppConsoleLogs` y `ContainerAppSystemLogs` (sin logs HTTP ni métricas). Al llegar al tope deja de recibir hasta el día siguiente. El día de la prueba de carga se sube a 0,5 GB y luego se vuelve a 0,1 |
 
-Todo lo nuevo va en **westus2**, la región del entorno de Container Apps. Si la base o Redis quedan en otra región, aumenta la latencia y puede cobrarse tráfico entre regiones.
+Todo lo nuevo va en **westus2**, la región del entorno de Container Apps. Si la base o Redis quedan en otra región, aumenta la latencia y puede cobrarse tráfico entre regiones. **Única excepción:** PostgreSQL, en westcentralus por falta de capacidad (ver la fila).
 
 ## 2. Antes de empezar
 
@@ -34,8 +37,8 @@ Variables para copiar en la terminal (completar las pendientes cuando existan):
 
 ```bash
 RG=rg-dinno
-APP=<nombre-del-backend>      # mientras tanto: ca-dinno-prueba
-PG=<nombre-del-servidor-pg>
+APP=ca-dinno-backend
+PG=pg-d4821-westcentralus-1ms   # westcentralus (ver la tabla)
 ```
 
 ## 3. Apagar (el mismo día en que se termina de trabajar)

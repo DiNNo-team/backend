@@ -1,6 +1,6 @@
 # Seguridad y red en Azure · procedimiento (Sprint 4)
 
-**Dueño:** Sebastián (reparto §4.2) · **Revisa:** Elizabeth · **Estado:** listo para correr cuando haya acceso a la suscripción. Nada de esto se ha creado todavía.
+**Dueño:** Sebastián (reparto §4.2) · **Revisa:** Elizabeth · **Estado (17 nov, Jacobo):** en curso. Ya existen el registro, Key Vault, PostgreSQL, Redis y Log Analytics (tabla de recursos en [`azure-operacion.md`](azure-operacion.md)). Las decisiones de red de esta sección son las definitivas: no hay otro criterio en otro documento.
 **Regla de costos (reparto §2.1):** todo lo de aquí es gratis o cuesta centavos: identidades administradas, credenciales federadas, reglas de firewall, Key Vault Standard y Static Web Apps Free. **No se crea** Azure Firewall, Application Gateway, Front Door, NAT Gateway, Private Endpoint, VNet ni planes de Defender.
 **Regla de acceso (reparto §2.1 y §9):** la API pública queda accesible **desde cualquier red**. Lo que se restringe es la base y Redis, nunca la API.
 
@@ -10,18 +10,19 @@ Sin secretos en este documento: los valores reales se escriben solo en la termin
 
 ## 0. Variables de la terminal
 
-Se definen una vez por sesión. Los nombres de recursos los confirma Elizabeth, que crea el Container App y PostgreSQL.
+Se definen una vez por sesión. Los nombres son los reales (17 nov):
 
 ```bash
-RG=rg-dinno
-LOCATION=eastus2                 # la región de rg-dinno (por confirmar)
-APP=ca-dinno-backend             # Container App del backend (Elizabeth)
-ENV=cae-dinno                    # entorno de Container Apps (Elizabeth)
-PG=psql-dinno                    # PostgreSQL Flexible Server (Elizabeth)
-KV=kv-dinno-$RANDOM              # nombre único global, 3 a 24 caracteres
-SWA=swa-dinno-web                # Static Web Apps (Free)
-SUB=$(az account show --query id -o tsv)
-TENANT=$(az account show --query tenantId -o tsv)
+RG=rg-dinno                      # el grupo está en eastus; sus recursos, en westus2 salvo PostgreSQL
+LOCATION=westus2                 # región del entorno de Container Apps y de todo lo demás
+APP=ca-dinno-backend             # Container App del backend
+ENV=managedEnvironment-rgdinno-8310
+PG=pg-d4821-westcentralus-1ms    # PostgreSQL Flexible Server, en westcentralus (ver §1)
+PGLOC=westcentralus
+KV=kv-dinno-4821
+REDIS=redis-dinno-4821
+ACR=acrdinno4821
+SWA=swa-dinno                    # Static Web Apps (Free)
 ```
 
 ---
@@ -29,17 +30,18 @@ TENANT=$(az account show --query tenantId -o tsv)
 ## 1. Red: quién habla con quién
 
 ```
-Comensal (app) ─┐                         ┌─ PostgreSQL Flexible Server (5432, TLS obligatorio)
-                ├─ HTTPS/WSS 443 ─► Container App (ingress externo, solo HTTPS) ─┤   firewall: solo las IP de salida del Container App
-Restaurante ────┘   cualquier red                                                └─ Redis (TLS, 10000 o 6380), con llave
-(web en Static Web Apps, HTTPS)
+Comensal (app) ─┐                                                               ┌─ PostgreSQL Flexible Server (5432, TLS verify-full, usuario dinno_app)
+                ├─ HTTPS/WSS 443 ─► Container App (westus2, ingress externo, solo HTTPS) ─┤   westcentralus · firewall: regla «servicios de Azure» (0.0.0.0)
+Restaurante ────┘   cualquier red                                                         ├─ Redis (westus2, solo TLS en 10000, con clave)
+(web en Static Web Apps, HTTPS)                                                           └─ Key Vault (westus2, identidad administrada)
 ```
 
 - **API:** ingress **externo**, solo HTTPS (`allowInsecure: false`), y el WebSocket por el mismo puerto (`transport: auto`). Es la única puerta pública.
-- **PostgreSQL:** acceso público **con firewall**. Solo entran las IP de salida del Container App y, cuando haga falta entrar a mano, una regla **temporal** con la IP de esa persona, que se borra el mismo día.
-- **No se usa** la regla «Permitir acceso desde cualquier servicio de Azure» (`0.0.0.0`): deja entrar a cualquier cliente de Azure, no solo al nuestro.
-- **Redis:** solo TLS y con llave, guardada en Key Vault.
-- **Por qué no una VNet privada:** el modo de red de PostgreSQL se elige al crear el servidor y no se cambia después. La VNet exige un entorno de Container Apps con perfiles de carga, más configuración y más riesgo de dejar el sistema sin conexión a 5 días de la presentación. El firewall por IP, TLS obligatorio y un usuario con permisos mínimos dan una protección razonable para el MVP. **Esto se acuerda con Elizabeth antes de que cree el servidor.**
+- **PostgreSQL (decidido el 17 nov):** acceso público con la regla **«Permitir acceso desde cualquier servicio de Azure»** (`0.0.0.0`), TLS obligatorio con **`sslmode=verify-full`** (el backend verifica el certificado) y la app entra con **`dinno_app`** (solo datos, sin crear ni borrar tablas). Para entrar a mano, una regla **temporal** con la IP de esa persona, que se borra el mismo día.
+- **Riesgo aceptado (regla `0.0.0.0`):** esa regla deja llegar a la base a cualquier cliente que corra dentro de Azure, incluso de otras suscripciones, no solo a nuestro Container App. No se filtra por IP porque el entorno de Container Apps es de **consumo y sin red virtual**: sus IP de salida **no son fijas** (cambian si Azure mueve el entorno) **ni exclusivas** (las comparten otros clientes de la misma región), así que una regla por IP no aseguraría que solo entre DiNNo y podría cortar el backend sin aviso. La base queda protegida por TLS obligatorio con verificación del certificado, contraseñas largas generadas que solo viven en Key Vault y un usuario con permisos mínimos, no por la red. Hacerlo con red privada exige recrear el entorno y el servidor y crear endpoints privados, con costo.
+- **Región de PostgreSQL (decidido el 17 nov):** el servidor está en **westcentralus**, no en westus2. Para la cuenta con créditos, westus2, westus y westus3 no tenían capacidad de B1ms (`Subscriptions are restricted from provisioning in this region`). El backend sigue en westus2: cada consulta cruza de región, **unos milisegundos más por consulta** (una reserva hace varias), y el tráfico entre regiones se cobra aparte, con un costo mínimo a este volumen. Si en el futuro hay capacidad en westus2, mover la base es restaurarla en un servidor nuevo allí.
+- **Redis:** solo TLS y con clave, guardada en Key Vault.
+- **Por qué no una VNet privada:** el modo de red de PostgreSQL se elige al crear el servidor y no se cambia después. La VNet exige un entorno de Container Apps con perfiles de carga, más configuración y más riesgo de dejar el sistema sin conexión a días de la presentación.
 
 ### 1.1 Ingress del backend
 
@@ -54,29 +56,24 @@ az containerapp show -g $RG -n $APP --query properties.configuration.ingress.fqd
 
 ### 1.2 Firewall de PostgreSQL
 
+En `firewall-rule` (CLI 2.93), el servidor va con **`--server-name`/`-s`** y el nombre de la regla con **`--name`/`-n`**. No existe `--rule-name`.
+
 ```bash
-# IP de salida del Container App (pueden cambiar si se recrea el entorno: revisar después de cada cambio)
-az containerapp show -g $RG -n $APP --query properties.outboundIpAddresses -o tsv
-
-# Una regla por IP de salida
-az postgres flexible-server firewall-rule create -g $RG --name $PG \
-  --rule-name aca-salida-1 --start-ip-address <ip> --end-ip-address <ip>
-
-# Que no exista la regla abierta a Azure (0.0.0.0)
-az postgres flexible-server firewall-rule list -g $RG --name $PG -o table
+# Reglas actuales: solo debe estar AllowAllAzureServicesAndResourcesWithinAzureIps_… (0.0.0.0) y, el día que se trabaja, la temporal
+az postgres flexible-server firewall-rule list -g $RG -s $PG -o table
 
 # TLS obligatorio (viene activado; se confirma)
 az postgres flexible-server parameter show -g $RG --server-name $PG --name require_secure_transport --query value
 az postgres flexible-server parameter set  -g $RG --server-name $PG --name require_secure_transport --value on
 
 # Entrada temporal de una persona (y se borra el mismo día)
-az postgres flexible-server firewall-rule create -g $RG --name $PG \
-  --rule-name temporal-<nombre>-<fecha> --start-ip-address <su-ip> --end-ip-address <su-ip>
-az postgres flexible-server firewall-rule delete -g $RG --name $PG --rule-name temporal-<nombre>-<fecha> --yes
+az postgres flexible-server firewall-rule create -g $RG -s $PG \
+  -n temporal-<nombre>-<aaaammdd> --start-ip-address <su-ip> --end-ip-address <su-ip>
+az postgres flexible-server firewall-rule delete -g $RG -s $PG -n temporal-<nombre>-<aaaammdd> --yes
 ```
 
-- La `DATABASE_URL` de Azure va con **`sslmode=verify-full`**: el backend verifica el certificado (`src/config/database-ssl.ts`).
-- **Si el backend deja de conectarse** después de un cambio, primero se comparan `outboundIpAddresses` con las reglas.
+- La `DATABASE_URL` de Azure va con **`sslmode=verify-full`**: el backend verifica el certificado (`src/config/database-ssl.ts`). Para `psql` (libpq 16 o más), `sslmode=verify-full sslrootcert=system` usa los certificados del sistema.
+- **No se agregan reglas por IP de salida del Container App** (riesgo aceptado, arriba).
 
 ### 1.3 Usuario de la app con permisos mínimos
 
@@ -101,8 +98,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE <admin> IN SCHEMA public
 
 ### 1.4 Redis
 
-- **Por confirmar en el reparto:** si queda Azure Managed Redis o se sigue con Upstash mientras tanto. Lo decide el equipo con los costos de Jacobo.
-- En cualquier caso: URL `rediss://` (TLS), la llave en Key Vault y nada de puertos sin TLS.
+- **Decidido (17 nov):** Azure Managed Redis `redis-dinno-4821`, Balanced B0, westus2, sin alta disponibilidad, directiva de clúster Enterprise (un solo punto de conexión, cliente normal), claves de acceso, base en el puerto **10000 solo con TLS 1.2+**.
+- URL `rediss://:<clave>@<host>:10000`, guardada en Key Vault como `redis-url`; nada de puertos sin TLS.
 - **Rotar la llave:** se regenera la secundaria, se actualiza el secreto de Key Vault, se reinicia la revisión y se regenera la primaria.
 - Si Redis falla, el límite de peticiones cuenta en memoria y la API sigue (CLAUDE.md §11, «Límite de peticiones y cabeceras de seguridad»).
 
@@ -112,17 +109,29 @@ ALTER DEFAULT PRIVILEGES FOR ROLE <admin> IN SCHEMA public
 
 El Container App lee los secretos con **su propia identidad** y referencias a Key Vault. No hay contraseñas guardadas en el Container App, en GitHub ni en la imagen.
 
+**Identidades (decidido el 17 nov), una por función y nunca compartidas:**
+
+| Identidad | La usa | Roles (cada uno solo sobre ese recurso) |
+|---|---|---|
+| `id-dinno-backend` (administrada de usuario) | el Container App `ca-dinno-backend` | **Key Vault Secrets User** sobre `kv-dinno-4821` (solo lee secretos) y **AcrPull** sobre `acrdinno4821` (solo baja imágenes) |
+| `id-gh-backend` (administrada de usuario, credencial federada de GitHub) | el job `deploy-azure` de `ci-cd.yml` | **AcrPush** sobre `acrdinno4821` y **Contributor** solo sobre `ca-dinno-backend` |
+
+- `id-dinno-backend` se crea **antes** que el Container App: sus roles ya están aplicados cuando arranca la primera revisión (con la identidad del sistema, la primera revisión suele fallar al bajar la imagen o leer los secretos).
+- Son dos identidades para que el pipeline no pueda leer secretos y el backend no pueda publicar imágenes ni cambiar su propia configuración.
+
 ```bash
 # 2.1 Key Vault con permisos por roles (RBAC), Standard
 az keyvault create -g $RG -n $KV -l $LOCATION --enable-rbac-authorization true --sku standard
 
-# 2.2 Identidad del backend y su rol de solo lectura de secretos, SOLO sobre este Key Vault
-az identity create -g $RG -n id-dinno-backend
+# 2.2 Identidad del backend: leer secretos SOLO de este Key Vault y bajar imágenes SOLO de este registro
+az identity create -g $RG -n id-dinno-backend -l $LOCATION
 MI_ID=$(az identity show -g $RG -n id-dinno-backend --query id -o tsv)
 MI_PRINCIPAL=$(az identity show -g $RG -n id-dinno-backend --query principalId -o tsv)
 KV_ID=$(az keyvault show -g $RG -n $KV --query id -o tsv)
 az role assignment create --assignee-object-id $MI_PRINCIPAL --assignee-principal-type ServicePrincipal \
   --role "Key Vault Secrets User" --scope $KV_ID
+az role assignment create --assignee-object-id $MI_PRINCIPAL --assignee-principal-type ServicePrincipal \
+  --role AcrPull --scope $(az acr show -n $ACR --query id -o tsv)
 
 # 2.3 Quien carga los secretos (Sebastián, Elizabeth): Secrets Officer solo sobre el Key Vault
 az role assignment create --assignee <correo> --role "Key Vault Secrets Officer" --scope $KV_ID
@@ -130,7 +139,7 @@ az role assignment create --assignee <correo> --role "Key Vault Secrets Officer"
 # 2.4 Cargar los secretos (el valor se escribe en la terminal; se limpia el historial después)
 az keyvault secret set --vault-name $KV -n database-url              --value '<postgres://dinno_app:…@…/dinno?sslmode=verify-full>'
 az keyvault secret set --vault-name $KV -n redis-url                 --value '<rediss://…>'
-az keyvault secret set --vault-name $KV -n firebase-service-account  --file ~/.dinno/firebase-service-account.json
+az keyvault secret set --vault-name $KV -n firebase-service-account-json --file ~/.dinno/firebase-service-account.json
 az keyvault secret set --vault-name $KV -n google-geocoding-api-key  --value '<llave>'
 # la llave del modelo de IA, con el nombre que acuerden Santiago y Sergio en AVISOS.md
 
@@ -140,7 +149,7 @@ KV_URI=$(az keyvault show -g $RG -n $KV --query properties.vaultUri -o tsv)
 az containerapp secret set -g $RG -n $APP --secrets \
   "database-url=keyvaultref:${KV_URI}secrets/database-url,identityref:$MI_ID" \
   "redis-url=keyvaultref:${KV_URI}secrets/redis-url,identityref:$MI_ID" \
-  "firebase-sa=keyvaultref:${KV_URI}secrets/firebase-service-account,identityref:$MI_ID" \
+  "firebase-sa=keyvaultref:${KV_URI}secrets/firebase-service-account-json,identityref:$MI_ID" \
   "geocoding-key=keyvaultref:${KV_URI}secrets/google-geocoding-api-key,identityref:$MI_ID"
 az containerapp update -g $RG -n $APP --set-env-vars \
   DATABASE_URL=secretref:database-url REDIS_URL=secretref:redis-url \
@@ -170,13 +179,19 @@ az role assignment create --assignee-object-id $(az identity show -g $RG -n id-g
   --assignee-principal-type ServicePrincipal --role Contributor --scope $SWA_ID
 az identity show -g $RG -n id-gh-frontend --query clientId -o tsv   # → variable AZURE_CLIENT_ID del repo frontend
 
-# Backend: lo configura con Elizabeth según su pipeline (sube la imagen y actualiza el Container App)
+# Backend: job deploy-azure de ci-cd.yml (needs: checks, solo en push a develop, SIN environment en el job),
+# así que el subject es la rama, no un entorno. Sube la imagen y actualiza el Container App.
 az identity create -g $RG -n id-gh-backend
 az identity federated-credential create -g $RG --identity-name id-gh-backend --name github-develop \
   --issuer https://token.actions.githubusercontent.com \
   --subject repo:DiNNo-team/backend:ref:refs/heads/develop \
   --audiences api://AzureADTokenExchange
-# Roles: AcrPush solo sobre el registro y Contributor solo sobre el Container App (no sobre rg-dinno ni la suscripción)
+GH_PRINCIPAL=$(az identity show -g $RG -n id-gh-backend --query principalId -o tsv)
+az role assignment create --assignee-object-id $GH_PRINCIPAL --assignee-principal-type ServicePrincipal \
+  --role AcrPush --scope $(az acr show -n $ACR --query id -o tsv)
+az role assignment create --assignee-object-id $GH_PRINCIPAL --assignee-principal-type ServicePrincipal \
+  --role Contributor --scope $(az containerapp show -g $RG -n $APP --query id -o tsv)
+# Nunca sobre rg-dinno ni la suscripción. No es id-dinno-backend: el pipeline no lee secretos.
 ```
 
 - **Comprobar:** `az role assignment list --assignee <clientId> --all -o table` muestra solo esos permisos. Ninguna identidad tiene *Owner* ni *Contributor* sobre el grupo o la suscripción.
@@ -219,8 +234,9 @@ az role assignment delete --assignee <correo> --role <rol> -g $RG     # retirar 
 | Rol incorrecto | token de comensal en `GET /v1/tables` | 403 `DINER_ACCOUNT` |
 | Datos de otro restaurante | token de Casa 72 en `PATCH /v1/tables/<id de otro>` | 404 (no revela que existe) |
 | Exceso de peticiones | 11 `POST /v1/reservations` en un minuto con la misma cuenta | el 11.º, 429 |
-| Base no expuesta | `psql "host=<pg> …"` desde una IP sin regla | conexión rechazada |
-| Redis no expuesto | `redis-cli -h <redis> -p 6379` (sin TLS) | rechazado |
+| Base no expuesta | `nc -vz -w 5 <pg> 5432` o `psql` desde una red fuera de Azure **sin** regla temporal | conexión rechazada o sin respuesta |
+| Redis sin clave | `redis-cli --tls -h <redis> -p 10000 PING` | `NOAUTH` |
+| Redis sin TLS | `redis-cli -h <redis> -p 10000 PING` | sin respuesta o conexión cerrada |
 | HTTPS obligatorio | `curl -i http://<api>/v1/health` | redirección a HTTPS o rechazo |
 | Errores sin detalle interno | ruta inexistente y JSON inválido | mensaje en español, sin stack |
 | Cabeceras | `curl -I https://<api>/v1/health` | CSP, HSTS, `nosniff` |
