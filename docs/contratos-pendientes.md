@@ -127,7 +127,7 @@ Los códigos de cuenta nuevos (`ADMIN_ACCOUNT`, `ACCOUNT_PENDING_APPROVAL`, `ACC
 ## I. §12.10 · Reemplaza la viñeta «Estado de cuenta y comisiones (Sprint 4).»
 
 ---
-- Comisiones variables, facturas y pagos (el estado de cuenta con tarifa fija por check-in está en §12.12).
+- Comisiones variables, facturas y pagos (el estado de cuenta con tarifa por comensal está en §12.12).
 ---
 
 ## J. §12 · Agrega la sección 12.12 al final
@@ -152,7 +152,7 @@ Los códigos de cuenta nuevos (`ADMIN_ACCOUNT`, `ACCOUNT_PENDING_APPROVAL`, `ACC
 - Si la cuenta ya existe: comensal → `403 DINER_ACCOUNT`; `platform_admin` → `403 ADMIN_ACCOUNT`; restaurante con restaurante → `409` «Ya registraste tu restaurante…»; restaurante habilitado sin restaurante → `409` (sin `errorCode`) «Tu cuenta ya está habilitada como restaurante. Registra tu restaurante desde el formulario de registro.».
 
 **Cobro por check-in**
-- Tarifa fija en pesos colombianos por cada check-in válido: `CHECKIN_FEE_COP` (por defecto 2000). Cada check-in guarda la tarifa vigente en ese momento; cambiarla no altera los anteriores. Cancelaciones y vencimientos no se cobran.
+- Tarifa por comensal en pesos colombianos: `CHECKIN_FEE_PER_GUEST_COP` (por defecto 1500). El cobro de cada check-in válido es personas de la reserva × la tarifa por comensal, y se guarda en `check_ins.fee_cop` (el total) en el momento del check-in; cambiarla no altera los anteriores. Los check-ins hechos con el cobro fijo anterior (2000 por check-in) conservan su monto. Cancelaciones y vencimientos no se cobran.
 
 **Reportes del restaurante** (solo `restaurant_admin` **aprobado**)
 - **Periodo:** `from` y `to` son días de Bogotá (`AAAA-MM-DD`), rango inclusivo. Por defecto, del día 1 del mes en curso hasta hoy (si solo llega `to`, desde el día 1 de ese mes). `to` no puede ser posterior a hoy y el periodo tiene como máximo 366 días; si no, `400` con la lista de mensajes.
@@ -186,9 +186,9 @@ Los códigos de cuenta nuevos (`ADMIN_ACCOUNT`, `ACCOUNT_PENDING_APPROVAL`, `ACC
 **`BillingStatement`**: `{ period: { from, to, timezone: 'America/Bogota' }, totalCheckIns, amountCop, items: [{ checkInId, reservationId, checkedInAt, partySize, tableIdentifier, feeCop }], page, pageSize, serverTime }`
 - `totalCheckIns` y `amountCop` (suma de `feeCop`, en COP) son del periodo completo; `items` es la página pedida, el check-in más reciente primero. Se filtra por la fecha del check-in.
 
-**`RestaurantSummary`**: `{ period: { from, to, timezone: 'America/Bogota' }, billing: { checkIns, amountCop, currentFeeCop }, reservations: { created, completed, cancelled, expired, active }, rates: { conversion, noShow, cancellation }, averagePartySize, peakHours: [{ hour, reservations }], byDayOfWeek: [{ dayOfWeek, reservations }], serverTime }`
+**`RestaurantSummary`**: `{ period: { from, to, timezone: 'America/Bogota' }, billing: { checkIns, amountCop, currentFeePerGuestCop }, reservations: { created, completed, cancelled, expired, active }, rates: { conversion, noShow, cancellation }, averagePartySize, peakHours: [{ hour, reservations }], byDayOfWeek: [{ dayOfWeek, reservations }], serverTime }`
 - `reservations`: reservas **creadas** en el periodo, por su estado actual. Antes de contar, el backend vence las reservas debidas.
-- `billing`: check-ins **hechos** en el periodo; `amountCop` = suma de la tarifa guardada en cada uno; `currentFeeCop` = la tarifa vigente.
+- `billing`: check-ins **hechos** en el periodo; `amountCop` = suma del total guardado en cada uno (`fee_cop`); `currentFeePerGuestCop` = la tarifa por comensal vigente (informativa: nunca se usa para recalcular montos).
 - `rates` (4 decimales; `null` si el denominador es 0): `conversion` = completed / created · `noShow` = expired / (completed + expired) · `cancellation` = cancelled / created.
 - `averagePartySize`: promedio de personas de las creadas, con 2 decimales; `null` si no hay.
 - `peakHours`: las 3 horas (0 a 23, hora de Bogotá) con más reservas creadas, de mayor a menor; a igual cantidad, la hora menor primero; vacío si no hay.

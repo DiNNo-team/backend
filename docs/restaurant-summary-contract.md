@@ -7,13 +7,13 @@
 - Solo `restaurant_admin` **aprobado**; un **suspendido** también la ve (solo lectura, §12.15). Pendiente o rechazado: su `403`. Mismo límite general de peticiones que el resto de `/restaurants/me`.
 - **Periodo:** `from` y `to`, días de Bogotá `AAAA-MM-DD`, inclusivos; por defecto del día 1 del mes en curso hasta hoy; `to` no puede ser futuro y el máximo es 366 días (`400` con la lista de mensajes).
 - **Hora:** todo en America/Bogota. Un check-in a las 23:59 de Bogotá es de ese día aunque en UTC ya sea el siguiente.
-- **Dinero:** COP, enteros: la suma de la tarifa guardada en cada check-in (`fee_cop`).
+- **Dinero:** COP, enteros: la suma del total guardado en cada check-in (`fee_cop`): personas de la reserva × la tarifa por comensal vigente al hacerlo; los check-ins anteriores al cobro por comensal conservan su monto.
 - **Privacidad:** ninguna respuesta trae nombres, correos, `diner_id` ni códigos de reserva.
 - No se agregó ninguna ruta: se amplía `GET /v1/restaurants/me/summary` (solo campos nuevos) y el detalle de un día reutiliza `GET /v1/restaurants/me/billing/check-ins`.
 
 ## 1. `GET /v1/restaurants/me/summary?from&to`
 
-Los campos que ya existían **no cambian** (`period`, `billing.checkIns/amountCop/currentFeeCop`, `reservations`, `rates`, `averagePartySize`, `peakHours`, `byDayOfWeek`, `serverTime`). Se agregan:
+Los campos que ya existían **no cambian** (`period`, `billing.checkIns/amountCop`, `reservations`, `rates`, `averagePartySize`, `peakHours`, `byDayOfWeek`, `serverTime`). Una excepción, por el cobro por comensal: `billing.currentFeeCop` se renombra a **`billing.currentFeePerGuestCop`** (la tarifa por comensal vigente, 1.500 por defecto; informativa: los montos salen de lo guardado en cada check-in). Se agregan:
 
 | Campo | Qué es |
 |---|---|
@@ -40,7 +40,7 @@ Los campos que ya existían **no cambian** (`period`, `billing.checkIns/amountCo
 
 ## 2. Detalle de un día
 
-`GET /v1/restaurants/me/billing/check-ins?from=AAAA-MM-DD&to=AAAA-MM-DD&pageSize=200` con el **mismo día** en `from` y `to`: los check-ins de ese día de Bogotá (hora, mesa, personas y tarifa), el más reciente primero. `period` se resuelve a `[00:00, 24:00)` de Bogotá (lo fija `test/db/restaurant-summary.db-spec.ts` con check-ins a las 23:59 y a las 00:00).
+`GET /v1/restaurants/me/billing/check-ins?from=AAAA-MM-DD&to=AAAA-MM-DD&pageSize=200` con el **mismo día** en `from` y `to`: los check-ins de ese día de Bogotá (hora, mesa, personas y total cobrado; `feeCop` es el total del check-in, personas × tarifa por comensal en los nuevos, y el monto fijo de entonces en los anteriores), el más reciente primero. `period` se resuelve a `[00:00, 24:00)` de Bogotá (lo fija `test/db/restaurant-summary.db-spec.ts` con check-ins a las 23:59 y a las 00:00).
 
 ## 3. Consultas
 

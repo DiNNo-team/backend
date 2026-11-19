@@ -134,10 +134,12 @@ async function createApp() {
             .slice(0, 7);
           const revenue =
             month === '2026-10' ? 5500 : month === '2026-11' ? 4000 : 0;
+          const checkIns =
+            month === '2026-10' ? 3 : month === '2026-11' ? 2 : 0;
           return {
             month,
             revenue_cop: String(revenue),
-            check_ins: revenue / 2000,
+            check_ins: checkIns,
           };
         }),
       );
@@ -242,7 +244,7 @@ async function createApp() {
           check_in_id: '11111111-1111-4111-8111-111111111111',
           reservation_id: '22222222-2222-4222-8222-222222222222',
           checked_in_at: new Date('2026-10-14T22:05:00Z'),
-          fee_cop: 2000,
+          fee_cop: 6000,
           party_size: 4,
           table_identifier: '04',
         },
@@ -431,7 +433,7 @@ describe('Panel del administrador: plataforma (e2e)', () => {
         collectedCop: 2000,
         pendingCop: 5500,
         restaurants: { pending: 2, approved: 15, suspended: 1, rejected: 0 },
-        currentFeeCop: 2000,
+        currentFeePerGuestCop: 1500,
         serverTime: NOW.toISOString(),
       });
       expect(res.body.monthly).toHaveLength(12);
@@ -617,7 +619,7 @@ describe('Panel del administrador: plataforma (e2e)', () => {
             checkInId: '11111111-1111-4111-8111-111111111111',
             checkedInAt: '2026-10-14T22:05:00.000Z',
             partySize: 4,
-            feeCop: 2000,
+            feeCop: 6000,
           },
         ],
         page: 1,

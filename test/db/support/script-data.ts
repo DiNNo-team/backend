@@ -24,6 +24,8 @@ interface ReservationInsert {
   state: ReservationState;
   // Minutos desde ahora para created_at (negativo = en el pasado).
   createdMinutesAgo?: number;
+  // Personas de la reserva (por defecto 2).
+  partySize?: number;
 }
 
 export interface InsertedReservation {
@@ -36,7 +38,13 @@ export interface InsertedReservation {
 export async function insertReservation(
   dataSource: DataSource,
   scenario: Scenario,
-  { dinerId, tableId, state, createdMinutesAgo = 30 }: ReservationInsert,
+  {
+    dinerId,
+    tableId,
+    state,
+    createdMinutesAgo = 30,
+    partySize = 2,
+  }: ReservationInsert,
 ): Promise<InsertedReservation> {
   const code = randomCode();
   const created = `now() - interval '${createdMinutesAgo} minutes'`;
@@ -44,14 +52,14 @@ export async function insertReservation(
     `INSERT INTO reservations
        (code, status, party_size, diner_id, restaurant_id, table_id, created_at,
         expires_at, cancelled_at, expired_at, checked_in_at, no_show)
-     VALUES ($1, $2::varchar, 2, $3, $4, $5, ${created},
+     VALUES ($1, $2::varchar, $6, $3, $4, $5, ${created},
         CASE WHEN $2::varchar = 'active' THEN now() + interval '15 minutes' ELSE ${created} + interval '15 minutes' END,
         CASE WHEN $2::varchar = 'cancelled' THEN ${created} + interval '2 minutes' END,
         CASE WHEN $2::varchar = 'expired' THEN ${created} + interval '15 minutes' END,
         CASE WHEN $2::varchar = 'completed' THEN ${created} + interval '5 minutes' END,
         $2::varchar = 'expired')
      RETURNING id`,
-    [code, state, dinerId, scenario.restaurantId, tableId],
+    [code, state, dinerId, scenario.restaurantId, tableId, partySize],
   );
   return { id, code };
 }

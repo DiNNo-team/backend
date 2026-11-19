@@ -63,6 +63,7 @@ interface Options {
   tableStillReserved?: boolean;
   logFails?: boolean;
   checkInInsertFails?: boolean;
+  feePerGuestCop?: number;
   dinerName?: string | null;
   // Qué le pasa a la reserva mientras la transacción pierde la carrera.
   afterLostUpdate?: (row: Reservation) => void;
@@ -216,7 +217,7 @@ function setup(options: Options = {}) {
     labels as unknown as ReservationLabelsReader,
     { now: () => NOW } as Clock,
     events as unknown as EventEmitter2,
-    { feeCop: 2000 },
+    { feePerGuestCop: options.feePerGuestCop ?? 1500 },
   );
   return {
     service,
@@ -300,7 +301,7 @@ describe('CheckInService · check-in válido', () => {
     );
   });
 
-  it('check_ins se inserta con el mismo instante de checked_in_at y la tarifa vigente', async () => {
+  it('check_ins se inserta con el mismo instante de checked_in_at y el total por comensal', async () => {
     const t = setup();
 
     await t.service.checkIn(admin, CODE);
@@ -310,10 +311,33 @@ describe('CheckInService · check-in válido', () => {
       reservationId: RESERVATION_ID,
       restaurantId: RESTAURANT_ID,
       checkedInAt: NOW,
-      feeCop: 2000,
+      feeCop: 3000,
     });
     expect(t.executed[0].params[1]).toBe(NOW);
   });
+
+  it.each([
+    [1, 1500, 1500],
+    [2, 1500, 3000],
+    [4, 1500, 6000],
+    [5, 1500, 7500],
+    [20, 1500, 30000],
+    [4, 2000, 8000],
+  ])(
+    'cobra %i personas a %i por comensal: guarda %i en fee_cop',
+    async (partySize, feePerGuestCop, expected) => {
+      const t = setup({
+        stored: [reservation({ partySize })],
+        feePerGuestCop,
+      });
+
+      await t.service.checkIn(admin, CODE);
+
+      expect(t.checkInsRepo.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ feeCop: expected }),
+      );
+    },
+  );
 
   it('el UPDATE lleva la condición completa, la hora del Clock y el RETURNING como texto (SQL real de TypeORM)', async () => {
     const t = setup();

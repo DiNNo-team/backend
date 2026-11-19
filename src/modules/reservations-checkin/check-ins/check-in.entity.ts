@@ -39,8 +39,10 @@ export class CheckIn {
   @Column({ name: 'checked_in_at', type: 'timestamptz' })
   checkedInAt: Date;
 
-  // Tarifa en COP cobrada por este check-in: CHECKIN_FEE_COP en ese momento
-  // (snapshot). Sin default a propósito: el check-in siempre la fija.
+  // Total en COP cobrado por este check-in: personas de la reserva × tarifa por
+  // comensal vigente en ese momento (CHECKIN_FEE_PER_GUEST_COP), guardado como
+  // snapshot. Los check-ins anteriores al cobro por comensal conservan el monto
+  // fijo que se les cobró. Sin default a propósito: el check-in siempre la fija.
   @Column({ name: 'fee_cop', type: 'integer' })
   feeCop: number;
 

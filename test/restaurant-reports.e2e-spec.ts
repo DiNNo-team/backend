@@ -64,7 +64,7 @@ const BILLING_ROWS = [
     check_in_id: '11111111-1111-4111-8111-111111111111',
     reservation_id: '22222222-2222-4222-8222-222222222222',
     checked_in_at: new Date('2026-11-14T22:05:00Z'),
-    fee_cop: 3500,
+    fee_cop: 6000,
     party_size: 4,
     table_identifier: '04',
   },
@@ -297,7 +297,7 @@ describe('Reportes del restaurante (e2e)', () => {
           checkIns: 2,
           amountCop: 5500,
           guests: 13,
-          currentFeeCop: 2000,
+          currentFeePerGuestCop: 1500,
         },
         previousComparable: {
           period: {
@@ -404,13 +404,13 @@ describe('Reportes del restaurante (e2e)', () => {
       }
     });
 
-    it('con la tarifa vigente de CHECKIN_FEE_COP', async () => {
-      const other = await createApp({ CHECKIN_FEE_COP: '3500' });
+    it('con la tarifa por comensal vigente de CHECKIN_FEE_PER_GUEST_COP', async () => {
+      const other = await createApp({ CHECKIN_FEE_PER_GUEST_COP: '3500' });
       const res = await request(other.app.getHttpServer())
         .get(PATH)
         .set('Authorization', 'Bearer owner')
         .expect(200);
-      expect(res.body.billing.currentFeeCop).toBe(3500);
+      expect(res.body.billing.currentFeePerGuestCop).toBe(3500);
       await other.app.close();
     });
 
@@ -423,7 +423,7 @@ describe('Reportes del restaurante (e2e)', () => {
 
       expect(res.body).toMatchObject({
         period: { from: '2026-10-01', to: '2026-10-31' },
-        billing: { checkIns: 0, amountCop: 0, currentFeeCop: 2000 },
+        billing: { checkIns: 0, amountCop: 0, currentFeePerGuestCop: 1500 },
         reservations: {
           created: 0,
           completed: 0,
@@ -498,7 +498,7 @@ describe('Reportes del restaurante (e2e)', () => {
             checkedInAt: '2026-11-14T22:05:00.000Z',
             partySize: 4,
             tableIdentifier: '04',
-            feeCop: 3500,
+            feeCop: 6000,
           },
           {
             checkInId: '33333333-3333-4333-8333-333333333333',
@@ -586,25 +586,31 @@ describe('Reportes del restaurante (e2e)', () => {
   });
 });
 
-describe('CHECKIN_FEE_COP al arrancar', () => {
+describe('CHECKIN_FEE_PER_GUEST_COP al arrancar', () => {
   it.each([
-    [undefined, 2000],
+    [undefined, 1500],
     ['0', 0],
     ['3500', 3500],
-  ])('con %s la tarifa es %i', async (value, fee) => {
+  ])('con %s la tarifa por comensal es %i', async (value, fee) => {
     const { app } = await createApp(
-      value === undefined ? {} : { CHECKIN_FEE_COP: value },
+      value === undefined ? {} : { CHECKIN_FEE_PER_GUEST_COP: value },
     );
-    expect(app.get(CheckInFeeConfig)).toEqual({ feeCop: fee });
+    expect(app.get(CheckInFeeConfig)).toEqual({ feePerGuestCop: fee });
     await app.close();
   });
 
-  it.each(['', 'dos mil', '-1', '2.000', '1000001'])(
+  it('ya no lee la variable anterior CHECKIN_FEE_COP', async () => {
+    const { app } = await createApp({ CHECKIN_FEE_COP: '3500' });
+    expect(app.get(CheckInFeeConfig)).toEqual({ feePerGuestCop: 1500 });
+    await app.close();
+  });
+
+  it.each(['', 'mil quinientos', '-1', '1.500', '1000001'])(
     'con %j la app no arranca',
     async (value) => {
-      await expect(createApp({ CHECKIN_FEE_COP: value })).rejects.toThrow(
-        /CHECKIN_FEE_COP/,
-      );
+      await expect(
+        createApp({ CHECKIN_FEE_PER_GUEST_COP: value }),
+      ).rejects.toThrow(/CHECKIN_FEE_PER_GUEST_COP/);
     },
   );
 });

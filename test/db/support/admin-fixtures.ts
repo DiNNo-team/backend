@@ -71,13 +71,14 @@ export class AdminFixtures {
     status: 'completed' | 'cancelled' | 'expired',
     at: Date,
     feeCop = 2000,
+    partySize = 2,
   ): Promise<void> {
     const diner = await this.user('diner');
     const table = await this.table(restaurantId);
     const { rows } = await this.client.query<{ id: string }>(
       `INSERT INTO reservations (code, status, party_size, diner_id, restaurant_id, table_id, expires_at, created_at,
                                  checked_in_at, cancelled_at, expired_at, no_show)
-       VALUES ($1, $2, 2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+       VALUES ($1, $2, $12, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
       [
         randomCode(),
         status,
@@ -90,6 +91,7 @@ export class AdminFixtures {
         status === 'cancelled' ? at : null,
         status === 'expired' ? at : null,
         status === 'expired',
+        partySize,
       ],
     );
     if (status === 'completed') {

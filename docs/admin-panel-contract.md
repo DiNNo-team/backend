@@ -7,7 +7,7 @@
 - Todo va bajo `/v1`, con `Authorization: Bearer <token de Firebase>` de una cuenta `platform_admin`.
 - **Errores:** forma de siempre, `{ statusCode, message, error, errorCode? }`. La web decide **por `errorCode`**, nunca por el texto. Un `400` de validación trae `message` como **lista**.
 - **Fechas:** ISO 8601 UTC. **Meses** (`month`): `AAAA-MM` en hora de Bogotá, desde `2026-01` hasta el mes en curso; sin `month`, el mes en curso. **Días** (`from`, `to`): `AAAA-MM-DD` de Bogotá, rango inclusivo.
-- **Dinero:** pesos colombianos (COP), enteros. Siempre la suma de la tarifa que se guardó en cada check-in (`fee_cop`): cambiar `CHECKIN_FEE_COP` no cambia los meses anteriores.
+- **Dinero:** pesos colombianos (COP), enteros. Siempre la suma del total que se guardó en cada check-in (`fee_cop`): desde el cobro por comensal es personas de la reserva × la tarifa por comensal (`CHECKIN_FEE_PER_GUEST_COP`, 1.500 por defecto), y los check-ins anteriores conservan el monto fijo que se les cobró. Cambiar la tarifa no cambia los meses anteriores.
 - **Paginación:** `page` ≥ 1 (por defecto 1); `pageSize` de 1 a 100 (por defecto 20) en listas por restaurante, y de 1 a 200 (por defecto 50) en los check-ins de un restaurante.
 - **Límite de peticiones:** las cinco lecturas pesadas (`overview`, `billing`, `billing/:restaurantId`, `activity`, `platform/metrics`) comparten **30 por minuto** por cuenta. Al pasarlo, `429` sin `errorCode`; no reintentar solo (§12.14).
 - **Confidencialidad:** ninguna respuesta de este documento trae correos, nombres de comensales, `diner_id`, códigos de reserva ni la bitácora de mesas. El único correo de personas sigue en la lista y el detalle de solicitudes (`ownerEmail`, `reviewedByEmail`, `suspendedByEmail`, solo para el administrador).
@@ -102,7 +102,7 @@ Resumen de la plataforma. `month` por defecto, el mes en curso.
   "collectedCop": 96000,
   "pendingCop": 48000,
   "restaurants": { "pending": 2, "approved": 15, "suspended": 1, "rejected": 0 },
-  "currentFeeCop": 2000,
+  "currentFeePerGuestCop": 1500,
   "serverTime": "2026-11-17T15:00:00.000Z"
 }
 ```
@@ -110,7 +110,7 @@ Resumen de la plataforma. `month` por defecto, el mes en curso.
 - `monthStatus`: `in_progress` (el mes en curso en Bogotá) o `closed`.
 - `revenueCop` / `checkIns`: del mes pedido. `previousRevenueCop`: del mes anterior (para «+8 % frente a octubre»; si es 0, no mostrar porcentaje).
 - `collectedCop`: lo **cobrado** (suma de lo guardado al marcar como cobrados) de **todos los meses cerrados desde 2026-01**, de restaurantes aprobados y suspendidos. `pendingCop`: lo **pendiente** de esos mismos meses (monto recalculado de los que no están marcados). No dependen de `month`.
-- `currentFeeCop`: la tarifa vigente por check-in.
+- `currentFeePerGuestCop`: la tarifa por comensal vigente (antes `currentFeeCop`). Es informativa: los montos salen siempre de lo guardado en cada check-in, no de este valor.
 - `400` si `month` no es `AAAA-MM`, es anterior a `2026-01` o posterior al mes en curso.
 
 ---
@@ -171,7 +171,7 @@ Resumen de la plataforma. `month` por defecto, el mes en curso.
   "snapshot": { "amountCop": 24000, "checkIns": 12 },
   "amountMismatch": false,
   "items": [
-    { "checkInId": "11111111-1111-4111-8111-111111111111", "checkedInAt": "2026-10-14T22:05:00.000Z", "partySize": 4, "feeCop": 2000 }
+    { "checkInId": "11111111-1111-4111-8111-111111111111", "checkedInAt": "2026-10-14T22:05:00.000Z", "partySize": 4, "feeCop": 6000 }
   ],
   "page": 1,
   "pageSize": 50,

@@ -89,8 +89,8 @@ const MONTH_TOTALS_BY_RESTAURANT = `SELECT "restaurant_id", COUNT(*)::int AS "ch
 // BillingStatementService lee tables. Nunca escribe y nunca trae datos de
 // comensales: ni diner_id, ni el código de la reserva, ni correos.
 //
-// El dinero es siempre SUM(check_ins.fee_cop), la tarifa guardada en cada
-// check-in: cambiar CHECKIN_FEE_COP no altera los meses anteriores.
+// El dinero es siempre SUM(check_ins.fee_cop), el total guardado en cada
+// check-in: cambiar CHECKIN_FEE_PER_GUEST_COP no altera los meses anteriores.
 @Injectable()
 export class PlatformBillingReader {
   constructor(private readonly dataSource: DataSource) {}

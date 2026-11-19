@@ -179,7 +179,7 @@ El evento facturable (§12.6): un registro por check-in válido.
 | `reservation_id` | `uuid` | NOT NULL, FK → `reservations.id`, **único** (`UQ_check_ins_reservation_id`): nunca se cobra dos veces |
 | `restaurant_id` | `uuid` | NOT NULL, FK → `restaurants.id` |
 | `checked_in_at` | `timestamptz` | NOT NULL. Fecha y hora del check-in |
-| `fee_cop` | `integer` | NOT NULL, **sin valor por defecto**, `>= 0` (`CHK_check_ins_fee_cop`). Tarifa en pesos colombianos cobrada por este check-in: `CHECKIN_FEE_COP` en ese momento (snapshot). Cambiar la tarifa no altera las filas anteriores. Los check-ins que existían al migrar quedaron con 2000 (`AddCheckInFee`) |
+| `fee_cop` | `integer` | NOT NULL, **sin valor por defecto**, `>= 0` (`CHK_check_ins_fee_cop`). **Total** en pesos colombianos cobrado por este check-in: personas de la reserva (`reservations.party_size`) × la tarifa por comensal (`CHECKIN_FEE_PER_GUEST_COP`, 1500 por defecto) vigente en ese momento (snapshot). Cambiar la tarifa no altera las filas anteriores. Los check-ins hechos con el cobro fijo anterior (los que existían al migrar quedaron con 2000 por `AddCheckInFee`, y los posteriores hasta el cambio) conservan ese monto: el cambio a cobro por comensal no modificó el esquema ni los datos |
 
 - `IDX_check_ins_restaurant_id_checked_in_at` sobre `(restaurant_id, checked_in_at)`: el estado de cuenta y el resumen filtran por restaurante y rango de `checked_in_at`.
 - `IDX_check_ins_checked_in_at` sobre `(checked_in_at)` (`AddPlatformReportIndexes`): el cobro y los ingresos de toda la plataforma filtran solo por fecha.
