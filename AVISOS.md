@@ -6,6 +6,15 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 18 nov 2026 · Jacobo · La llave del informe de IA ya está en Azure (Sprint 4) · para revisar: Elizabeth
+
+- **Qué hay:** la llave del modelo está en Key Vault como `insights-llm-api-key` y el Container App la lee como `INSIGHTS_LLM_API_KEY=secretref:insights-llm-key` (referencia a Key Vault con `id-dinno-backend`, igual que los demás secretos). Revisión `ca-dinno-backend--0000010`; el log de arranque dice «Informe de IA con el modelo claude-haiku-5-5». Procedimiento en `docs/azure/seguridad-red.md` §2.4 y §2.5.
+- **Santiago:** ya puedes repetir IA1.1 en Azure (Swagger `/docs`, `GET /v1/restaurants/me/insights?refresh=true`). La base de Azure no es Neon: con menos de 10 reservas resueltas en 7 días sale `fallback: "insufficient_data"`, que es correcto pero no prueba la llave.
+- **Ojo con el costo:** cada `refresh=true` llama al modelo y se cobra; sin él, el informe sale de la caché (1 hora).
+- **El CI la conserva:** `deploy-azure` solo cambia la imagen y `GIT_COMMIT`.
+- **Regla nueva (operación):** Si se fusiona a `develop` con PostgreSQL detenido, la revisión nueva queda en `ActivationFailed` y Azure sigue con la anterior. Pasó con el PR #81: la imagen de la IA no arrancó hasta encender la base el 18 nov (y `deploy-azure` quedó en rojo). Al encender: primero PostgreSQL, después el backend; comprobar que `/v1/health` muestre el último commit de `develop` (`docs/azure/azure-operacion.md` §4).
+- **Sin cambios** de código, API, base de datos ni dependencias.
+
 ## 18 nov 2026 · Santiago · Informe de IA: recomendaciones menos genéricas (Sprint 4, tarea 2.1.3) · para revisar: Elizabeth
 
 - **Qué cambia:** solo lo que se le manda al modelo. La respuesta de `GET /v1/restaurants/me/insights` no cambia (ni campos ni forma), así que la web de Sergio no tiene que tocar nada.

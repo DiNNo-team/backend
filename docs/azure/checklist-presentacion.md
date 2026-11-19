@@ -48,6 +48,16 @@ PostgreSQL va **antes** que el backend: tarda varios minutos en arrancar, y un b
   az containerapp update -n $APP -g $RG --min-replicas 1 --max-replicas 1
   az containerapp replica list -n $APP -g $RG -o table                  # debe haber 1
   ```
+- [ ] **El backend sirve el último commit de `develop`.** Si se fusiona a `develop` con PostgreSQL detenido, la revisión nueva queda en `ActivationFailed` y Azure sigue con la anterior. Al encender: primero PostgreSQL, después el backend; comprobar que `/v1/health` muestre el último commit de `develop`:
+  ```bash
+  git fetch -q origin && git rev-parse --short=7 origin/develop          # último commit de develop
+  curl -s https://$(az containerapp show -n $APP -g $RG --query properties.configuration.ingress.fqdn -o tsv)/v1/health   # su "commit" debe ser el mismo
+  ```
+  **Si el backend ya estaba en 1–1** (el `update` no cambia la escala y no crea revisión nueva) y la revisión más reciente está en `ActivationFailed`, con PostgreSQL ya `Ready` se reinicia esa revisión y se vuelve a comprobar el commit:
+  ```bash
+  REV=$(az containerapp show -n $APP -g $RG --query properties.latestRevisionName -o tsv)
+  az containerapp revision restart -n $APP -g $RG --revision $REV
+  ```
 - [ ] **Si se cambió algo para la prueba de carga, revisar que no quedó nada:**
   ```bash
   # Debe mostrar min 1 y max 1
