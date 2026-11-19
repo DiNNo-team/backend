@@ -142,7 +142,9 @@ az keyvault secret set --vault-name $KV -n database-url              --value '<p
 az keyvault secret set --vault-name $KV -n redis-url                 --value '<rediss://…>'
 az keyvault secret set --vault-name $KV -n firebase-service-account-json --file ~/.dinno/firebase-service-account.json
 az keyvault secret set --vault-name $KV -n google-geocoding-api-key  --value '<llave>'
-# la llave del modelo de IA, con el nombre que acuerden Santiago y Sergio en AVISOS.md
+# Llave del modelo de IA (INSIGHTS_LLM_API_KEY): read -rs la pide sin mostrarla ni dejarla en el historial
+read -rs LLAVE
+az keyvault secret set --vault-name $KV -n insights-llm-api-key --value "$LLAVE" --query name -o tsv && unset LLAVE
 
 # 2.5 El Container App usa la identidad y referencia los secretos
 az containerapp identity assign -g $RG -n $APP --user-assigned $MI_ID
@@ -151,10 +153,12 @@ az containerapp secret set -g $RG -n $APP --secrets \
   "database-url=keyvaultref:${KV_URI}secrets/database-url,identityref:$MI_ID" \
   "redis-url=keyvaultref:${KV_URI}secrets/redis-url,identityref:$MI_ID" \
   "firebase-sa=keyvaultref:${KV_URI}secrets/firebase-service-account-json,identityref:$MI_ID" \
-  "geocoding-key=keyvaultref:${KV_URI}secrets/google-geocoding-api-key,identityref:$MI_ID"
+  "geocoding-key=keyvaultref:${KV_URI}secrets/google-geocoding-api-key,identityref:$MI_ID" \
+  "insights-llm-key=keyvaultref:${KV_URI}secrets/insights-llm-api-key,identityref:$MI_ID"
 az containerapp update -g $RG -n $APP --set-env-vars \
   DATABASE_URL=secretref:database-url REDIS_URL=secretref:redis-url \
   FIREBASE_SERVICE_ACCOUNT_JSON=secretref:firebase-sa GOOGLE_GEOCODING_API_KEY=secretref:geocoding-key \
+  INSIGHTS_LLM_API_KEY=secretref:insights-llm-key \
   NODE_ENV=production FIREBASE_PROJECT_ID=<id-del-proyecto>
 ```
 

@@ -17,7 +17,7 @@
 | Identidad de GitHub Actions (backend) | `id-gh-backend` | westus2 | No | Existe (17 nov) · credencial federada `github-develop` (`repo:DiNNo-team@329297407/backend@1391461154:ref:refs/heads/develop`, formato con IDs fijos de GitHub), AcrPush sobre `acrdinno4821` y Contributor solo sobre `ca-dinno-backend`. En el repo: variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ACR_NAME` y `APP_NAME`; ningún secreto |
 | Identidad de GitHub Actions (frontend) | `id-gh-frontend` | westus2 | No | Existe (17 nov) · credencial federada `github-production` (`repo:DiNNo-team@329297407/frontend@1393536492:environment:production`, el job `deploy` de `web-ci-cd.yml`) y Contributor solo sobre `swa-dinno`. En el repo frontend: variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `AZURE_STATIC_WEB_APP_NAME` y los `VITE_*`; ningún secreto |
 | Web (Static Web Apps, Free) | `swa-dinno` | westus2 | No | Existe (17 nov) · https://brave-grass-07093571e.3.azurestaticapps.net. La publica `web-ci-cd.yml` del frontend en cada push a `main`; primer despliegue con `workflow_dispatch` el 17 nov. Usa el backend de Azure (`VITE_API_URL`) |
-| Backend (Container App, consumo) | `ca-dinno-backend` | westus2 | Solo con réplicas > 0 | Existe (17 nov) · imagen `dinno-backend:5add132`, 0,5 vCPU y 1 GiB, 1 réplica, ingress externo solo HTTPS (HTTP → 301) en el puerto 3000. URL: `https://ca-dinno-backend.icyrock-d101225d.westus2.azurecontainerapps.io`. Secretos como referencias a Key Vault (`database-url`, `redis-url`, `google-geocoding-api-key`, `firebase-service-account-json`: notificaciones push activas). Sin `INSIGHTS_LLM_API_KEY`: el informe de IA usa plantillas |
+| Backend (Container App, consumo) | `ca-dinno-backend` | westus2 | Solo con réplicas > 0 | Existe (17 nov) · imagen `dinno-backend:5add132`, 0,5 vCPU y 1 GiB, 1 réplica, ingress externo solo HTTPS (HTTP → 301) en el puerto 3000. URL: `https://ca-dinno-backend.icyrock-d101225d.westus2.azurecontainerapps.io`. Secretos como referencias a Key Vault (`database-url`, `redis-url`, `google-geocoding-api-key`, `firebase-service-account-json`: notificaciones push activas; `insights-llm-api-key` desde el 18 nov: el informe de IA lo redacta el modelo) |
 | PostgreSQL Flexible Server (Burstable B1ms) | `pg-d4821-westcentralus-1ms` | **westcentralus** | **Sí, mientras está encendido** (el almacenamiento cobra siempre) | Existe (17 nov) · PostgreSQL 17, 32 GB, sin alta disponibilidad, respaldos de 7 días sin redundancia geográfica. Base `dinno`, administrador `dinnoadmin` (clave en Key Vault: `pg-admin-password`). Firewall: solo la regla «servicios de Azure» (`0.0.0.0`). **Otra región a propósito:** westus2, westus y westus3 no tenían capacidad de B1ms para la cuenta; cada consulta del backend suma unos milisegundos (decisión en [`seguridad-red.md`](seguridad-red.md) §1) |
 | Azure Managed Redis (Balanced B0) | `redis-dinno-4821` | westus2 | **Sí, siempre** (no se puede pausar) | Existe (17 nov) · base `default` en el puerto 10000, solo TLS 1.2+ (`rediss://`), clúster Enterprise (un solo punto de conexión, cliente normal), claves de acceso, sin alta disponibilidad ni persistencia, eviction `VolatileLRU`. La URL va en Key Vault (`redis-url`, paso 9) |
 | Log Analytics | `log-dinno` | westus2 | Por GB ingerido (tope de 0,1 GB/día; retención de 30 días incluida) | Existe (17 nov) · recibe del entorno, con `diag-dinno`, `ContainerAppConsoleLogs` y `ContainerAppSystemLogs` (sin logs HTTP ni métricas). Al llegar al tope deja de recibir hasta el día siguiente. El día de la prueba de carga se sube a 0,5 GB y luego se vuelve a 0,1 |
@@ -64,6 +64,13 @@ az postgres flexible-server show -n $PG -g $RG --query state -o tsv   # esperar 
 
 az containerapp update -n $APP -g $RG --min-replicas 1 --max-replicas 1
 ```
+
+- **Si se fusiona a `develop` con PostgreSQL detenido, la revisión nueva queda en `ActivationFailed` y Azure sigue con la anterior** (el job `deploy-azure` queda en rojo: pasó con el PR #81 el 18 nov). Al encender: **primero PostgreSQL, después el backend**; el `update` de arriba crea una revisión nueva con la última imagen. Después, comprobar que `/v1/health` muestre el último commit de `develop`:
+
+  ```bash
+  git fetch -q origin && git rev-parse --short=7 origin/develop          # último commit de develop
+  curl -s https://$(az containerapp show -n $APP -g $RG --query properties.configuration.ingress.fqdn -o tsv)/v1/health   # su "commit" debe ser el mismo
+  ```
 
 ## 5. Verificar
 
