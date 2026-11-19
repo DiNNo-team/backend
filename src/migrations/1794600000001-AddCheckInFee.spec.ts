@@ -1,6 +1,9 @@
 import type { QueryRunner } from 'typeorm';
-import { CHECKIN_FEE_DEFAULT_COP } from '../modules/reservations-checkin/billing/checkin-fee.config.js';
 import { AddCheckInFee1794600000001 } from './1794600000001-AddCheckInFee.js';
+
+// Valor con el que esta migración ya aplicada rellenó los check-ins existentes:
+// es un dato histórico, no la tarifa vigente, y no depende de la configuración.
+const BACKFILL_FEE_COP = 2000;
 
 async function queriesOf(direction: 'up' | 'down'): Promise<string[]> {
   const queries: string[] = [];
@@ -18,7 +21,7 @@ describe('AddCheckInFee migration', () => {
   it('backfills the existing check-ins with the default fee and then drops the default', async () => {
     const queries = await queriesOf('up');
     const add = queries.indexOf(
-      `ALTER TABLE "check_ins" ADD "fee_cop" integer NOT NULL DEFAULT ${CHECKIN_FEE_DEFAULT_COP}`,
+      `ALTER TABLE "check_ins" ADD "fee_cop" integer NOT NULL DEFAULT ${BACKFILL_FEE_COP}`,
     );
 
     expect(add).toBe(0);

@@ -12,6 +12,7 @@ import {
   RESERVATION_CHECKED_IN,
   type ReservationEndedEvent,
 } from '../../search-availability/index.js';
+import { checkInFeeCop } from '../billing/check-in-fee.js';
 import { CheckInFeeConfig } from '../billing/checkin-fee.config.js';
 import { moveReservedTable } from '../reservations/release-reserved-table.js';
 import { ReservationExpirationService } from '../reservations/reservation-expiration.service.js';
@@ -151,12 +152,13 @@ export class CheckInService {
         source: 'reservation',
         changedAt: now,
       });
-      // La tarifa vigente queda guardada: cambiar CHECKIN_FEE_COP no altera el historial.
+      // El total cobrado (personas × tarifa por comensal vigente) queda guardado:
+      // cambiar CHECKIN_FEE_PER_GUEST_COP no altera el historial.
       await manager.getRepository(CheckIn).insert({
         reservationId: reservation.id,
         restaurantId: reservation.restaurantId,
         checkedInAt: now,
-        feeCop: this.fee.feeCop,
+        feeCop: checkInFeeCop(reservation.partySize, this.fee.feePerGuestCop),
       });
       return now;
     });

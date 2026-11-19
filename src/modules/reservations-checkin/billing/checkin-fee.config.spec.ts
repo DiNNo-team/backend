@@ -1,35 +1,39 @@
 import {
-  CHECKIN_FEE_DEFAULT_COP,
-  parseCheckInFee,
+  CHECKIN_FEE_PER_GUEST_DEFAULT_COP,
+  parseCheckInFeePerGuest,
 } from './checkin-fee.config.js';
 
-describe('parseCheckInFee', () => {
-  it('defaults to 2000 when undefined', () => {
-    expect(parseCheckInFee(undefined)).toBe(CHECKIN_FEE_DEFAULT_COP);
-    expect(CHECKIN_FEE_DEFAULT_COP).toBe(2000);
+describe('parseCheckInFeePerGuest', () => {
+  it('defaults to 1500 when undefined', () => {
+    expect(parseCheckInFeePerGuest(undefined)).toBe(
+      CHECKIN_FEE_PER_GUEST_DEFAULT_COP,
+    );
+    expect(CHECKIN_FEE_PER_GUEST_DEFAULT_COP).toBe(1500);
   });
 
   it.each([
     ['0', 0],
-    ['2000', 2000],
+    ['1500', 1500],
     [' 3500 ', 3500],
     ['1000000', 1_000_000],
   ])('accepts %j', (raw, fee) => {
-    expect(parseCheckInFee(raw)).toBe(fee);
+    expect(parseCheckInFeePerGuest(raw)).toBe(fee);
   });
 
   it.each([
     '',
     '   ',
-    'dos mil',
-    '2000.5',
-    '2.000',
+    'mil quinientos',
+    '1500.5',
+    '1.500',
     '-1',
-    '+2000',
+    '+1500',
     '1000001',
     '1e3',
     '0x10',
   ])('rejects %j with a message in Spanish that names the variable', (raw) => {
-    expect(() => parseCheckInFee(raw)).toThrow(/^CHECKIN_FEE_COP debe ser/);
+    expect(() => parseCheckInFeePerGuest(raw)).toThrow(
+      /^CHECKIN_FEE_PER_GUEST_COP debe ser/,
+    );
   });
 });

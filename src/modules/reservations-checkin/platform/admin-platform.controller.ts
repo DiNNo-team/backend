@@ -45,7 +45,7 @@ export class AdminPlatformController {
   @ApiOperation({
     summary: 'Resumen de la plataforma',
     description:
-      'Ingresos (SUM de la tarifa guardada en cada check-in) y check-ins del mes, el mes anterior, los últimos 12 meses (también en 0), lo cobrado y lo pendiente de todos los meses cerrados desde 2026-01 (restaurantes aprobados y suspendidos) y cuántos restaurantes hay en cada estado. month por defecto, el mes en curso (Bogotá).',
+      'Ingresos (SUM del total guardado en cada check-in (feeCop)) y check-ins del mes, el mes anterior, los últimos 12 meses (también en 0), lo cobrado y lo pendiente de todos los meses cerrados desde 2026-01 (restaurantes aprobados y suspendidos) y cuántos restaurantes hay en cada estado. month por defecto, el mes en curso (Bogotá).',
   })
   @ApiOkResponse({ type: AdminOverviewDto })
   @ApiBadRequestResponse(MONTH_BAD_REQUEST)

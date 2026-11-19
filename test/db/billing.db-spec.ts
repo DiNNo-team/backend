@@ -19,8 +19,9 @@ import { insertAdmin, insertReservation } from './support/script-data.js';
 import { CHECK_VIOLATION } from './support/test-db.js';
 
 // Cobro por check-in (CLAUDE.md §11, "Cobro por check-in") contra Postgres REAL:
-// cada check-in guarda la tarifa vigente en ese momento, cambiar la tarifa no
-// altera los anteriores y el estado de cuenta suma lo guardado. Commits reales:
+// cada check-in guarda su total (personas × tarifa por comensal vigente en ese
+// momento), cambiar la tarifa no altera los anteriores y el estado de cuenta
+// suma lo guardado. Commits reales:
 // cada prueba borra solo lo que creó (support/scenario.ts).
 
 const NOT_NULL_VIOLATION = '23502';
@@ -37,7 +38,7 @@ afterAll(async () => {
   await closeTestDataSource(dataSource);
 });
 
-function checkInServiceWithFee(feeCop: number): CheckInService {
+function checkInServiceWithFee(feePerGuestCop: number): CheckInService {
   const statusLog = new DbTableStatusLog();
   const events = new EventEmitter2();
   return new CheckInService(
@@ -50,7 +51,7 @@ function checkInServiceWithFee(feeCop: number): CheckInService {
     ),
     CLOCK,
     events,
-    { feeCop },
+    { feePerGuestCop },
   );
 }
 
@@ -61,7 +62,7 @@ function today() {
 }
 
 describe('Cobro por check-in (Postgres)', () => {
-  it('cada check-in guarda la tarifa vigente; cambiarla no altera los anteriores y el estado de cuenta suma lo guardado', async () => {
+  it('cada check-in guarda personas × tarifa por comensal; cambiarla no altera los anteriores y el estado de cuenta suma lo guardado', async () => {
     await withScenario(
       dataSource,
       [
@@ -84,14 +85,15 @@ describe('Cobro por check-in (Postgres)', () => {
               dinerId: scenario.dinerIds[index],
               tableId: scenario.tableIds.get(identifier) as string,
               state: 'active',
+              partySize: [2, 4, 5][index],
             }),
           ),
         );
 
-        // Tres tarifas distintas, una por check-in, como si CHECKIN_FEE_COP
-        // cambiara entre uno y otro.
+        // Tres tarifas por comensal distintas, una por check-in, como si
+        // CHECKIN_FEE_PER_GUEST_COP cambiara entre uno y otro.
         await checkInServiceWithFee(2000).checkIn(user, reservations[0].code);
-        await checkInServiceWithFee(3500).checkIn(user, reservations[1].code);
+        await checkInServiceWithFee(1500).checkIn(user, reservations[1].code);
         await checkInServiceWithFee(0).checkIn(user, reservations[2].code);
 
         const stored = await dataSource.query<
@@ -101,8 +103,8 @@ describe('Cobro por check-in (Postgres)', () => {
           [scenario.restaurantId],
         );
         expect(stored).toEqual([
-          { reservation_id: reservations[0].id, fee_cop: 2000 },
-          { reservation_id: reservations[1].id, fee_cop: 3500 },
+          { reservation_id: reservations[0].id, fee_cop: 4000 },
+          { reservation_id: reservations[1].id, fee_cop: 6000 },
           { reservation_id: reservations[2].id, fee_cop: 0 },
         ]);
 
@@ -110,7 +112,7 @@ describe('Cobro por check-in (Postgres)', () => {
         const period = today();
         expect(await billing.totals(scenario.restaurantId, period)).toEqual({
           checkIns: 3,
-          amountCop: 5500,
+          amountCop: 10000,
         });
         const statement = await billing.statement(
           scenario.restaurantId,
@@ -119,18 +121,18 @@ describe('Cobro por check-in (Postgres)', () => {
         );
         // Totales del periodo completo; la página, el más reciente primero.
         expect(statement.totalCheckIns).toBe(3);
-        expect(statement.amountCop).toBe(5500);
+        expect(statement.amountCop).toBe(10000);
         expect(
           statement.items.map((item) => [item.tableIdentifier, item.feeCop]),
         ).toEqual([
           ['03', 0],
-          ['02', 3500],
+          ['02', 6000],
         ]);
         const second = await billing.statement(scenario.restaurantId, period, {
           page: 2,
           pageSize: 2,
         });
-        expect(second.items.map((item) => item.feeCop)).toEqual([2000]);
+        expect(second.items.map((item) => item.feeCop)).toEqual([4000]);
 
         // Un periodo que no incluye hoy no cuenta nada.
         const past = parseReportPeriod(

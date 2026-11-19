@@ -104,11 +104,12 @@ export class AdminOverviewDto {
   restaurants: RestaurantStatusCountsDto;
 
   @ApiProperty({
-    description: 'Tarifa vigente por check-in (CHECKIN_FEE_COP).',
+    description:
+      'Tarifa por comensal vigente hoy (CHECKIN_FEE_PER_GUEST_COP), en COP. Es informativa: el monto de cada check-in es el que se guardó al hacerlo.',
     type: 'integer',
-    example: 2000,
+    example: 1500,
   })
-  currentFeeCop: number;
+  currentFeePerGuestCop: number;
 
   @ApiProperty({ example: '2026-11-17T15:00:00.000Z' })
   serverTime: string;
@@ -232,7 +233,12 @@ export class AdminBillingCheckInDto {
   @ApiProperty({ type: 'integer', example: 4 })
   partySize: number;
 
-  @ApiProperty({ type: 'integer', example: 2000 })
+  @ApiProperty({
+    description:
+      'Total cobrado por este check-in, en COP (partySize × la tarifa por comensal de ese momento; los anteriores al cobro por comensal conservan su monto).',
+    type: 'integer',
+    example: 6000,
+  })
   feeCop: number;
 }
 

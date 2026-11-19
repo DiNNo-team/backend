@@ -76,7 +76,7 @@ function createService() {
     metrics as unknown as RestaurantMetricsService,
     billing as unknown as BillingStatementService,
     expiration as unknown as ReservationExpirationService,
-    { feeCop: 2500 },
+    { feePerGuestCop: 1500 },
     { now: () => NOW },
     reader as unknown as RestaurantSummaryReader,
     periods as unknown as PlatformBillingReader,
@@ -110,7 +110,7 @@ describe('RestaurantReportsService.summary', () => {
       checkIns: 1,
       amountCop: 2000,
       guests: 13,
-      currentFeeCop: 2500,
+      currentFeePerGuestCop: 1500,
     });
     expect(summary.serverTime).toBe(NOW.toISOString());
   });

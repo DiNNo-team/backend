@@ -48,9 +48,9 @@ export class BillingItemDto {
 
   @ApiProperty({
     description:
-      'Tarifa cobrada por este check-in, en pesos colombianos: la vigente cuando se hizo (no cambia aunque cambie la tarifa).',
+      'Total cobrado por este check-in, en pesos colombianos. Desde el cobro por comensal es partySize × la tarifa por comensal vigente cuando se hizo; los check-ins anteriores conservan el monto que se les cobró entonces. No cambia aunque cambie la tarifa.',
     type: 'integer',
-    example: 2000,
+    example: 6000,
   })
   feeCop: number;
 }
@@ -69,7 +69,7 @@ export class BillingStatementResponseDto {
   @ApiProperty({
     description: 'Suma de feeCop del periodo completo, en COP.',
     type: 'integer',
-    example: 24000,
+    example: 18000,
   })
   amountCop: number;
 
@@ -103,18 +103,19 @@ export class SummaryBillingDto {
   checkIns: number;
 
   @ApiProperty({
-    description: 'Suma de la tarifa guardada en esos check-ins, en COP.',
+    description: 'Suma del total cobrado en esos check-ins (feeCop), en COP.',
     type: 'integer',
-    example: 24000,
+    example: 18000,
   })
   amountCop: number;
 
   @ApiProperty({
-    description: 'Tarifa vigente hoy por check-in (CHECKIN_FEE_COP), en COP.',
+    description:
+      'Tarifa por comensal vigente hoy (CHECKIN_FEE_PER_GUEST_COP), en COP. Es informativa: el monto de cada check-in es el que se guardó al hacerlo.',
     type: 'integer',
-    example: 2000,
+    example: 1500,
   })
-  currentFeeCop: number;
+  currentFeePerGuestCop: number;
 }
 
 export class SummaryReservationsDto {

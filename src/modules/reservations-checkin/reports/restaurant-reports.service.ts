@@ -71,7 +71,7 @@ export class RestaurantReportsService {
       billing: {
         ...metrics.billing,
         guests: totals.guests,
-        currentFeeCop: this.feeConfig.feeCop,
+        currentFeePerGuestCop: this.feeConfig.feePerGuestCop,
       },
       previousComparable: {
         period: periodDto(comparable),

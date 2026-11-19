@@ -108,7 +108,7 @@ export class PlatformReportsService {
         suspended: counts[SUSPENDED] ?? 0,
         rejected: counts[REJECTED] ?? 0,
       },
-      currentFeeCop: this.feeConfig.feeCop,
+      currentFeePerGuestCop: this.feeConfig.feePerGuestCop,
       serverTime: this.clock.now().toISOString(),
     };
   }

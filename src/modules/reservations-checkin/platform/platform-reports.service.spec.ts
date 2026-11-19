@@ -81,7 +81,7 @@ function createService({
             checkedInAt: '2026-10-14T22:05:00.000Z',
             partySize: 4,
             tableIdentifier: '04',
-            feeCop: 2000,
+            feeCop: 6000,
           },
         ],
       }),
@@ -120,7 +120,7 @@ function createService({
     billing as unknown as BillingStatementService,
     metrics as unknown as RestaurantMetricsService,
     expiration as unknown as ReservationExpirationService,
-    { feeCop: 2000 } as CheckInFeeConfig,
+    { feePerGuestCop: 1500 } as CheckInFeeConfig,
     clock,
   );
   return { service, reader, billing, expiration, order };
@@ -166,7 +166,7 @@ describe('PlatformReportsService', () => {
         previousRevenueCop: 1000,
         collectedCop: 4000,
         pendingCop: 2000,
-        currentFeeCop: 2000,
+        currentFeePerGuestCop: 1500,
         serverTime: NOW.toISOString(),
       });
       // Los estados sin restaurantes salen en 0, nunca ausentes.
@@ -329,7 +329,7 @@ describe('PlatformReportsService', () => {
           checkInId: 'c-1',
           checkedInAt: '2026-10-14T22:05:00.000Z',
           partySize: 4,
-          feeCop: 2000,
+          feeCop: 6000,
         },
       ]);
     });

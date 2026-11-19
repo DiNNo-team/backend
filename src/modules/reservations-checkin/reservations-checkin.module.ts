@@ -62,7 +62,7 @@ import { RestaurantSummaryReader } from './reports/restaurant-summary.reader.js'
     AdminPlatformController,
   ],
   providers: [
-    // Tarifa por check-in (CHECKIN_FEE_COP): la valida al crear el módulo.
+    // Tarifa por comensal (CHECKIN_FEE_PER_GUEST_COP): la valida al crear el módulo.
     checkInFeeConfigProvider,
     BillingStatementService,
     RestaurantMetricsService,
