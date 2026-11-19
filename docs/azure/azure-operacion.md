@@ -72,6 +72,13 @@ az containerapp update -n $APP -g $RG --min-replicas 1 --max-replicas 1
   curl -s https://$(az containerapp show -n $APP -g $RG --query properties.configuration.ingress.fqdn -o tsv)/v1/health   # su "commit" debe ser el mismo
   ```
 
+- **Si el backend ya estaba en 1–1** (el `update` no cambia la escala y no crea revisión nueva) y la revisión más reciente está en `ActivationFailed`, con PostgreSQL ya `Ready` se reinicia esa revisión y se vuelve a comprobar el commit:
+
+  ```bash
+  REV=$(az containerapp show -n $APP -g $RG --query properties.latestRevisionName -o tsv)
+  az containerapp revision restart -n $APP -g $RG --revision $REV
+  ```
+
 ## 5. Verificar
 
 ```bash
