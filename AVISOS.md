@@ -6,6 +6,20 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 18 nov 2026 · Elizabeth · Cobro por comensal: COP 1.500 por persona en vez de 2.000 por check-in (Sprint 4) · rama `feat/sprint4-tarifa-por-comensal`
+
+- **Qué cambia:** el cobro pasa de una tarifa fija por check-in (COP 2.000) a **COP 1.500 por persona**: `fee_cop` = personas de la reserva × tarifa por comensal. Se calcula **solo al hacer el check-in** (crear, cancelar o vencer una reserva no cobra). Ejemplos: 1 persona = 1.500, 2 = 3.000, 4 = 6.000, 5 = 7.500.
+- **Nombres nuevos (iguales en los tres repos):** variable `CHECKIN_FEE_PER_GUEST_COP` (default 1500) y campo de API `currentFeePerGuestCop` (antes `currentFeeCop`).
+- **Backend:**
+  - **Variable renombrada:** `CHECKIN_FEE_COP` → `CHECKIN_FEE_PER_GUEST_COP` (entero de 0 a 1.000.000, **default 1500**, misma validación estricta: un valor inválido impide que la app arranque). **La variable vieja ya no se lee.** Quedó en `.env.example` y en el README.
+  - **API:** `currentFeeCop` → `currentFeePerGuestCop` en `GET /v1/restaurants/me/summary` (`billing`) y en `GET /v1/admin/overview`. Cada fila de `GET /v1/restaurants/me/billing/check-ins` y de `GET /v1/admin/billing/:restaurantId` ya traía `partySize` y `feeCop` (el total de ese check-in); no cambia nada más. Swagger y `docs/` actualizados.
+  - **Un solo cálculo:** la función pura `checkInFeeCop` (`reservations-checkin/billing/check-in-fee.ts`) la llama `CheckInService` dentro de la transacción del check-in. Todo lo demás (estado de cuenta, Resumen, panel del administrador, snapshots de `billing_periods`) sigue sumando `SUM(check_ins.fee_cop)`: la regla «dinero = suma de lo guardado» no cambia.
+  - **Sin migración y sin tocar el histórico:** `fee_cop` ya era un entero que guarda el total. Los check-ins y meses anteriores conservan su valor (2.000 por check-in) y `amountMismatch` no se activa por este cambio. **No hay migración de producción que correr.**
+- **Despliegue en Azure (quien despliegue):** definir `CHECKIN_FEE_PER_GUEST_COP` en la configuración del Container App `ca-dinno-backend` (si no se define, aplica el default 1500) y **eliminar `CHECKIN_FEE_COP` si existiera**. En Render (plan B), lo mismo. El CI solo cambia la imagen y `GIT_COMMIT`: no toca las variables.
+- **Frontend:** consume `currentFeePerGuestCop` y muestra «N personas × $1.500» solo donde el monto guardado coincide exactamente; ver el aviso del repo `frontend`. **Mobile:** la app del comensal no usa la tarifa ni el cobro; sin cambios de código.
+- **Pruebas:** unitarias de la función y de cada servicio, e2e (variable nueva, inválida y la vieja ignorada) y `test/db/billing-per-guest.db-spec.ts` (Postgres real: check-ins de 1, 2, 4, 5 y 20 personas, cancelada y vencida sin cobro, y filas históricas mezcladas con las nuevas: totales, Resumen, panel, snapshot y `amountMismatch`).
+- **Los PR a `develop` (backend, frontend y mobile, misma rama en los tres) los abre Elizabeth.** Se despliegan juntos: el backend nuevo cambia el nombre del campo, y el frontend anterior no leería `currentFeePerGuestCop`.
+
 ## 18 nov 2026 · Jacobo · La llave del informe de IA ya está en Azure (Sprint 4) · para revisar: Elizabeth
 
 - **Qué hay:** la llave del modelo está en Key Vault como `insights-llm-api-key` y el Container App la lee como `INSIGHTS_LLM_API_KEY=secretref:insights-llm-key` (referencia a Key Vault con `id-dinno-backend`, igual que los demás secretos). Revisión `ca-dinno-backend--0000010`; el log de arranque dice «Informe de IA con el modelo claude-haiku-5-5». Procedimiento en `docs/azure/seguridad-red.md` §2.4 y §2.5.

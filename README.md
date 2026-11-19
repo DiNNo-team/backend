@@ -56,7 +56,7 @@ Todas están documentadas con placeholders en [`.env.example`](.env.example):
 | `GOOGLE_GEOCODING_API_KEY` | No | Llave de Google Geocoding API para `GET /v1/geocode`. **Secreto.** Sin ella la app arranca y esa ruta responde `503 GEOCODING_UNAVAILABLE`. | Consola de **Google Cloud** → APIs y servicios → Credenciales (restringida a Geocoding API). La entrega el equipo de Google Cloud por canal privado. | *(sin valor en `.env.example`)* |
 | `RESERVATION_TTL_MINUTES` | No (por defecto `15`) | Vigencia de la microreserva, en minutos enteros de 2 a 15. Un valor inválido (texto, vacío, fuera de rango) impide que la app arranque. | La defines tú en tu `.env` y en el panel de Render. `3` solo durante la demo de expiración. | `15` |
 | `RESERVATION_EXPIRY_ENABLED` | No (por defecto `true`) | Activa el proceso que vence las reservas cada 15 s y al arrancar. `true` o `false`; cualquier otro valor (también vacío) impide que la app arranque. Con `false` las reservas vencidas se siguen venciendo al leerlas u operarlas. | La defines tú; en Render va en `true`. | `true` |
-| `CHECKIN_FEE_COP` | No (por defecto `2000`) | Tarifa fija por check-in, en pesos colombianos (entero de 0 a 1.000.000, sin puntos ni signos). Cada check-in guarda la vigente; cambiarla no altera el historial. Un valor inválido impide que la app arranque. | La defines tú en tu `.env` y en el panel de Render. | `2000` |
+| `CHECKIN_FEE_PER_GUEST_COP` | No (por defecto `1500`) | Tarifa por comensal de cada check-in, en pesos colombianos (entero de 0 a 1.000.000, sin puntos ni signos). El cobro de un check-in es personas de la reserva × esta tarifa. Cada check-in guarda su total; cambiarla no altera el historial. Un valor inválido impide que la app arranque. Reemplaza a `CHECKIN_FEE_COP`, que ya no se lee. | La defines tú en tu `.env` y en la configuración del servicio (Azure Container Apps o Render). | `1500` |
 | `PLATFORM_ADMIN_EMAIL` | No (solo para `npm run seed`) | Correo del administrador de DiNNo (`platform_admin`): si está definida, el seed crea esa cuenta. La app no la lee. | Defínela solo en el proceso del seed. **No va en Render.** | *(comentada en `.env.example`)* |
 | `DEV_USER_ENABLED` | No (por defecto apagado) | Activa el usuario de desarrollo. **Solo local:** se apaga solo en Render aunque esté en `true`. | La defines tú en tu `.env`. **No la definas en Render.** | `true` |
 | `DEV_USER_ID` | Si `DEV_USER_ENABLED=true` | UUID (tabla `users`) del usuario de desarrollo por defecto. | Lo imprime `npm run seed`. | `3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f` |
@@ -204,7 +204,7 @@ Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `
 - Desplegado en **Render** como *Web Service*.
 - **Auto-deploy activado**: cada push a la rama `develop` dispara un nuevo despliegue.
 - **URL de producción:** https://dinno-backend.onrender.com
-- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID`, `GOOGLE_GEOCODING_API_KEY`, `RESERVATION_TTL_MINUTES`, `RESERVATION_EXPIRY_ENABLED` y `CHECKIN_FEE_COP`)
+- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID`, `GOOGLE_GEOCODING_API_KEY`, `RESERVATION_TTL_MINUTES`, `RESERVATION_EXPIRY_ENABLED` y `CHECKIN_FEE_PER_GUEST_COP`)
   se configuran directamente en el dashboard de Render — **no viven en el repositorio**.
   `FIREBASE_PROJECT_ID` es obligatoria porque en Render el usuario de desarrollo está apagado:
   si falta, la app no arranca. `PORT` no se define ahí: Render lo asigna en tiempo de ejecución.
