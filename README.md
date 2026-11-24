@@ -992,10 +992,10 @@ npm run build
 | Integrante | Rol | GitHub |
 |---|---|---|
 | Elizabeth Correa Suárez | Backend base, mesas, edición del restaurante e integración | [@Eliza-05](https://github.com/Eliza-05) |
-| Juan Sebastián Ortega Muñoz | Kit visual y pantallas de mesas; notificaciones y límite de peticiones del backend | <!-- usuario --> |
+| Juan Sebastián Ortega Muñoz | Kit visual y pantallas de mesas; notificaciones y límite de peticiones del backend | [@Juanseom](https://github.com/Juanseom) |
 | Jacobo Díaz | Autenticación y control de acceso | [@Jacobo2025](https://github.com/Jacobo2025) |
-| Santiago Carmona | Registro del restaurante (onboarding); informe de IA | <!-- usuario --> |
-| Sergio Alejandro Idarraga Torres | Estado abierto/cerrado y bitácora de mesas; informe de IA | <!-- usuario --> |
+| Santiago Carmona | Registro del restaurante (onboarding); informe de IA | [@Carmo0982](https://github.com/Carmo0982) |
+| Sergio Alejandro Idarraga Torres | Estado abierto/cerrado y bitácora de mesas; informe de IA | [@ALEJO21005](https://github.com/ALEJO21005) |
 
 ---
 
