@@ -903,7 +903,7 @@ Solo se documentan los **nombres**; nunca subas valores al repositorio.
 | `CHECKIN_FEE_PER_GUEST_COP` | Tarifa por comensal (COP) |
 | `INSIGHTS_LLM_API_KEY` / `INSIGHTS_LLM_MODEL` | Acceso y modelo del informe de IA |
 | `PORT` | Puerto (por defecto 3000) |
-| `GIT_COMMIT` · `RENDER_GIT_COMMIT` | Versión desplegada, expuesta en `/v1/health` (la define el pipeline; no se escribe a mano) |
+| `GIT_COMMIT` | Versión desplegada, expuesta en `/v1/health` (la define el pipeline; no se escribe a mano) |
 | `RATE_LIMIT_ENABLED` / `RATE_LIMIT_FACTOR` | Límite de peticiones |
 | `REALTIME_REDIS_ADAPTER_ENABLED` | Adaptador de Redis de Socket.IO (varias réplicas) |
 | `TRUST_PROXY_HOPS` | Proxies de confianza para la IP del cliente |
@@ -976,7 +976,6 @@ npm run build
 |---|---|---|
 | ✅ `checks` | Pull request y push | `lint` → `typecheck` → `test` → `test:e2e` → `build` |
 | 🚢 `deploy-azure` | Push a `develop`, tras `checks` | Construye la imagen, la publica en ACR, actualiza el Container App y espera a que `/v1/health` devuelva el nuevo commit |
-| 🔍 `verify-deployment` | Push a `develop`, tras `checks` | Comprueba que Render (plan B) sirve el commit y lo registra como *deployment* de GitHub |
 
 - Autenticación **sin secretos** (OIDC): la identidad solo confía en este repositorio y la rama `develop`.
 - El despliegue termina en éxito **solo cuando la versión nueva responde**.
