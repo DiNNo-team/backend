@@ -3,11 +3,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { configureApp, resolveListenHost } from './app.setup.js';
 import { SocketConnectionLimiter } from './common/rate-limit/socket-connection-limiter.js';
+import { SocketIoRedisAdapter } from './config/socket-io-redis.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   configureApp(app, {
     socketConnectionLimiter: app.get(SocketConnectionLimiter),
+    socketIoAdapter: app.get(SocketIoRedisAdapter).adapter(),
   });
   app.enableShutdownHooks();
 

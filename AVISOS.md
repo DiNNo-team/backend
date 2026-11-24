@@ -6,6 +6,18 @@ Es temporal por diseño: cuando un aviso se vuelve regla permanente, se muda al 
 Aquí no van reglas definitivas, secretos, uuid ni cadenas de conexión.
 
 
+## 23 nov 2026 · Jacobo · Adaptador de Redis para Socket.IO: tiempo real con 2 réplicas (Sprint 4) · rama `chore/sprint4-redis-adapter` · para revisar y aprobar la dependencia: Elizabeth
+
+- **Por qué:** hasta hoy las salas del WebSocket vivían en la memoria de cada proceso. Con 2 réplicas en Azure, un evento (`availability.changed`, `reservation.*`, `table.status_changed`) emitido en una réplica **no llegaba** a los clientes conectados a la otra. `develop` no tenía el adaptador.
+- **Dependencia nueva (necesita tu aprobación antes de fusionar):** `@socket.io/redis-adapter@^8.3.0` (la oficial de Socket.IO; depende de `socket.io-adapter`, que ya venía con `socket.io`). Funciona con el `ioredis` que ya usamos y con Azure Managed Redis (`rediss://`, pub/sub en el punto de conexión único).
+- **Qué cambia en el código:** `SocketIoRedisAdapter` (`src/config/socket-io-redis.ts`, en `RedisModule`) abre dos conexiones más a Redis (publicar y suscribir) duplicando la de la app; `CorsIoAdapter` lo recibe sin perder el CORS ni el límite de conexiones por IP. **Si Redis falla**, cada réplica sigue entregando a sus propios clientes y la API no se cae (el adaptador no atrapa el error de `publish`; lo atrapamos nosotros). Detalle en CLAUDE.md §11, "Tiempo real".
+- **Variable nueva, opcional:** `REALTIME_REDIS_ADAPTER_ENABLED` (`true` o `false`, por defecto `true`; un valor inválido impide arrancar). No hay que definirla en Azure ni en Render; existe para el control negativo de la prueba de 2 réplicas. Quedó en `.env.example`.
+- **Para escalar a 2 réplicas en Azure falta además** la afinidad de sesión del ingress (`sticky`): sin ella, un cliente que use `polling` (el transporte por defecto de Socket.IO antes de pasar a websocket) puede repartir su handshake entre réplicas y fallar.
+- **Web y mobile:** sin cambios de contrato ni de eventos.
+- **Pendiente de ajustar en los tres repos (§12.7, sección compartida):** la línea «Redis sigue sin usarse para Socket.IO… pasa al Sprint 4» queda desactualizada cuando esto se fusione.
+- **Pruebas:** `src/config/socket-io-redis.spec.ts`, `test/socket-io-redis-adapter.e2e-spec.ts` (dos réplicas sobre un bus en memoria: entrega cruzada, salas aisladas, control sin adaptador, Redis caído, CORS y límite) y una comprobación manual con ioredis contra un Redis real en Docker local.
+
+
 ## 18 nov 2026 · Elizabeth · Cobro por comensal: COP 1.500 por persona en vez de 2.000 por check-in (Sprint 4) · rama `feat/sprint4-tarifa-por-comensal`
 
 - **Qué cambia:** el cobro pasa de una tarifa fija por check-in (COP 2.000) a **COP 1.500 por persona**: `fee_cop` = personas de la reserva × tarifa por comensal. Se calcula **solo al hacer el check-in** (crear, cancelar o vencer una reserva no cobra). Ejemplos: 1 persona = 1.500, 2 = 3.000, 4 = 6.000, 5 = 7.500.

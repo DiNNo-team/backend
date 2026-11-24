@@ -5,6 +5,7 @@ import {
   SOCKET_RATE_LIMITED,
   type SocketConnectionLimiter,
 } from '../common/rate-limit/socket-connection-limiter.js';
+import type { SocketIoAdapterConstructor } from './socket-io-redis.js';
 
 const rateLimitLogger = new Logger('RateLimit');
 
@@ -15,11 +16,16 @@ const rateLimitLogger = new Logger('RateLimit');
 // With a limiter, every new connection passes it first (Sprint 4, task 6.1.3):
 // its middleware is registered here, before the gateway's handshake one, so a
 // flood of connections is rejected before any token is verified.
+//
+// With a Redis adapter (main.ts, SocketIoRedisAdapter), the rooms are shared
+// by every replica: an emit on one reaches the sockets of all of them.
+// Without it, Socket.IO keeps its in-memory adapter (one replica, the e2e).
 export class CorsIoAdapter extends IoAdapter {
   constructor(
     app: INestApplicationContext,
     private readonly origins: string[],
     private readonly limiter?: SocketConnectionLimiter,
+    private readonly roomsAdapter?: SocketIoAdapterConstructor | null,
   ) {
     super(app);
   }
@@ -28,6 +34,7 @@ export class CorsIoAdapter extends IoAdapter {
     const server = super.createIOServer(port, {
       ...options,
       cors: { origin: this.origins, credentials: false },
+      ...(this.roomsAdapter ? { adapter: this.roomsAdapter } : {}),
     } as ServerOptions) as Server;
     const limiter = this.limiter;
     if (limiter) {

@@ -11,10 +11,12 @@ import {
   closeRedisClient,
   createRedisClient,
 } from './redis.config.js';
+import { SocketIoRedisAdapter } from './socket-io-redis.js';
 
-// The one Redis connection of the app, global so any module (the rate limit,
-// later the Socket.IO adapter) injects it with REDIS_CLIENT without importing
-// AppModule. Registered once, in AppModule.
+// The one Redis connection of the app, global so any module (the rate limit)
+// injects it with REDIS_CLIENT without importing AppModule. Registered once,
+// in AppModule. The Socket.IO adapter (main.ts) duplicates it into its own
+// two connections.
 @Global()
 @Module({
   providers: [
@@ -24,8 +26,9 @@ import {
       useFactory: (configService: ConfigService) =>
         createRedisClient(configService.getOrThrow<string>('REDIS_URL')),
     },
+    SocketIoRedisAdapter,
   ],
-  exports: [REDIS_CLIENT],
+  exports: [REDIS_CLIENT, SocketIoRedisAdapter],
 })
 export class RedisModule implements OnApplicationShutdown {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
