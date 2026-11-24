@@ -1,9 +1,17 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logo-dark.svg">
+  <img src="docs/images/logo-light.svg" alt="Logo de DiNNo" height="72" />
+</picture>
+
 # 📍 DiNNo · Backend
 
-**Dile no a la espera.**
+### **Dile no a la espera.**
+
 API REST y tiempo real para encontrar y asegurar una mesa disponible *ahora*.
+
+<br/>
 
 ![NestJS](https://img.shields.io/badge/NestJS-12-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
