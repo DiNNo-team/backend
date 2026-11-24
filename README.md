@@ -1,114 +1,301 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# DiNNo — Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API del backend de **DiNNo**, una plataforma de microreservas de mesas en restaurantes con
+disponibilidad en tiempo real. Está construido como un **monolito modular** con NestJS +
+TypeScript: un único servicio desplegable, pero con los dominios del negocio separados en
+módulos independientes bajo `src/modules/`.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 1. Requisitos
 
-## Description
+- **Node.js 24.x** — versión fijada en [`.nvmrc`](.nvmrc) y en `engines.node` de
+  [`package.json`](package.json). Con nvm: `nvm use`.
+- **npm** (incluido con Node).
+- Acceso a una base de datos **PostgreSQL en [Neon](https://neon.tech)** y a una instancia de
+  **Redis en [Upstash](https://upstash.com)** — o las credenciales compartidas del equipo para
+  el ambiente de desarrollo.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## 2. Instalación
 
 ```bash
-$ npm install
+git clone https://github.com/DiNNo-team/backend.git
+cd backend
+npm install
 ```
 
-## Compile and run the project
+> **Importante: corre `npm install` antes que cualquier otro comando** (`start:dev`, `test`,
+> `lint`, etc.), incluso si acabas de hacer `git pull` sobre un `node_modules` que ya tenías.
+> Cada vez que `package.json` gana una dependencia nueva (por ejemplo, cuando se agregó
+> `@nestjs/swagger`) hay que reinstalar — si no, los comandos fallan con errores como
+> `Cannot find package '@nestjs/swagger'` porque el paquete está declarado pero no está en
+> `node_modules`. Ya nos pasó una vez y rompió los tests en local.
+
+Luego copia la plantilla de variables de entorno y complétala con tus credenciales reales:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env
 ```
 
-## Run tests
+Edita `.env` con los valores reales (ver siguiente sección). **Nunca subas `.env` al
+repositorio** — ya está en `.gitignore`.
+
+> ⚠️ **Sin `DEV_USER_ENABLED=true` en tu `.env`, toda ruta protegida responde `401`.**
+> En local, el usuario actual lo da el *usuario de desarrollo*; en Render se usa el login con
+> Firebase. Ver [sección 10](#10-usuario-de-desarrollo).
+
+## 3. Variables de entorno
+
+Todas están documentadas con placeholders en [`.env.example`](.env.example):
+
+| Variable | Obligatoria | Qué es | De dónde sale | Ejemplo (formato) |
+|---|---|---|---|---|
+| `PORT` | No (por defecto `3000`) | Puerto HTTP en el que escucha el servidor. | En Render lo asigna la plataforma automáticamente — **no la definas ahí**. | `3000` |
+| `CORS_ORIGINS` | No (por defecto `http://localhost:5173`) | Lista de orígenes permitidos para peticiones cross-origin, separados por comas y **sin `/` final**. | La defines tú: el o los orígenes del frontend/mobile que van a consumir la API. | `http://localhost:5173,https://frontend-rose-gamma-96.vercel.app` |
+| `DATABASE_URL` | **Sí** | Cadena de conexión de PostgreSQL. | Panel de **Neon** → tu proyecto → "Connection string". | `postgresql://usuario:password@host/nombre_db?sslmode=require` |
+| `REDIS_URL` | **Sí** | Cadena de conexión de Redis. | Panel de **Upstash** → tu base de datos → "Connect" (usar la URL `rediss://...` con TLS). | `redis://default:password@host:puerto` |
+| `FIREBASE_PROJECT_ID` | **Sí**, si el usuario de desarrollo está apagado (siempre en Render) | ID del proyecto de Firebase con el que se verifican los ID tokens. No es un secreto. | Consola de **Firebase** → configuración del proyecto. | `mi-proyecto-firebase` |
+| `GOOGLE_GEOCODING_API_KEY` | No | Llave de Google Geocoding API para `GET /v1/geocode`. **Secreto.** Sin ella la app arranca y esa ruta responde `503 GEOCODING_UNAVAILABLE`. | Consola de **Google Cloud** → APIs y servicios → Credenciales (restringida a Geocoding API). La entrega el equipo de Google Cloud por canal privado. | *(sin valor en `.env.example`)* |
+| `RESERVATION_TTL_MINUTES` | No (por defecto `15`) | Vigencia de la microreserva, en minutos enteros de 2 a 15. Un valor inválido (texto, vacío, fuera de rango) impide que la app arranque. | La defines tú en tu `.env` y en el panel de Render. `3` solo durante la demo de expiración. | `15` |
+| `RESERVATION_EXPIRY_ENABLED` | No (por defecto `true`) | Activa el proceso que vence las reservas cada 15 s y al arrancar. `true` o `false`; cualquier otro valor (también vacío) impide que la app arranque. Con `false` las reservas vencidas se siguen venciendo al leerlas u operarlas. | La defines tú; en Render va en `true`. | `true` |
+| `CHECKIN_FEE_PER_GUEST_COP` | No (por defecto `1500`) | Tarifa por comensal de cada check-in, en pesos colombianos (entero de 0 a 1.000.000, sin puntos ni signos). El cobro de un check-in es personas de la reserva × esta tarifa. Cada check-in guarda su total; cambiarla no altera el historial. Un valor inválido impide que la app arranque. Reemplaza a `CHECKIN_FEE_COP`, que ya no se lee. | La defines tú en tu `.env` y en la configuración del servicio (Azure Container Apps o Render). | `1500` |
+| `PLATFORM_ADMIN_EMAIL` | No (solo para `npm run seed`) | Correo del administrador de DiNNo (`platform_admin`): si está definida, el seed crea esa cuenta. La app no la lee. | Defínela solo en el proceso del seed. **No va en Render.** | *(comentada en `.env.example`)* |
+| `DEV_USER_ENABLED` | No (por defecto apagado) | Activa el usuario de desarrollo. **Solo local:** se apaga solo en Render aunque esté en `true`. | La defines tú en tu `.env`. **No la definas en Render.** | `true` |
+| `DEV_USER_ID` | Si `DEV_USER_ENABLED=true` | UUID (tabla `users`) del usuario de desarrollo por defecto. | Lo imprime `npm run seed`. | `3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f` |
+
+La app usa `ConfigService.getOrThrow()` para leer `DATABASE_URL` y `REDIS_URL`: si falta
+cualquiera de las dos, **no arranca**. Lo mismo pasa con `FIREBASE_PROJECT_ID` cuando el
+usuario de desarrollo está apagado. `FIREBASE_AUTH_EMULATOR_HOST` es opcional, solo para el
+emulador de Firebase en local, y nunca se define en Render. `GOOGLE_GEOCODING_API_KEY` también es
+opcional: sin ella solo `GET /v1/geocode` deja de funcionar (responde `503`).
+
+## 4. Arquitectura
+
+- **Monolito modular.** El código de negocio vive bajo `src/modules/`, uno por dominio,
+  registrado en [`src/app.module.ts`](src/app.module.ts). Hoy existen 5 módulos.
+  `restaurant-operations` (registro, consulta y edición del restaurante, estado abierto/cerrado,
+  mesas y bitácora de mesas), `identity-access` (usuario actual, roles, cuentas y autenticación
+  del WebSocket), `search-availability` (búsqueda, detalle público, disponibilidad y WebSocket)
+  y `reservations-checkin` (microreservas, vencimiento y check-in) ya tienen código;
+  `notifications` sigue vacío:
+  - `identity-access`
+  - `restaurant-operations`
+  - `reservations-checkin`
+  - `search-availability`
+  - `notifications`
+- **PostgreSQL (Neon) vía TypeORM.** Configurado con `TypeOrmModule.forRootAsync()` en
+  `app.module.ts`, usando `DATABASE_URL`. Si la cadena incluye `sslmode=require` (como la de
+  Neon), se activa SSL automáticamente. `synchronize` está en `false` a propósito: los cambios
+  de esquema van por migraciones, no por auto-sync.
+- **Redis (Upstash) vía ioredis.** Cliente creado en
+  [`src/config/redis.config.ts`](src/config/redis.config.ts) y expuesto en el contenedor de
+  Nest bajo el token `REDIS_CLIENT`, para inyectarlo en cualquier módulo que lo necesite.
+- **CORS por variable de entorno.** `app.setup.ts` lee `CORS_ORIGINS`, hace `split(',')` y usa
+  el resultado como lista blanca de orígenes en `app.enableCors()`. Por ahora `credentials`
+  queda en `false` (no hay auth por cookies/sesión). **Para agregar un nuevo origen** (por
+  ejemplo cuando cambie la URL de despliegue del frontend en Vercel), edita la variable
+  `CORS_ORIGINS` en el dashboard de Render — no hace falta tocar código.
+- **Prefijo `/v1`.** Todas las rutas de la API están bajo `/v1` (`GET /v1/health`, etc.),
+  definido como `API_PREFIX` en `app.setup.ts`.
+- **Swagger en `/docs`.** La documentación OpenAPI se sirve en `/docs` (JSON en `/docs-json`),
+  **fuera** del prefijo `/v1` — `SwaggerModule.setup()` se monta directo sobre el adaptador HTTP
+  y no hereda el prefijo global.
+- **Health check en `/v1/health`.** Responde `{"status":"ok","commit":"<sha>"}`; `commit` es el
+  SHA que despliega Render (`RENDER_GIT_COMMIT`) y en local es `null`. Render lo usa para el
+  *Health Check* del Web Service y el CI, para comprobar qué commit está sirviendo.
+
+```
+src/
+├── main.ts              # Arranque: puerto, configuración HTTP
+├── app.setup.ts         # Prefijo /v1, CORS y Swagger (compartido con las pruebas e2e)
+├── app.module.ts         # Configuración, PostgreSQL (TypeORM), Redis y módulos
+├── app.controller.ts    # GET /v1/health
+├── config/               # Configuración de infraestructura (Redis)
+└── modules/              # Módulos del monolito modular
+    ├── identity-access/
+    ├── restaurant-operations/
+    ├── reservations-checkin/
+    ├── search-availability/
+    └── notifications/
+```
+
+## 5. Comandos
+
+| Comando | Qué hace |
+|---|---|
+| `npm run start` | Ejecuta la build ya compilada (`node dist/main`); corre `npm run build` antes. Es lo que usa Render. |
+| `npm run start:dev` | Arranca en modo desarrollo, con recarga al cambiar archivos. |
+| `npm run start:debug` | Igual que `start:dev`, con el inspector de Node activo. |
+| `npm run build` | Compila el proyecto a `dist/` (`nest build`). |
+| `npm run start:prod` | Igual que `start`. |
+| `npm run lint` | Revisa `src/`, `test/` y `scripts/` con oxlint. |
+| `npm run typecheck` | Revisa los tipos de todo el proyecto, pruebas incluidas (`tsc --noEmit`). |
+| `npm run format` | Formatea `src/` y `test/` con Prettier. |
+| `npm run test` | Pruebas unitarias (Vitest). |
+| `npm run test:watch` | Pruebas unitarias en modo watch. |
+| `npm run test:cov` | Pruebas unitarias con reporte de cobertura. |
+| `npm run test:e2e` | Pruebas e2e de la capa HTTP (prefijo, CORS, Swagger) — no requieren PostgreSQL ni Redis. |
+| `npm run test:db` | Pruebas contra un Postgres real (solo la base de pruebas, con `.env.test`); no están en CI. Ver [CLAUDE.md §11](CLAUDE.md#pruebas). |
+| `npm run export:data` | Exportación anónima de reservas, check-ins y bitácora a CSV (solo lectura). **Solo Elizabeth.** Ver [CLAUDE.md §11](CLAUDE.md#scripts-de-datos-srcscripts-elizabeth). |
+| `npm run demo:reset` | Deja la demo limpia: Casa 72 sin reservas activas y con sus mesas en el estado inicial. Dry-run por defecto; `--apply` pide confirmar la base. **Solo Elizabeth.** Ver [CLAUDE.md §11](CLAUDE.md#scripts-de-datos-srcscripts-elizabeth). |
+| `npm run seed` | Crea los datos de prueba (ver [sección 9](#9-base-de-datos-migraciones-y-datos-de-prueba)). |
+| `npm run migration:create -- src/migrations/<Nombre>` | Crea una migración vacía para escribir el SQL a mano. |
+| `npm run migration:generate -- src/migrations/<Nombre>` | Genera una migración comparando las entidades con la base. **Solo Elizabeth.** |
+| `npm run migration:run` | Aplica las migraciones pendientes. **Solo Elizabeth.** |
+| `npm run migration:revert` | Deshace la última migración. **Solo Elizabeth.** |
+
+> `npm run deploy` también existe en `package.json` (viene de `@nestjs/mau`, la plataforma
+> propia de NestJS), pero **no es lo que usamos para desplegar**: el despliegue real es vía
+> Render, descrito abajo.
+
+## 6. Cómo verificar que funciona
+
+Con las variables de entorno ya cargadas en `.env`:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run start:dev
 ```
 
-## Deployment
+En la consola deberían aparecer, entre los logs de Nest, estas dos líneas confirmando las
+conexiones:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+```
+Redis conectado
+PostgreSQL conectado
+```
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Y con el servidor arriba:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+curl http://localhost:3000/v1/health
+# {"status":"ok","commit":null}
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+También puedes abrir `http://localhost:3000/docs` para ver el contrato de la API en Swagger UI.
 
-## Observability
+> **En local el servidor escucha solo en `127.0.0.1`**: se llega a él desde tu propio equipo
+> (`localhost`), no desde otro equipo ni desde el celular. Es a propósito: en local el usuario de
+> desarrollo no pide credenciales y la base es la compartida, que es producción, así que abrir el
+> puerto a la red dejaría esa base expuesta a cualquiera en tu misma red. Si necesitas probar desde
+> otro dispositivo, avísale al equipo antes. En Render escucha en `0.0.0.0` (todas las interfaces),
+> como exige la plataforma (`resolveListenHost` en `src/app.setup.ts`).
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+### Tiempo real: escuchar `availability.changed`
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+El WebSocket (Socket.IO) corre en el mismo host y puerto que la API (`/socket.io`) y acepta
+comensales y restaurantes con restaurante registrado (salas y eventos en `CLAUDE.md` §12.7). Para ver llegar los eventos mientras cambias mesas o el estado del restaurante, usa el
+script de QA (necesita `npm install`, porque usa `socket.io-client`):
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+```bash
+# Local, con el usuario de desarrollo activo: el UUID de un usuario con rol diner
+# (el seed imprime el de comensal@example.com).
+node scripts/listen-availability.mjs --dev-user-id <uuid del comensal>
 
-## Resources
+# Contra Render (o local sin usuario de desarrollo): token de Firebase de un comensal.
+# DINNO_TOKEN no deja el token en el historial de la terminal; --token también funciona.
+DINNO_TOKEN=<token> node scripts/listen-availability.mjs --url https://dinno-backend.onrender.com
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Imprime cada evento con la hora, por ejemplo
+`[14:05:12] availability.changed {"restaurantId":"…","availability":"few","isOpenNow":true,"isSearchable":true}`.
+Si la conexión se rechaza muestra `connect_error: <código>` (`UNAUTHORIZED`, `EMAIL_NOT_VERIFIED`,
+`PROFILE_REQUIRED` o `RESTAURANT_REQUIRED`) y termina. Sal con Ctrl+C.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## 7. Despliegue
 
-## Support
+- Desplegado en **Render** como *Web Service*.
+- **Auto-deploy activado**: cada push a la rama `develop` dispara un nuevo despliegue.
+- **URL de producción:** https://dinno-backend.onrender.com
+- **Variables de entorno** (`DATABASE_URL`, `REDIS_URL`, `CORS_ORIGINS`, `FIREBASE_PROJECT_ID`, `GOOGLE_GEOCODING_API_KEY`, `RESERVATION_TTL_MINUTES`, `RESERVATION_EXPIRY_ENABLED` y `CHECKIN_FEE_PER_GUEST_COP`)
+  se configuran directamente en el dashboard de Render — **no viven en el repositorio**.
+  `FIREBASE_PROJECT_ID` es obligatoria porque en Render el usuario de desarrollo está apagado:
+  si falta, la app no arranca. `PORT` no se define ahí: Render lo asigna en tiempo de ejecución.
+  `DEV_USER_ENABLED`, `DEV_USER_ID` y `FIREBASE_AUTH_EMULATOR_HOST` **no se definen en Render**.
+  **En un entorno desplegado (`RENDER` definida o `NODE_ENV=production`) la app no arranca** si
+  `FIREBASE_AUTH_EMULATOR_HOST` está definida o `DEV_USER_ENABLED` es `true`: el error del log
+  nombra la variable (nunca su valor). Quítala del panel y vuelve a desplegar.
+- **Host:** en Render el servidor escucha en `0.0.0.0`; en local, solo en `127.0.0.1` (sección 6).
+- **Health Check Path:** `/v1/health`.
+- Además del despliegue en sí (gestionado por Render), el workflow de GitHub Actions en
+  [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) tiene dos jobs:
+  - `checks` corre en cada PR hacia `develop` y en cada push a `develop`, con Node 24:
+    `npm ci`, lint, typecheck, pruebas unitarias, pruebas e2e y build.
+  - `verify-deployment` corre solo en cada push a `develop`, si `checks` pasa: espera hasta
+    15 minutos a que `/v1/health` devuelva el commit del push y registra el resultado en la
+    pestaña **Deployments** de GitHub (con la Deployments API y el `GITHUB_TOKEN` automático de
+    Actions — no despliega nada por sí mismo, Render ya lo hizo).
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+## 8. Integración con frontend y mobile
 
-## Stay in touch
+- El **frontend** (React + Vite, desplegado en Vercel) y el **mobile** (Expo) consumen esta API
+  a través de las variables `VITE_API_URL` y `EXPO_PUBLIC_API_URL` respectivamente, apuntando a
+  `https://dinno-backend.onrender.com/v1` en producción (o `http://localhost:3000/v1` en local).
+- **Tiempo real:** la app (comensal) y la web (restaurante) se conectan por Socket.IO a la misma URL **sin** `/v1`
+  (`https://dinno-backend.onrender.com`), con `auth` como función que entrega el token de Firebase.
+  Contrato en `CLAUDE.md`, sección 10, "Tiempo real", y §12.7.
+- Si cambia la URL de despliegue del frontend o del mobile (por ejemplo, un nuevo dominio de
+  Vercel), hay que **actualizar `CORS_ORIGINS` en el dashboard de Render** agregando el nuevo
+  origen a la lista separada por comas — de lo contrario el navegador bloqueará las peticiones
+  por CORS aunque el backend esté funcionando bien.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 9. Base de datos: migraciones y datos de prueba
 
-## License
+- El esquema vigente, sus reglas y las decisiones están en [`docs/database.md`](docs/database.md).
+- **Las migraciones las corre solo Elizabeth**: en el Sprint 1 compartimos una sola base en
+  Neon. El porqué y cómo crear la tuya está en el [CLAUDE.md](CLAUDE.md) (sección 11,
+  "Migraciones").
+- **Datos de prueba:** `npm run seed` compila y crea, si no existen:
+  - un usuario **sin restaurante** (para probar el onboarding);
+  - `demo@example.com`, también sin restaurante, **reservado para la demo del Día 7: no lo uses
+    para probar**;
+  - `dinnoteam2026+casa72@gmail.com` con el restaurante **Casa 72** (el restaurante de prueba del
+    equipo) y 8 mesas (Disponibles, Reservadas, Ocupadas y una Inactiva). El seed es la fuente de
+    verdad de Casa 72: en cada corrida restablece su categoría, dirección, coordenadas y horarios
+    (borra los que tenga e inserta los del seed). No toca su nombre ni sus mesas;
+  - los **15 restaurantes reales** de `src/seed-data/restaurants.json` (Santiago), cada uno con su
+    dueño `restaurante-XX@dinno.test`, horarios y mesas. En cada corrida vuelven a quedar como dice
+    el archivo, estado de las mesas incluido;
+  - `comensal@example.com`, con rol `diner` ("Comensal de prueba"), para probar las rutas del
+    comensal;
+  - `dinnoteam2026@gmail.com`, habilitado como restaurante, sin restaurante asignado por el seed;
+  - si defines `PLATFORM_ADMIN_EMAIL` en ese proceso (`PLATFORM_ADMIN_EMAIL=admin@ejemplo.com npm run
+    seed`), el **administrador de DiNNo** (`platform_admin`). Si el correo ya existe con otro rol, el
+    seed se detiene sin cambiar nada.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+  Se puede correr varias veces: no duplica nada, no cambia usuarios que ya existen (si un correo
+  ya existe con otro rol, solo lo avisa) y corre en una transacción, así que un error no deja nada
+  a medias. Detalle de qué restablece en el [CLAUDE.md](CLAUDE.md) (sección 11, "Datos de prueba:
+  el seed"). Al final imprime los ids de los usuarios de prueba para usarlos en `DEV_USER_ID`.
+  Como la base es compartida, normalmente ya están creados: pide los ids en el grupo antes de
+  correrlo. No es una migración, así que nunca llega a Render.
+
+  Después de probar un registro, el usuario de onboarding queda con restaurante. Para
+  devolverlo a su estado inicial, ver [Reiniciar los datos de prueba](docs/database.md#reiniciar-los-datos-de-prueba).
+
+## 10. Usuario de desarrollo
+
+El login con Firebase ya está integrado: con el usuario de desarrollo apagado (siempre en
+Render), `FirebaseUserResolver` toma el usuario de `Authorization: Bearer <ID token de
+Firebase>`, y sin token válido la ruta protegida responde `401`. Para trabajar en local sin
+Firebase, el usuario actual de cada petición lo puede resolver un usuario de desarrollo que se
+lee **de la base** en cada petición.
+
+- `DEV_USER_ENABLED=true` lo activa. **Sin esto (y sin un token de Firebase), toda ruta protegida responde `401`.**
+- `DEV_USER_ID` es el UUID del usuario por defecto.
+- La cabecera `x-dev-user-id` cambia de usuario en una petición, sin reiniciar el servidor. Recibe
+  un UUID; si tiene mal formato, la respuesta es `401`:
+
+  ```bash
+  curl http://localhost:3000/v1/<ruta> -H "x-dev-user-id: 3f2b8c1e-5d4a-4e7b-9c6f-1a2b3c4d5e6f"
+  ```
+
+- **Con `DEV_USER_ENABLED=true`, la API local ignora los tokens de Firebase:** todas las
+  peticiones entran como el usuario de desarrollo, aunque traigan `Authorization: Bearer`. Para
+  probar con tokens reales, levanta una segunda instancia con el usuario de desarrollo apagado en
+  el propio comando, sin tocar tu `.env` (las variables del comando ganan sobre las del `.env`):
+  `DEV_USER_ENABLED=false PORT=3001 npm run start:dev` (en PowerShell:
+  `$env:DEV_USER_ENABLED='false'; $env:PORT='3001'; npm run start:dev`). Las cuentas de prueba
+  están en el `CLAUDE.md`, sección 10.
+- En Render no funciona: si la variable está en `true`, la app no arranca (ver la sección 7).
+  Al arrancar en local con el usuario de desarrollo activo, Nest deja un aviso en la consola.
+- En el código: `@UseGuards(CurrentUserGuard)` y `@CurrentUser() user: CurrentUserData`,
+  importados desde `src/modules/identity-access/index.ts`. El `restaurantId` sale siempre de
+  `user`, nunca del body, query ni parámetros de ruta.

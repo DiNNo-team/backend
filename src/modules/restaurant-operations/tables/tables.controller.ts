@@ -1,0 +1,435 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
+import {
+  CurrentUser,
+  CurrentUserGuard,
+  RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
+  Roles,
+  type CurrentUserData,
+  UserRole,
+  SESSION_UNAUTHORIZED_RESPONSE,
+} from '../../identity-access/index.js';
+import { CAPACITY_RANGE, CreateTableDto } from './dto/create-table.dto.js';
+import { TableResponseDto } from './dto/table-response.dto.js';
+import { UpdateTableDto } from './dto/update-table.dto.js';
+import { PLAN_X_RANGE, SaveTablePlanDto } from './dto/save-table-plan.dto.js';
+import {
+  STATUS_INVALID,
+  UpdateTableStatusDto,
+} from './dto/update-table-status.dto.js';
+import {
+  RESTAURANT_REQUIRED_CODE,
+  RESTAURANT_REQUIRED_MESSAGE,
+} from '../shared/restaurant-required.js';
+import { TABLE_ID_INVALID } from '../shared/table-id-invalid.js';
+import { identifierTakenMessage } from './table-identifier.js';
+import {
+  TABLE_HAS_ACTIVE_RESERVATION_CODE,
+  TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+  TABLE_NOT_AVAILABLE_TO_DEACTIVATE_CODE,
+  TABLE_NOT_AVAILABLE_TO_DEACTIVATE_MESSAGE,
+} from './table-reservation-errors.js';
+import { AREA_NOT_FOUND_MESSAGE } from '../table-areas/table-area-rules.js';
+import {
+  NO_TABLE_CHANGES_MESSAGE,
+  TABLE_ALREADY_ACTIVE_MESSAGE,
+  TABLE_ALREADY_INACTIVE_MESSAGE,
+  TABLE_INACTIVE_MESSAGE,
+  PLAN_PROBLEM_MESSAGES,
+  TABLE_NOT_FOUND_MESSAGE,
+  TablesService,
+} from './tables.service.js';
+
+const NOT_FOUND_RESPONSE = {
+  description:
+    'La mesa no existe o es de otro restaurante (mismo mensaje en los dos casos). Conviene recargar la lista de mesas.',
+  type: ErrorResponseDto,
+  example: {
+    statusCode: 404,
+    message: TABLE_NOT_FOUND_MESSAGE,
+    error: 'Not Found',
+  },
+};
+
+const IDENTIFIER_TAKEN_RESPONSE = {
+  description:
+    'Ya existe una mesa con ese identificador en el restaurante: "4", "04" y "Mesa 4" son la misma mesa, sin importar mayúsculas ni espacios.',
+  type: ErrorResponseDto,
+  example: {
+    statusCode: 409,
+    message: identifierTakenMessage('04'),
+    error: 'Conflict',
+  },
+};
+
+// :id of every /tables/:id route. Checked before the query: Postgres rejects a
+// malformed uuid with a 500. A list, like the other validation 400s.
+const TableIdParam = () =>
+  Param(
+    'id',
+    new ParseUUIDPipe({
+      exceptionFactory: () => new BadRequestException([TABLE_ID_INVALID]),
+    }),
+  );
+
+@ApiTags('tables')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
+@ApiForbiddenResponse({
+  description:
+    'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED), es de comensal (DINER_ACCOUNT) o todavía no registra su restaurante (RESTAURANT_REQUIRED).',
+  type: ErrorResponseDto,
+  examples: {
+    ...RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
+    restaurantRequired: {
+      summary: 'El usuario todavía no registra su restaurante',
+      value: {
+        statusCode: 403,
+        message: RESTAURANT_REQUIRED_MESSAGE,
+        error: 'Forbidden',
+        errorCode: RESTAURANT_REQUIRED_CODE,
+      },
+    },
+  },
+})
+@Roles(UserRole.RESTAURANT_ADMIN)
+@UseGuards(CurrentUserGuard)
+@Controller('tables')
+export class TablesController {
+  constructor(private readonly tablesService: TablesService) {}
+
+  @Post()
+  @ApiOperation({
+    summary: 'Crear una mesa en el restaurante del usuario',
+    description:
+      'Solo acepta identifier (identificador corto, por ejemplo "04"; se muestra "Mesa 04"), capacity y, si quieres, areaId (la zona, de GET /v1/table-areas; sin ella la mesa queda sin zona); cualquier otro campo (status, isActive, restaurantId…) se rechaza con 400. La mesa nace Disponible (available) y activa. El restaurante sale de la sesión.',
+  })
+  @ApiCreatedResponse({ description: 'Mesa creada.', type: TableResponseDto })
+  @ApiBadRequestResponse({
+    description:
+      'Datos inválidos: identificador vacío o de más de 10 caracteres, capacidad fuera de 1 a 20 o no entera, o campos no permitidos.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [CAPACITY_RANGE],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse({
+    description:
+      'areaId es una zona que no existe o es de otro restaurante (mismo mensaje en los dos casos).',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: AREA_NOT_FOUND_MESSAGE,
+      error: 'Not Found',
+    },
+  })
+  @ApiConflictResponse(IDENTIFIER_TAKEN_RESPONSE)
+  async create(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: CreateTableDto,
+  ): Promise<TableResponseDto> {
+    const table = await this.tablesService.create(user.restaurantId, dto);
+    return TableResponseDto.fromEntity(table);
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: 'Listar las mesas del restaurante del usuario',
+    description:
+      'Devuelve todas las mesas del restaurante, activas e inactivas (isActive), ordenadas por fecha de creación, de la más antigua a la más nueva. Sin mesas, devuelve [].',
+  })
+  @ApiOkResponse({
+    description: 'Mesas en orden de creación ascendente.',
+    type: TableResponseDto,
+    isArray: true,
+  })
+  async findAll(
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<TableResponseDto[]> {
+    const tables = await this.tablesService.findAll(user.restaurantId);
+    return tables.map((table) => TableResponseDto.fromEntity(table));
+  }
+
+  @Put('plan')
+  @ApiOperation({
+    summary: 'Guardar el plano de mesas del restaurante',
+    description:
+      'Reemplaza el plano completo: cada mesa ubicada con su celda (x, y) y, si se quiere, su forma. Las mesas del restaurante que no vengan en la lista quedan sin ubicar (planX, planY y planShape en null). Gana el último que guarda. El tamaño de cada mesa sale de su forma y su capacidad (tables/table-plan.ts): ninguna puede salirse de la grilla de 20 × 30 celdas ni quedar encima de otra de su misma zona: cada zona (areaId, y las mesas sin zona) tiene su propio plano, así que mesas de zonas distintas pueden compartir celdas. No cambia el estado, no se registra en la bitácora y no afecta la disponibilidad. Responde la lista completa, igual que GET /v1/tables.',
+  })
+  @ApiOkResponse({
+    description: 'Todas las mesas del restaurante, con su posición nueva.',
+    type: TableResponseDto,
+    isArray: true,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Celda fuera de rango, forma inválida, mesa repetida, una mesa que se sale de la grilla o dos mesas superpuestas, o campos no permitidos. message es una lista.',
+    type: ErrorResponseDto,
+    examples: {
+      overlap: {
+        summary: 'Dos mesas superpuestas',
+        value: {
+          statusCode: 400,
+          message: [PLAN_PROBLEM_MESSAGES.overlap],
+          error: 'Bad Request',
+        },
+      },
+      range: {
+        summary: 'Columna fuera de la grilla',
+        value: {
+          statusCode: 400,
+          message: [PLAN_X_RANGE],
+          error: 'Bad Request',
+        },
+      },
+    },
+  })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  async savePlan(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: SaveTablePlanDto,
+  ): Promise<TableResponseDto[]> {
+    const tables = await this.tablesService.savePlan(
+      user.restaurantId,
+      dto.tables,
+    );
+    return tables.map((table) => TableResponseDto.fromEntity(table));
+  }
+
+  @Patch(':id/status')
+  @ApiOperation({
+    summary: 'Cambiar el estado de una mesa',
+    description:
+      'Cambia el estado de una mesa activa del restaurante del usuario a Disponible, Reservada u Ocupada, y lo registra en la bitácora en la misma transacción: si la bitácora falla, el estado no cambia. Poner el estado que la mesa ya tiene es válido: responde 200 con la mesa sin cambios y no se registra en la bitácora (sirve para un "Deshacer" sin errores).',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Id de la mesa.' })
+  @ApiOkResponse({
+    description:
+      'Mesa con su estado nuevo. También responde 200 si el estado pedido es el que ya tenía.',
+    type: TableResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'El estado no es available, reserved ni occupied, falta, o el id no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [STATUS_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  @ApiConflictResponse({
+    description:
+      'La mesa está inactiva (isActive: false): una mesa desactivada no cambia de estado (sin errorCode). O la mesa tiene una reserva de DiNNo activa (errorCode TABLE_HAS_ACTIVE_RESERVATION): se libera sola cuando el comensal llegue, cancele o se venza la reserva; también responde así si el estado pedido es el que ya tiene. Una mesa Reservada u Ocupada a mano, sin reserva de DiNNo, sí cambia.',
+    type: ErrorResponseDto,
+    examples: {
+      inactive: {
+        summary: 'Mesa inactiva',
+        value: {
+          statusCode: 409,
+          message: TABLE_INACTIVE_MESSAGE,
+          error: 'Conflict',
+        },
+      },
+      activeReservation: {
+        summary: 'Mesa con reserva de DiNNo activa',
+        value: {
+          statusCode: 409,
+          message: TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_HAS_ACTIVE_RESERVATION_CODE,
+        },
+      },
+    },
+  })
+  async updateStatus(
+    @CurrentUser() user: CurrentUserData,
+    @TableIdParam() id: string,
+    @Body() dto: UpdateTableStatusDto,
+  ): Promise<TableResponseDto> {
+    const table = await this.tablesService.updateStatus(user, id, dto.status);
+    return TableResponseDto.fromEntity(table);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Editar el identificador, la capacidad o la zona de una mesa',
+    description:
+      'Edita una mesa del restaurante del usuario, activa o inactiva, con las mismas reglas que al crearla. Solo se envían los campos que cambian, pero al menos uno. areaId en null saca la mesa de su zona; cambiar de zona también la saca del plano (planX, planY y planShape en null), porque cada zona tiene su propio plano. No cambia el estado ni se registra en la bitácora.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Id de la mesa.' })
+  @ApiOkResponse({ description: 'Mesa editada.', type: TableResponseDto })
+  @ApiBadRequestResponse({
+    description:
+      'Datos inválidos (mismas reglas que al crear), cuerpo vacío, campos no permitidos o id que no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [NO_TABLE_CHANGES_MESSAGE],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse({
+    ...NOT_FOUND_RESPONSE,
+    description: `${NOT_FOUND_RESPONSE.description} También si areaId es una zona que no existe o de otro restaurante ("${AREA_NOT_FOUND_MESSAGE}").`,
+  })
+  @ApiConflictResponse({
+    description:
+      'Ya existe una mesa con ese identificador en el restaurante (sin errorCode), o la mesa tiene una reserva de DiNNo activa y la nueva capacidad queda por debajo de las personas de la reserva (errorCode TABLE_HAS_ACTIVE_RESERVATION). Cambiar solo el identificador siempre se permite.',
+    type: ErrorResponseDto,
+    examples: {
+      identifierTaken: {
+        summary: 'Identificador repetido',
+        value: IDENTIFIER_TAKEN_RESPONSE.example,
+      },
+      activeReservation: {
+        summary: 'Capacidad por debajo de la reserva en curso',
+        value: {
+          statusCode: 409,
+          message: TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_HAS_ACTIVE_RESERVATION_CODE,
+        },
+      },
+    },
+  })
+  async update(
+    @CurrentUser() user: CurrentUserData,
+    @TableIdParam() id: string,
+    @Body() dto: UpdateTableDto,
+  ): Promise<TableResponseDto> {
+    const table = await this.tablesService.update(user.restaurantId, id, dto);
+    return TableResponseDto.fromEntity(table);
+  }
+
+  @Post(':id/deactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Desactivar una mesa',
+    description:
+      'La mesa deja de ser operativa (isActive: false). Solo se desactiva una mesa Disponible y sin reserva de DiNNo en curso; si está Reservada u Ocupada a mano, primero se marca como Disponible. Se registra en la bitácora (available → inactive) en la misma transacción: si la bitácora falla, la mesa no cambia. Sin cuerpo.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Id de la mesa.' })
+  @ApiOkResponse({
+    description: 'Mesa desactivada (isActive: false).',
+    type: TableResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [TABLE_ID_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  @ApiConflictResponse({
+    description:
+      'La mesa ya estaba inactiva (sin errorCode), tiene una reserva de DiNNo activa (TABLE_HAS_ACTIVE_RESERVATION, tiene prioridad) o no está Disponible (TABLE_NOT_AVAILABLE_TO_DEACTIVATE: primero se marca como Disponible). Se evalúan en ese orden.',
+    type: ErrorResponseDto,
+    examples: {
+      alreadyInactive: {
+        summary: 'Ya estaba inactiva',
+        value: {
+          statusCode: 409,
+          message: TABLE_ALREADY_INACTIVE_MESSAGE,
+          error: 'Conflict',
+        },
+      },
+      activeReservation: {
+        summary: 'Mesa con reserva de DiNNo activa',
+        value: {
+          statusCode: 409,
+          message: TABLE_HAS_ACTIVE_RESERVATION_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_HAS_ACTIVE_RESERVATION_CODE,
+        },
+      },
+      notAvailable: {
+        summary: 'Mesa Reservada u Ocupada a mano',
+        value: {
+          statusCode: 409,
+          message: TABLE_NOT_AVAILABLE_TO_DEACTIVATE_MESSAGE,
+          error: 'Conflict',
+          errorCode: TABLE_NOT_AVAILABLE_TO_DEACTIVATE_CODE,
+        },
+      },
+    },
+  })
+  async deactivate(
+    @CurrentUser() user: CurrentUserData,
+    @TableIdParam() id: string,
+  ): Promise<TableResponseDto> {
+    const table = await this.tablesService.deactivate(user, id);
+    return TableResponseDto.fromEntity(table);
+  }
+
+  @Post(':id/reactivate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reactivar una mesa',
+    description:
+      'La mesa vuelve a ser operativa como Disponible (isActive: true, status: available). Se registra en la bitácora (inactive → available) en la misma transacción. Sin cuerpo.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Id de la mesa.' })
+  @ApiOkResponse({
+    description: 'Mesa reactivada (isActive: true, status: available).',
+    type: TableResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'El id no es un UUID. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [TABLE_ID_INVALID],
+      error: 'Bad Request',
+    },
+  })
+  @ApiNotFoundResponse(NOT_FOUND_RESPONSE)
+  @ApiConflictResponse({
+    description: 'La mesa ya estaba activa.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 409,
+      message: TABLE_ALREADY_ACTIVE_MESSAGE,
+      error: 'Conflict',
+    },
+  })
+  async reactivate(
+    @CurrentUser() user: CurrentUserData,
+    @TableIdParam() id: string,
+  ): Promise<TableResponseDto> {
+    const table = await this.tablesService.reactivate(user, id);
+    return TableResponseDto.fromEntity(table);
+  }
+}

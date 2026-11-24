@@ -1,0 +1,479 @@
+import {
+  EntityManager,
+  In,
+  IsNull,
+  QueryFailedError,
+  Repository,
+} from 'typeorm';
+import { UserRole } from '../roles/user-role.js';
+import { User } from './user.entity.js';
+import { UsersService } from './users.service.js';
+
+describe('UsersService', () => {
+  const usersRepository = {
+    findOneBy: vi.fn(),
+    find: vi.fn(),
+    create: vi.fn(),
+    save: vi.fn(),
+  };
+  let usersService: UsersService;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    usersService = new UsersService(
+      usersRepository as unknown as Repository<User>,
+    );
+  });
+
+  describe('findByFirebaseUid', () => {
+    it('returns the user matching the Firebase UID', async () => {
+      const user = { firebaseUid: 'firebase-uid' } as User;
+      usersRepository.findOneBy.mockResolvedValue(user);
+
+      await expect(
+        usersService.findByFirebaseUid('firebase-uid'),
+      ).resolves.toBe(user);
+      expect(usersRepository.findOneBy).toHaveBeenCalledWith({
+        firebaseUid: 'firebase-uid',
+      });
+    });
+
+    it('returns null when no user matches the Firebase UID', async () => {
+      usersRepository.findOneBy.mockResolvedValue(null);
+
+      await expect(
+        usersService.findByFirebaseUid('missing-uid'),
+      ).resolves.toBeNull();
+    });
+
+    it('propagates repository errors', async () => {
+      const error = new Error('Database failure');
+      usersRepository.findOneBy.mockRejectedValue(error);
+
+      await expect(usersService.findByFirebaseUid('firebase-uid')).rejects.toBe(
+        error,
+      );
+    });
+  });
+
+  describe('findByEmail', () => {
+    it('normalizes the email before searching', async () => {
+      usersRepository.findOneBy.mockResolvedValue(null);
+
+      await expect(
+        usersService.findByEmail('  Owner@Example.COM  '),
+      ).resolves.toBeNull();
+      expect(usersRepository.findOneBy).toHaveBeenCalledWith({
+        email: 'owner@example.com',
+      });
+    });
+  });
+
+  describe('findById', () => {
+    it('returns the user matching the id', async () => {
+      const user = { id: 'user-id' } as User;
+      usersRepository.findOneBy.mockResolvedValue(user);
+
+      await expect(usersService.findById('user-id')).resolves.toBe(user);
+      expect(usersRepository.findOneBy).toHaveBeenCalledWith({ id: 'user-id' });
+    });
+
+    it('returns null when no user matches the id', async () => {
+      usersRepository.findOneBy.mockResolvedValue(null);
+
+      await expect(usersService.findById('missing-id')).resolves.toBeNull();
+    });
+
+    it('propagates repository errors', async () => {
+      const error = new Error('Database failure');
+      usersRepository.findOneBy.mockRejectedValue(error);
+
+      await expect(usersService.findById('user-id')).rejects.toBe(error);
+    });
+  });
+
+  describe('findRestaurantAdminEmailsByIds', () => {
+    it('looks up every distinct id in one query, only among restaurant admins, and maps id to email', async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'user-a', email: 'a@example.com' },
+        { id: 'user-b', email: 'b@example.com' },
+      ]);
+
+      const emails = await usersService.findRestaurantAdminEmailsByIds([
+        'user-a',
+        'user-b',
+        'user-a',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledTimes(1);
+      expect(usersRepository.find).toHaveBeenCalledWith({
+        where: {
+          id: In(['user-a', 'user-b']),
+          role: UserRole.RESTAURANT_ADMIN,
+        },
+        select: { id: true, email: true },
+      });
+      expect(emails).toEqual(
+        new Map([
+          ['user-a', 'a@example.com'],
+          ['user-b', 'b@example.com'],
+        ]),
+      );
+    });
+
+    it('does not query for an empty list', async () => {
+      await expect(
+        usersService.findRestaurantAdminEmailsByIds([]),
+      ).resolves.toEqual(new Map());
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findRestaurantOwnerEmails', () => {
+    it('reads the owners of every restaurant in one query, filtering the role in it', async () => {
+      usersRepository.find.mockResolvedValue([
+        { restaurantId: 'r1', email: 'antigua@example.com' },
+        { restaurantId: 'r1', email: 'nueva@example.com' },
+        { restaurantId: 'r2', email: 'otra@example.com' },
+      ]);
+
+      const emails = await usersService.findRestaurantOwnerEmails([
+        'r1',
+        'r2',
+        'r1',
+        'r3',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledExactlyOnceWith({
+        where: {
+          restaurantId: In(['r1', 'r2', 'r3']),
+          role: UserRole.RESTAURANT_ADMIN,
+        },
+        select: { restaurantId: true, email: true },
+        order: { createdAt: 'ASC', id: 'ASC' },
+      });
+      // Si hubiera varios dueños, el de la cuenta más antigua.
+      expect(emails).toEqual(
+        new Map([
+          ['r1', 'antigua@example.com'],
+          ['r2', 'otra@example.com'],
+        ]),
+      );
+    });
+
+    it('does not query with no restaurants', async () => {
+      expect(await usersService.findRestaurantOwnerEmails([])).toEqual(
+        new Map(),
+      );
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findPlatformAdminEmailsByIds', () => {
+    it('reads only platform_admin accounts, in one query', async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'a1', email: 'admin@example.com' },
+      ]);
+
+      const emails = await usersService.findPlatformAdminEmailsByIds([
+        'a1',
+        'a1',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledExactlyOnceWith({
+        where: { id: In(['a1']), role: UserRole.PLATFORM_ADMIN },
+        select: { id: true, email: true },
+      });
+      expect(emails).toEqual(new Map([['a1', 'admin@example.com']]));
+    });
+
+    it('does not query with no ids', async () => {
+      expect(await usersService.findPlatformAdminEmailsByIds([])).toEqual(
+        new Map(),
+      );
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findPublicDisplayNamesByIds', () => {
+    const namesFor = async (displayName: string | null, email: string) => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'user-a', displayName, email },
+      ]);
+      const names = await usersService.findPublicDisplayNamesByIds(['user-a']);
+      return names.get('user-a');
+    };
+
+    it('looks up every distinct id in one query and keeps a null name', async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: 'user-a', displayName: 'Ana', email: 'a@example.com' },
+        { id: 'user-b', displayName: null, email: 'b@example.com' },
+      ]);
+
+      const names = await usersService.findPublicDisplayNamesByIds([
+        'user-a',
+        'user-b',
+        'user-a',
+      ]);
+
+      expect(usersRepository.find).toHaveBeenCalledTimes(1);
+      expect(usersRepository.find).toHaveBeenCalledWith({
+        where: { id: In(['user-a', 'user-b']) },
+        select: { id: true, displayName: true, email: true },
+      });
+      expect(names).toEqual(
+        new Map([
+          ['user-a', 'Ana'],
+          ['user-b', null],
+        ]),
+      );
+    });
+
+    it('does not query for an empty list', async () => {
+      await expect(
+        usersService.findPublicDisplayNamesByIds([]),
+      ).resolves.toEqual(new Map());
+      expect(usersRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('never falls back to the email: a null name stays null', async () => {
+      await expect(namesFor(null, 'ana.perez@example.com')).resolves.toBeNull();
+    });
+
+    it.each([
+      ['the same text', 'ana.perez', 'ana.perez@example.com'],
+      ['other case in the name', 'Ana.Perez', 'ana.perez@example.com'],
+      ['other case in the email', 'ana.perez', 'Ana.Perez@Example.com'],
+      ['spaces around the name', ' ana.perez ', 'ana.perez@example.com'],
+      ['a plus alias', 'equipo+comensal', 'equipo+comensal@gmail.com'],
+      ['the column cut', 'a'.repeat(60), `${'a'.repeat(64)}@example.com`],
+    ])('hides a name equal to the email before the @: %s', async (_c, n, e) => {
+      await expect(namesFor(n, e)).resolves.toBeNull();
+    });
+
+    it.each([
+      ['Ana', 'ana.perez@example.com'],
+      ['Ana María', 'ana@example.com'],
+      ['ana perez', 'ana.perez@example.com'],
+      ['example.com', 'ana@example.com'],
+    ])('keeps the real name %j with %s', async (name, email) => {
+      await expect(namesFor(name, email)).resolves.toBe(name);
+    });
+  });
+
+  describe('getSessionUser', () => {
+    it('returns the row of the session user', async () => {
+      const user = { id: 'user-id' } as User;
+      usersRepository.findOneBy.mockResolvedValue(user);
+
+      await expect(usersService.getSessionUser('user-id')).resolves.toBe(user);
+    });
+
+    it('throws a plain Error (generic 500) when the row is missing', async () => {
+      usersRepository.findOneBy.mockResolvedValue(null);
+
+      await expect(usersService.getSessionUser('missing-id')).rejects.toThrow(
+        'User missing-id of the session not found',
+      );
+    });
+  });
+
+  describe('assignRestaurantIfNone', () => {
+    const userId = 'user-id';
+    const restaurantId = 'restaurant-id';
+
+    function createManager(affected: number) {
+      return {
+        update: vi.fn().mockResolvedValue({ affected }),
+      } as unknown as EntityManager & { update: ReturnType<typeof vi.fn> };
+    }
+
+    it('assigns a restaurant when the user has none and returns true', async () => {
+      const manager = createManager(1);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(true);
+
+      expect(manager.update).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(
+        User,
+        { id: userId, restaurantId: IsNull() },
+        { restaurantId },
+      );
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('returns false and does not overwrite an existing restaurant', async () => {
+      const manager = createManager(0);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(false);
+
+      expect(manager.update).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(
+        User,
+        { id: userId, restaurantId: IsNull() },
+        { restaurantId },
+      );
+    });
+
+    it('returns false when the user does not exist', async () => {
+      const manager = createManager(0);
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).resolves.toBe(false);
+      expect(manager.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('propagates manager errors without swallowing them', async () => {
+      const driverError = Object.assign(new Error('foreign key violation'), {
+        code: '23503',
+        constraint: 'FK_users_restaurant_id',
+      });
+      const error = new QueryFailedError('UPDATE users', [], driverError);
+      const manager = {
+        update: vi.fn().mockRejectedValue(error),
+      } as unknown as EntityManager & { update: ReturnType<typeof vi.fn> };
+
+      await expect(
+        usersService.assignRestaurantIfNone(userId, restaurantId, manager),
+      ).rejects.toBe(error);
+    });
+  });
+
+  describe('linkFirebaseUid', () => {
+    const firebaseUid = 'firebase-uid';
+    const originalUser = {
+      id: 'user-id',
+      firebaseUid: null,
+      email: 'owner@example.com',
+      role: UserRole.RESTAURANT_ADMIN,
+      restaurantId: null,
+    } as User;
+
+    function uniqueViolation(constraint: string): QueryFailedError {
+      const driverError = Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint,
+      });
+      return new QueryFailedError('UPDATE users', [], driverError);
+    }
+
+    it('returns the user found by Firebase UID after a matching unique conflict', async () => {
+      const linkedUser = { ...originalUser, firebaseUid } as User;
+      usersRepository.save.mockRejectedValueOnce(
+        uniqueViolation('UQ_users_firebase_uid'),
+      );
+      usersRepository.findOneBy.mockResolvedValueOnce(linkedUser);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).resolves.toBe(linkedUser);
+      expect(usersRepository.findOneBy).toHaveBeenCalledWith({ firebaseUid });
+    });
+
+    it('rethrows the original unique error when no linked user is found', async () => {
+      const error = uniqueViolation('UQ_users_firebase_uid');
+      usersRepository.save.mockRejectedValueOnce(error);
+      usersRepository.findOneBy.mockResolvedValueOnce(null);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).rejects.toBe(error);
+    });
+
+    it('rethrows a unique error from a different constraint without searching', async () => {
+      const error = uniqueViolation('UQ_users_email');
+      usersRepository.save.mockRejectedValueOnce(error);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).rejects.toBe(error);
+      expect(usersRepository.findOneBy).not.toHaveBeenCalled();
+    });
+
+    it('propagates errors that are not unique violations', async () => {
+      const error = new QueryFailedError(
+        'UPDATE users',
+        [],
+        Object.assign(new Error('foreign key violation'), {
+          code: '23503',
+          constraint: 'FK_users_restaurant_id',
+        }),
+      );
+      usersRepository.save.mockRejectedValueOnce(error);
+
+      await expect(
+        usersService.linkFirebaseUid(originalUser, firebaseUid),
+      ).rejects.toBe(error);
+      expect(usersRepository.findOneBy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('create', () => {
+    it('creates and persists a user', async () => {
+      const input = {
+        firebaseUid: 'firebase-uid',
+        email: '  Owner@Example.COM  ',
+        role: UserRole.DINER,
+        restaurantId: null,
+        displayName: 'Ana',
+      };
+      const newUser = { ...input, email: 'owner@example.com' } as User;
+      const savedUser = { ...newUser, id: 'user-id' } as User;
+      usersRepository.create.mockReturnValue(newUser);
+      usersRepository.save.mockResolvedValue(savedUser);
+
+      await expect(usersService.create(input)).resolves.toBe(savedUser);
+      expect(usersRepository.create).toHaveBeenCalledWith({
+        ...input,
+        email: 'owner@example.com',
+      });
+      expect(usersRepository.save).toHaveBeenCalledWith(newUser);
+    });
+
+    it('propagates persistence errors', async () => {
+      const input = {
+        firebaseUid: 'firebase-uid',
+        email: 'owner@example.com',
+        role: UserRole.DINER,
+        restaurantId: null,
+        displayName: 'Ana',
+      };
+      const error = new Error('Unique constraint violation');
+      usersRepository.create.mockReturnValue(input);
+      usersRepository.save.mockRejectedValue(error);
+
+      await expect(usersService.create(input)).rejects.toBe(error);
+    });
+
+    it('does not persist unexpected input fields', async () => {
+      const input = {
+        firebaseUid: 'firebase-uid',
+        email: 'owner@example.com',
+        role: UserRole.DINER,
+        restaurantId: null,
+        displayName: 'Ana',
+        unexpected: 'must not be persisted',
+      };
+      const persistedFields = {
+        firebaseUid: input.firebaseUid,
+        email: input.email,
+        role: input.role,
+        restaurantId: input.restaurantId,
+        displayName: input.displayName,
+      };
+      const user = persistedFields as User;
+      usersRepository.create.mockReturnValue(user);
+      usersRepository.save.mockResolvedValue(user);
+
+      await usersService.create(input);
+
+      expect(usersRepository.create).toHaveBeenCalledWith(persistedFields);
+      expect(usersRepository.save).toHaveBeenCalledWith(persistedFields);
+    });
+  });
+});

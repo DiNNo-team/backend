@@ -1,0 +1,7 @@
+# Falsos positivos revisados el 16 nov 2026 (docs/seguridad/auditoria-sprint4.md):
+# tokens JWT falsos de scripts/qa (sin firma valida) y una palabra del README.
+cd842f89b6ab434c5101cf86790f30802f199a0c:scripts/qa/roles.mjs:generic-api-key:30
+cd842f89b6ab434c5101cf86790f30802f199a0c:scripts/qa/roles.mjs:jwt:31
+cd842f89b6ab434c5101cf86790f30802f199a0c:scripts/qa/escuchar-eventos.mjs:jwt:46
+cd842f89b6ab434c5101cf86790f30802f199a0c:scripts/qa/escuchar-eventos.mjs:generic-api-key:45
+831ced0ea6a286841ea01595a9eb3d643333e0c9:README.md:generic-api-key:5

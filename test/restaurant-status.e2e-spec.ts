@@ -1,0 +1,414 @@
+import { INestApplication } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { Test } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import request from 'supertest';
+import type { App } from 'supertest/types.js';
+import { Not, type FindOperator } from 'typeorm';
+import { configureApp } from './../src/app.setup.js';
+import { TableReservationsAccess } from './../src/modules/restaurant-operations/index.js';
+import { User } from './../src/modules/identity-access/users/user.entity.js';
+import { RestaurantOperationsModule } from './../src/modules/restaurant-operations/restaurant-operations.module.js';
+import { Restaurant } from './../src/modules/restaurant-operations/restaurants/restaurant.entity.js';
+import { RestaurantSchedule } from './../src/modules/restaurant-operations/restaurants/restaurant-schedule.entity.js';
+import { TableLog } from './../src/modules/restaurant-operations/table-logs/table-log.entity.js';
+import { Table } from './../src/modules/restaurant-operations/tables/table.entity.js';
+import { TableArea } from './../src/modules/restaurant-operations/table-areas/table-area.entity.js';
+import { UserRole } from './../src/modules/identity-access/index.js';
+import { RestaurantApprovalReader } from './../src/modules/identity-access/approval/restaurant-approval.reader.js';
+import { approvalReader } from './support/test-accounts.js';
+
+const OWNER_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+const OTHER_OWNER_ID = '7c6b5a49-3827-4615-a4b3-c2d1e0f9a8b7';
+const NEWCOMER_ID = '2f3e4d5c-6b7a-4980-a1b2-c3d4e5f60718';
+const DINER_USER_ID = '00000000-0000-4000-8000-000000000001';
+const RESTAURANT_ID = '9c8b7a6f-5e4d-4c3b-a2a1-0f9e8d7c6b5a';
+const OTHER_RESTAURANT_ID = '1d2c3b4a-5f6e-4d7c-8b9a-0a1b2c3d4e5f';
+
+const users = [
+  {
+    id: OWNER_ID,
+    role: UserRole.RESTAURANT_ADMIN,
+    restaurantId: RESTAURANT_ID,
+  },
+  {
+    id: OTHER_OWNER_ID,
+    role: UserRole.RESTAURANT_ADMIN,
+    restaurantId: OTHER_RESTAURANT_ID,
+  },
+  { id: NEWCOMER_ID, role: UserRole.RESTAURANT_ADMIN, restaurantId: null },
+  {
+    id: DINER_USER_ID,
+    role: UserRole.DINER,
+    restaurantId: RESTAURANT_ID,
+  },
+];
+
+const IS_OPEN_MESSAGE = 'Elige si el restaurante está Abierto o Cerrado.';
+
+// Prueba el contrato HTTP de GET y PATCH /v1/restaurants/me/status sin PostgreSQL.
+// El puerto de las reservas: por defecto ninguna (activeReservationsCount 0);
+// cada prueba que necesita reservas cambia lo que responde.
+const reservations = {
+  countActive: vi.fn(),
+  expireDueForTable: vi.fn(),
+  findActiveForTable: vi.fn(),
+};
+
+beforeEach(() => {
+  for (const stub of Object.values(reservations)) {
+    stub.mockReset();
+  }
+});
+
+describe('Restaurant status (e2e)', () => {
+  let app: INestApplication<App>;
+  let stored: Map<string, Restaurant>;
+  let restaurants: {
+    findOneBy: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
+
+  async function createApp(devUserEnabled: boolean) {
+    const moduleFixture = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true,
+          load: [
+            () => ({
+              DEV_USER_ENABLED: String(devUserEnabled),
+              DEV_USER_ID: OWNER_ID,
+              FIREBASE_PROJECT_ID: 'firebase-project-example',
+            }),
+          ],
+        }),
+        EventEmitterModule.forRoot(),
+        RestaurantOperationsModule,
+      ],
+    })
+      .overrideProvider(RestaurantApprovalReader)
+      .useValue(approvalReader('approved'))
+      .overrideProvider(getRepositoryToken(User))
+      .useValue({
+        findOneBy: ({ id }: { id: string }) =>
+          Promise.resolve(users.find((user) => user.id === id) ?? null),
+      })
+      .overrideProvider(getRepositoryToken(Restaurant))
+      .useValue(restaurants)
+      .overrideProvider(getRepositoryToken(RestaurantSchedule))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(Table))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableLog))
+      .useValue({})
+      .overrideProvider(getRepositoryToken(TableArea))
+      .useValue({})
+      .overrideProvider(TableReservationsAccess)
+      .useValue(reservations)
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    configureApp(app);
+    await app.init();
+  }
+
+  beforeEach(async () => {
+    const restaurant = (id: string, name: string): Restaurant => ({
+      id,
+      name,
+      category: null,
+      address: null,
+      isOpen: true,
+      latitude: null,
+      longitude: null,
+      approvalStatus: 'approved',
+      rejectionReason: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      suspensionReason: null,
+      suspendedAt: null,
+      suspendedBy: null,
+      contactPhone: null,
+      submittedAt: new Date('2026-10-04T12:00:00Z'),
+      createdAt: new Date('2026-10-04T12:00:00Z'),
+      updatedAt: new Date('2026-10-04T12:00:00Z'),
+    });
+    stored = new Map([
+      [RESTAURANT_ID, restaurant(RESTAURANT_ID, 'La Esquina de Ana')],
+      [OTHER_RESTAURANT_ID, restaurant(OTHER_RESTAURANT_ID, 'Otro')],
+    ]);
+    // In-memory repository: a PATCH followed by a GET sees the saved value.
+    restaurants = {
+      findOneBy: vi.fn(({ id }: { id: string }) => {
+        const found = stored.get(id);
+        return Promise.resolve(found ? { ...found } : null);
+      }),
+      // Like the conditional Repository.update of the service: changes only
+      // the given columns, and only if isOpen is Not(the new value).
+      update: vi.fn(
+        (
+          { id, isOpen }: { id: string; isOpen: FindOperator<boolean> },
+          changes: Partial<Restaurant>,
+        ) => {
+          const found = stored.get(id);
+          const matches = found !== undefined && found.isOpen !== isOpen.value;
+          if (matches) {
+            stored.set(id, { ...found, ...changes });
+          }
+          return Promise.resolve({ affected: matches ? 1 : 0 });
+        },
+      ),
+    };
+
+    await createApp(true);
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('returns 200 with the state of the session restaurant, open by default', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/restaurants/me/status')
+      .expect(200);
+
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
+    expect(restaurants.findOneBy).toHaveBeenCalledWith({ id: RESTAURANT_ID });
+  });
+
+  it('closes the restaurant and a later GET returns it closed', async () => {
+    const patch = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: false })
+      .expect(200);
+    expect(patch.body).toEqual({
+      isOpen: false,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
+
+    const get = await request(app.getHttpServer())
+      .get('/v1/restaurants/me/status')
+      .expect(200);
+    expect(get.body).toEqual({
+      isOpen: false,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
+  });
+
+  it('closing the restaurant does not touch its reservations (§12.2)', async () => {
+    reservations.countActive.mockReset().mockResolvedValue(3);
+
+    await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: false })
+      .expect(200);
+
+    // Cerrar no vence, cancela ni consulta reservas: las existentes siguen
+    // hasta el check-in, la cancelación o el vencimiento.
+    expect(reservations.expireDueForTable).not.toHaveBeenCalled();
+    expect(reservations.findActiveForTable).not.toHaveBeenCalled();
+    expect(reservations.countActive).not.toHaveBeenCalled();
+  });
+
+  it('opens it again', async () => {
+    await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: false })
+      .expect(200);
+
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: true })
+      .expect(200);
+
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
+  });
+
+  it('answers 200 when asked for the state it already has', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: true })
+      .expect(200);
+
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
+    expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
+  });
+
+  it('does not change the restaurant of another user', async () => {
+    await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: false })
+      .expect(200);
+
+    const res = await request(app.getHttpServer())
+      .get('/v1/restaurants/me/status')
+      .set('x-dev-user-id', OTHER_OWNER_ID)
+      .expect(200);
+
+    expect(res.body).toEqual({
+      isOpen: true,
+      approvalStatus: 'approved',
+      suspensionReason: null,
+    });
+    expect(stored.get(OTHER_RESTAURANT_ID)?.isOpen).toBe(true);
+    expect(restaurants.update).toHaveBeenCalledTimes(1);
+    expect(restaurants.update).toHaveBeenCalledWith(
+      { id: RESTAURANT_ID, isOpen: Not(false) },
+      { isOpen: false },
+    );
+  });
+
+  it.each([
+    ['missing', {}],
+    ['text instead of a boolean', { isOpen: 'true' }],
+    ['a number', { isOpen: 0 }],
+    ['null', { isOpen: null }],
+  ])('returns 400 when isOpen is %s', async (_case, body) => {
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send(body)
+      .expect(400);
+
+    expect(res.body).toEqual({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: [IS_OPEN_MESSAGE],
+    });
+    expect(restaurants.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects extra fields, such as a restaurantId, and changes nothing', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/v1/restaurants/me/status')
+      .send({ isOpen: false, restaurantId: OTHER_RESTAURANT_ID })
+      .expect(400);
+
+    expect(res.body.message).toEqual([
+      'El campo "restaurantId" no se permite. Quítalo de la solicitud.',
+    ]);
+    expect(restaurants.findOneBy).not.toHaveBeenCalled();
+    expect(restaurants.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'GET',
+      () => request(app.getHttpServer()).get('/v1/restaurants/me/status'),
+    ],
+    [
+      'PATCH',
+      () =>
+        request(app.getHttpServer())
+          .patch('/v1/restaurants/me/status')
+          .send({ isOpen: false }),
+    ],
+  ])(
+    '%s returns 403 with errorCode RESTAURANT_REQUIRED for a user without a restaurant',
+    async (_method, send) => {
+      const res = await send().set('x-dev-user-id', NEWCOMER_ID).expect(403);
+
+      expect(res.body).toEqual({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Primero registra tu restaurante.',
+        errorCode: 'RESTAURANT_REQUIRED',
+      });
+      expect(restaurants.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      'GET',
+      () => request(app.getHttpServer()).get('/v1/restaurants/me/status'),
+    ],
+    [
+      'PATCH',
+      () =>
+        request(app.getHttpServer())
+          .patch('/v1/restaurants/me/status')
+          .send({ isOpen: false }),
+    ],
+  ])('%s returns 403 DINER_ACCOUNT for a diner', async (_method, send) => {
+    const res = await send().set('x-dev-user-id', DINER_USER_ID).expect(403);
+
+    expect(res.body).toEqual({
+      statusCode: 403,
+      error: 'Forbidden',
+      message:
+        'Esta es una cuenta de comensal. Para buscar mesa, usa la app DiNNo.',
+      errorCode: 'DINER_ACCOUNT',
+    });
+    expect(restaurants.findOneBy).not.toHaveBeenCalled();
+    expect(restaurants.update).not.toHaveBeenCalled();
+    expect(stored.get(RESTAURANT_ID)?.isOpen).toBe(true);
+  });
+
+  it.each([
+    [
+      'GET',
+      () => request(app.getHttpServer()).get('/v1/restaurants/me/status'),
+    ],
+    [
+      'PATCH',
+      () =>
+        request(app.getHttpServer())
+          .patch('/v1/restaurants/me/status')
+          .send({ isOpen: false }),
+    ],
+  ])(
+    '%s returns 401 without a session (development user turned off)',
+    async (_method, send) => {
+      await app.close();
+      await createApp(false);
+
+      await send().expect(401);
+      expect(restaurants.findOneBy).not.toHaveBeenCalled();
+      expect(restaurants.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('documents both routes in Swagger', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/docs-json')
+      .expect(200);
+    const route = res.body.paths['/v1/restaurants/me/status'];
+
+    expect(Object.keys(route).sort()).toEqual(['get', 'patch']);
+    expect(Object.keys(route.get.responses).sort()).toEqual([
+      '200',
+      '401',
+      '403',
+    ]);
+    expect(Object.keys(route.patch.responses).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+    ]);
+    expect(
+      Object.keys(
+        res.body.components.schemas.UpdateRestaurantStatusDto.properties,
+      ),
+    ).toEqual(['isOpen']);
+    expect(
+      res.body.components.schemas.UpdateRestaurantStatusDto.required,
+    ).toEqual(['isOpen']);
+  });
+});

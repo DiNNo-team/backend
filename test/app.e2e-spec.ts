@@ -1,26 +1,82 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module.js';
+import type { App } from 'supertest/types.js';
+import { AppController } from './../src/app.controller.js';
+import { AppService } from './../src/app.service.js';
+import { configureApp } from './../src/app.setup.js';
 
-describe('AppController (e2e)', () => {
+// Prueba la capa HTTP (prefijo, CORS, Swagger) sin PostgreSQL ni Redis.
+describe('HTTP (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [
+        ConfigModule.forRoot({
+          ignoreEnvFile: true,
+          load: [() => ({ CORS_ORIGINS: 'http://localhost:5173' })],
+        }),
+      ],
+      controllers: [AppController],
+      providers: [AppService],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    configureApp(app);
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('/v1/health (GET) answers commit null where RENDER_GIT_COMMIT is not set', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/v1/health')
       .expect(200)
-      .expect('Hello World!');
+      .expect({ status: 'ok', commit: null });
+  });
+
+  it('/v1/health (GET) answers the deployed commit on Render', async () => {
+    const commit = '2ad0fcd4b1e8c9a7f3d2e1b0c9a8f7e6d5c4b3a2';
+    const moduleFixture = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          ignoreEnvFile: true,
+          load: [() => ({ RENDER_GIT_COMMIT: commit })],
+        }),
+      ],
+      controllers: [AppController],
+      providers: [AppService],
+    }).compile();
+    const renderApp = moduleFixture.createNestApplication();
+    configureApp(renderApp);
+    await renderApp.init();
+
+    await request(renderApp.getHttpServer())
+      .get('/v1/health')
+      .expect(200)
+      .expect({ status: 'ok', commit });
+    await renderApp.close();
+  });
+
+  it('allows the configured CORS origin', () => {
+    return request(app.getHttpServer())
+      .get('/v1/health')
+      .set('Origin', 'http://localhost:5173')
+      .expect('Access-Control-Allow-Origin', 'http://localhost:5173');
+  });
+
+  it('rejects an unknown CORS origin', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/health')
+      .set('Origin', 'https://evil.example.com');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('/docs-json exposes the OpenAPI document', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/docs-json')
+      .expect(200);
+    expect(res.body.paths).toHaveProperty('/v1/health');
   });
 
   afterEach(async () => {

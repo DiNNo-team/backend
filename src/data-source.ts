@@ -1,0 +1,24 @@
+import { DataSource } from 'typeorm';
+import { databaseSsl } from './config/database-ssl.js';
+
+// Used by the TypeORM CLI and the seed, outside Nest DI: the one place allowed to read process.env.
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  throw new Error(
+    'DATABASE_URL is not defined. Run it through npm (migration:* or seed), which loads .env.',
+  );
+}
+
+export default new DataSource({
+  type: 'postgres',
+  url: databaseUrl,
+  synchronize: false,
+  uuidExtension: 'pgcrypto',
+  installExtensions: false,
+  ssl: databaseSsl(databaseUrl),
+  // Same as app.module.ts: 10 s leaves room for Neon to wake up.
+  connectTimeoutMS: 10_000,
+  entities: ['dist/**/*.entity.js'],
+  migrations: ['dist/migrations/*.js'],
+});

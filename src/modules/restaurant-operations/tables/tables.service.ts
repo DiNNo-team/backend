@@ -1,0 +1,481 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, type EntityManager } from 'typeorm';
+import { isUniqueViolation } from '../../../common/database/unique-violation.js';
+import { AfterCommitEvents } from '../../../common/events/after-commit-events.js';
+import type { CurrentUserData } from '../../identity-access/index.js';
+import {
+  availabilityAffected,
+  RESTAURANT_AVAILABILITY_AFFECTED,
+} from '../shared/availability-affected.event.js';
+import { requireRestaurant } from '../shared/restaurant-required.js';
+import { TableReservationsAccess } from '../shared/table-reservations.js';
+import type { CreateTableDto } from './dto/create-table.dto.js';
+import type { PlanTableDto } from './dto/save-table-plan.dto.js';
+import type { UpdateTableDto } from './dto/update-table.dto.js';
+import {
+  identifierTakenMessage,
+  normalizeTableIdentifier,
+} from './table-identifier.js';
+import { Table, type TableStatus } from './table.entity.js';
+import { TableArea } from '../table-areas/table-area.entity.js';
+import { AREA_NOT_FOUND_MESSAGE } from '../table-areas/table-area-rules.js';
+import {
+  tableHasActiveReservation,
+  tableNotAvailableToDeactivate,
+} from './table-reservation-errors.js';
+import { findPlanProblem, type PlanProblem } from './table-plan.js';
+import { recordTableChange, TableStatusLog } from './table-status-log.js';
+
+const UNIQUE_IDENTIFIER_INDEX = 'UQ_tables_restaurant_id_identifier';
+
+// Same text for a missing table and another restaurant's table: never reveal
+// that a table of another restaurant exists.
+export const TABLE_NOT_FOUND_MESSAGE =
+  'No encontramos esta mesa. Actualiza la lista de mesas e intenta de nuevo.';
+export const TABLE_INACTIVE_MESSAGE =
+  'Esta mesa está inactiva. Reactívala para cambiar su estado.';
+export const TABLE_ALREADY_INACTIVE_MESSAGE =
+  'Esta mesa ya está inactiva. Actualiza la lista de mesas.';
+export const TABLE_ALREADY_ACTIVE_MESSAGE =
+  'Esta mesa ya está activa. Actualiza la lista de mesas.';
+export const NO_TABLE_CHANGES_MESSAGE =
+  'No hay cambios para guardar. Cambia el identificador, la capacidad o la zona de la mesa.';
+export const PLAN_TABLE_REPEATED_MESSAGE =
+  'Una mesa aparece dos veces en el plano. Envía cada mesa una sola vez.';
+export const PLAN_PROBLEM_MESSAGES: Record<PlanProblem, string> = {
+  'out-of-bounds':
+    'Una mesa se sale del plano. Muévela hacia adentro e intenta de nuevo.',
+  overlap:
+    'Dos mesas quedaron una encima de otra. Sepáralas e intenta de nuevo.',
+};
+
+@Injectable()
+export class TablesService {
+  constructor(
+    @InjectRepository(Table) private readonly tables: Repository<Table>,
+    private readonly statusLog: TableStatusLog,
+    private readonly events: EventEmitter2,
+    private readonly reservations: TableReservationsAccess,
+  ) {}
+
+  async create(
+    restaurantId: string | null,
+    dto: CreateTableDto,
+  ): Promise<Table> {
+    const ownerId = requireRestaurant(restaurantId);
+    const identifier = dto.identifier.trim();
+    await this.assertIdentifierAvailable(ownerId, identifier);
+    const areaId = dto.areaId ?? null;
+    if (areaId !== null) {
+      await this.assertAreaExists(this.tables.manager, ownerId, areaId);
+    }
+    // Explicit fields: nothing else from the request reaches the entity.
+    const table = this.tables.create({
+      restaurantId: ownerId,
+      areaId,
+      identifier,
+      capacity: dto.capacity,
+      status: 'available',
+      isActive: true,
+    });
+
+    const saved = await this.writeIdentifier(
+      () => this.tables.save(table),
+      identifier,
+    );
+    this.emitAvailabilityAffected(ownerId);
+    return saved;
+  }
+
+  async findAll(restaurantId: string | null): Promise<Table[]> {
+    const ownerId = requireRestaurant(restaurantId);
+    // created_at, not identifier: by text "Mesa 10" would sort before "Mesa 2".
+    // id breaks ties so rows created in the same instant keep a stable order.
+    return this.tables.find({
+      where: { restaurantId: ownerId },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+  }
+
+  // Status change and log entry share one transaction: if the log fails, the
+  // status change is rolled back. The availability event goes out after the
+  // commit, and only if the status really changed.
+  async updateStatus(
+    user: CurrentUserData,
+    tableId: string,
+    status: TableStatus,
+  ): Promise<Table> {
+    const ownerId = requireRestaurant(user.restaurantId);
+    // Vence una reserva debida ANTES de la transacción (ver TableReservations).
+    await this.reservations.expireDueForTable(tableId);
+
+    const afterCommit = new AfterCommitEvents();
+    const { table, changed } = await this.tables.manager.transaction(
+      async (manager) => {
+        // Row lock: concurrent changes to the same table queue up, so each log
+        // entry gets the real previous status.
+        const table = await manager.findOne(Table, {
+          where: { id: tableId, restaurantId: ownerId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!table) {
+          throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+        }
+        if (!table.isActive) {
+          throw new ConflictException(TABLE_INACTIVE_MESSAGE);
+        }
+        // Una mesa con reserva DiNNo activa no cambia de estado (§12.2): el
+        // camino es el check-in. Va antes del atajo de "mismo estado": también
+        // ese "Deshacer" sin cambio responde 409. Los estados reserved u
+        // occupied puestos a mano no cuentan: sin reserva DiNNo se cambian como siempre.
+        await this.assertNoActiveReservation(manager, table.id);
+        // Same status is a valid no-op (the web's "Deshacer" relies on it):
+        // nothing changed, so nothing is written, logged or emitted.
+        if (table.status === status) {
+          return { table, changed: false };
+        }
+
+        const previousStatus = table.status;
+        table.status = status;
+        const saved = await manager.save(table);
+        await recordTableChange(
+          this.statusLog,
+          ownerId,
+          {
+            tableId: saved.id,
+            previousStatus,
+            newStatus: status,
+            userId: user.userId,
+            source: 'manual',
+            changedAt: new Date(),
+          },
+          manager,
+          afterCommit,
+        );
+        return { table: saved, changed: true };
+      },
+    );
+    afterCommit.publish(this.events);
+    if (changed) {
+      this.emitAvailabilityAffected(ownerId);
+    }
+    return table;
+  }
+
+  // Edit: identifier, capacity and/or zone. Works on inactive tables too and never
+  // changes the status, so nothing goes to the log.
+  async update(
+    restaurantId: string | null,
+    tableId: string,
+    dto: UpdateTableDto,
+  ): Promise<Table> {
+    const ownerId = requireRestaurant(restaurantId);
+    const identifier = dto.identifier?.trim();
+    if (
+      identifier === undefined &&
+      dto.capacity === undefined &&
+      dto.areaId === undefined
+    ) {
+      // A list, like the other validation 400s.
+      throw new BadRequestException([NO_TABLE_CHANGES_MESSAGE]);
+    }
+    // Solo cambiar la capacidad puede chocar con una reserva (§12.2).
+    if (dto.capacity !== undefined) {
+      await this.reservations.expireDueForTable(tableId);
+    }
+
+    return this.tables.manager.transaction(async (manager) => {
+      // Same row lock as updateStatus: a concurrent status change waits.
+      const table = await manager.findOne(Table, {
+        where: { id: tableId, restaurantId: ownerId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) {
+        throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+      }
+      // Con reserva DiNNo activa la capacidad no puede quedar por debajo de las
+      // personas de la reserva (igual sí se puede bajar, o subir). Cambiar solo
+      // el identificador no se revisa: siempre se permite.
+      if (dto.capacity !== undefined) {
+        const reservation = await this.reservations.findActiveForTable(
+          table.id,
+          manager,
+        );
+        if (reservation && dto.capacity < reservation.partySize) {
+          throw tableHasActiveReservation();
+        }
+      }
+
+      // Only the edited columns: save() would also write back any stale
+      // column of the loaded row, such as status or isActive.
+      const changes: Partial<
+        Pick<
+          Table,
+          'identifier' | 'capacity' | 'areaId' | 'planX' | 'planY' | 'planShape'
+        >
+      > = {};
+      const areaId = dto.areaId;
+      if (areaId !== undefined && areaId !== (table.areaId ?? null)) {
+        if (areaId !== null) {
+          await this.assertAreaExists(manager, ownerId, areaId);
+        }
+        // Another zone is another plan: the old cell could land on top of a
+        // table there, so the table goes back to the unplaced ones.
+        Object.assign(changes, {
+          areaId,
+          planX: null,
+          planY: null,
+          planShape: null,
+        });
+      }
+      if (identifier !== undefined) {
+        await this.assertIdentifierAvailable(ownerId, identifier, table.id);
+        changes.identifier = identifier;
+      }
+      if (dto.capacity !== undefined) {
+        changes.capacity = dto.capacity;
+      }
+      await this.writeIdentifier(
+        () =>
+          manager.update(
+            Table,
+            { id: table.id, restaurantId: ownerId },
+            changes,
+          ),
+        changes.identifier ?? table.identifier,
+      );
+      return { ...table, ...changes };
+    });
+  }
+
+  // Floor plan (manual v2.0, 13.10): the whole plan at once, and the last save
+  // wins. Tables of the restaurant missing from the list end up unplaced. The
+  // position never changes availability, so nothing goes to the log and no
+  // event is emitted. Answers the full list, like findAll.
+  async savePlan(
+    restaurantId: string | null,
+    items: PlanTableDto[],
+  ): Promise<Table[]> {
+    const ownerId = requireRestaurant(restaurantId);
+    if (new Set(items.map((item) => item.id)).size !== items.length) {
+      throw new BadRequestException([PLAN_TABLE_REPEATED_MESSAGE]);
+    }
+
+    return this.tables.manager.transaction(async (manager) => {
+      // Locks every table of the restaurant: an edit of the capacity (which
+      // changes the footprint) or another save waits for this one.
+      const tables = await manager.find(Table, {
+        where: { restaurantId: ownerId },
+        order: { createdAt: 'ASC', id: 'ASC' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const byId = new Map(tables.map((table) => [table.id, table]));
+      const placed = items.map((item) => {
+        const table = byId.get(item.id);
+        // Same 404 as the other routes: never reveal another restaurant's table.
+        if (!table) {
+          throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+        }
+        return { ...item, shape: item.shape ?? null, capacity: table.capacity };
+      });
+      // Each zone has its own plan: tables of different zones may share cells.
+      const byArea = new Map<string | null, typeof placed>();
+      for (const item of placed) {
+        const area = byId.get(item.id)?.areaId ?? null;
+        byArea.set(area, [...(byArea.get(area) ?? []), item]);
+      }
+      for (const zone of byArea.values()) {
+        const problem = findPlanProblem(zone);
+        if (problem) {
+          throw new BadRequestException([PLAN_PROBLEM_MESSAGES[problem]]);
+        }
+      }
+
+      const plan = new Map(placed.map((item) => [item.id, item]));
+      for (const table of tables) {
+        const item = plan.get(table.id);
+        const next = {
+          planX: item?.x ?? null,
+          planY: item?.y ?? null,
+          planShape: item?.shape ?? null,
+        };
+        if (
+          next.planX === table.planX &&
+          next.planY === table.planY &&
+          next.planShape === table.planShape
+        ) {
+          continue;
+        }
+        // Only the plan columns: a stale status must never be written back.
+        await manager.update(
+          Table,
+          { id: table.id, restaurantId: ownerId },
+          next,
+        );
+        Object.assign(table, next);
+      }
+      return tables;
+    });
+  }
+
+  // Deactivate (PBI 7, §12.2): solo una mesa Disponible y sin reserva DiNNo
+  // activa; deja de ser operativa y registra available → inactive en la misma
+  // transacción.
+  async deactivate(user: CurrentUserData, tableId: string): Promise<Table> {
+    return this.changeActive(user, tableId, false);
+  }
+
+  // Reactivate (PBI 7): back as available, logging inactive → available.
+  async reactivate(user: CurrentUserData, tableId: string): Promise<Table> {
+    return this.changeActive(user, tableId, true);
+  }
+
+  private async changeActive(
+    user: CurrentUserData,
+    tableId: string,
+    active: boolean,
+  ): Promise<Table> {
+    const ownerId = requireRestaurant(user.restaurantId);
+    // Vence una reserva debida ANTES de la transacción (ver TableReservations).
+    // Reactivar no depende de reservas.
+    if (!active) {
+      await this.reservations.expireDueForTable(tableId);
+    }
+
+    const afterCommit = new AfterCommitEvents();
+    const updated = await this.tables.manager.transaction(async (manager) => {
+      // Same row lock as updateStatus: the log always gets the real previous state.
+      const table = await manager.findOne(Table, {
+        where: { id: tableId, restaurantId: ownerId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!table) {
+        throw new NotFoundException(TABLE_NOT_FOUND_MESSAGE);
+      }
+      if (table.isActive === active) {
+        throw new ConflictException(
+          active
+            ? TABLE_ALREADY_ACTIVE_MESSAGE
+            : TABLE_ALREADY_INACTIVE_MESSAGE,
+        );
+      }
+      if (!active) {
+        // Orden de §12.2: la reserva activa tiene prioridad sobre "no está
+        // Disponible" (una mesa con reserva DiNNo está en reserved).
+        await this.assertNoActiveReservation(manager, table.id);
+        if (table.status !== 'available') {
+          throw tableNotAvailableToDeactivate();
+        }
+      }
+
+      const previousStatus = active ? 'inactive' : table.status;
+      table.isActive = active;
+      if (active) {
+        table.status = 'available';
+      }
+      const saved = await manager.save(table);
+      await recordTableChange(
+        this.statusLog,
+        ownerId,
+        {
+          tableId: saved.id,
+          previousStatus,
+          newStatus: active ? 'available' : 'inactive',
+          userId: user.userId,
+          source: 'manual',
+          changedAt: new Date(),
+        },
+        manager,
+        afterCommit,
+      );
+      return saved;
+    });
+    afterCommit.publish(this.events);
+    this.emitAvailabilityAffected(ownerId);
+    return updated;
+  }
+
+  // Debe llamarse dentro de la transacción y DESPUÉS de bloquear la fila de la
+  // mesa: la creación de reservas bloquea la misma fila, así que o la reserva
+  // ya está confirmada y se ve aquí, o la creación salta a otra mesa.
+  private async assertNoActiveReservation(
+    manager: EntityManager,
+    tableId: string,
+  ): Promise<void> {
+    const reservation = await this.reservations.findActiveForTable(
+      tableId,
+      manager,
+    );
+    if (reservation) {
+      throw tableHasActiveReservation();
+    }
+  }
+
+  // Same 404 for a missing zone and another restaurant's zone.
+  private async assertAreaExists(
+    manager: EntityManager,
+    restaurantId: string,
+    areaId: string,
+  ): Promise<void> {
+    const found = await manager.count(TableArea, {
+      where: { id: areaId, restaurantId },
+    });
+    if (found === 0) {
+      throw new NotFoundException(AREA_NOT_FOUND_MESSAGE);
+    }
+  }
+
+  // Call only after the write is committed: the listeners read the database.
+  private emitAvailabilityAffected(restaurantId: string): void {
+    this.events.emit(
+      RESTAURANT_AVAILABILITY_AFFECTED,
+      availabilityAffected(restaurantId),
+    );
+  }
+
+  // "4", "04" and "Mesa 4" are the same table (table-identifier.ts). The unique
+  // index only catches exact repeats (lower(trim)), so this check runs first;
+  // the index still guards the race of two identical requests at once.
+  private async assertIdentifierAvailable(
+    restaurantId: string,
+    identifier: string,
+    ignoreId?: string,
+  ): Promise<void> {
+    const key = normalizeTableIdentifier(identifier);
+    const existing = await this.tables.find({
+      where: { restaurantId },
+      select: { id: true, identifier: true },
+    });
+    const taken = existing.some(
+      (table) =>
+        table.id !== ignoreId &&
+        normalizeTableIdentifier(table.identifier) === key,
+    );
+    if (taken) {
+      throw new ConflictException(identifierTakenMessage(identifier));
+    }
+  }
+
+  // Runs a write whose identifier may collide (create and edit): the unique
+  // index answers the same 409 as the check above.
+  private async writeIdentifier<T>(
+    write: () => Promise<T>,
+    identifier: string,
+  ): Promise<T> {
+    try {
+      return await write();
+    } catch (error) {
+      if (isUniqueViolation(error, UNIQUE_IDENTIFIER_INDEX)) {
+        throw new ConflictException(identifierTakenMessage(identifier));
+      }
+      throw error;
+    }
+  }
+}

@@ -1,0 +1,147 @@
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { ErrorResponseDto } from '../../../common/dto/error-response.dto.js';
+import {
+  AllowSuspendedRestaurant,
+  AllowUnapprovedRestaurant,
+  CurrentUser,
+  CurrentUserGuard,
+  RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
+  Roles,
+  type CurrentUserData,
+  UserRole,
+  SESSION_UNAUTHORIZED_RESPONSE,
+} from '../../identity-access/index.js';
+import {
+  RESTAURANT_REQUIRED_CODE,
+  RESTAURANT_REQUIRED_MESSAGE,
+} from '../shared/restaurant-required.js';
+import { RegisterRestaurantDto } from './dto/register-restaurant.dto.js';
+import { TableReservationsAccess } from '../shared/table-reservations.js';
+import { RestaurantProfileResponseDto } from './dto/restaurant-profile-response.dto.js';
+import {
+  ALREADY_REGISTERED_MESSAGE,
+  RestaurantRegistrationService,
+} from './restaurant-registration.service.js';
+import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator.js';
+
+@ApiTags('restaurants')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse(SESSION_UNAUTHORIZED_RESPONSE)
+@Roles(UserRole.RESTAURANT_ADMIN)
+@UseGuards(CurrentUserGuard)
+@Controller('restaurants')
+export class RestaurantRegistrationController {
+  constructor(
+    private readonly registrationService: RestaurantRegistrationService,
+    private readonly reservations: TableReservationsAccess,
+  ) {}
+
+  @Post()
+  @RateLimit('signup')
+  @ApiOperation({
+    summary: 'Registrar el restaurante del usuario',
+    description:
+      'Crea el restaurante del usuario de la sesión con su nombre, categoría, dirección, horarios y teléfono de contacto opcional, y lo asocia a ese usuario. Es para cuentas habilitadas por el equipo: el restaurante nace aprobado (approvalStatus approved). Un usuario solo tiene un restaurante. Cualquier campo que no esté en el DTO (restaurantId, id…) se rechaza con 400.',
+  })
+  @ApiCreatedResponse({
+    description: 'Restaurante registrado, con sus horarios.',
+    type: RestaurantProfileResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Datos inválidos (nombre o dirección vacíos o muy largos, categoría fuera de la lista, ningún día abierto, un día repetido, horas que no están en HH:MM o iguales, horas en un día de 24 horas) o campos no permitidos. message es una lista.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: [
+        'Escribe la dirección de tu restaurante.',
+        'El lunes: escribe la hora de apertura en formato HH:MM, por ejemplo 09:30.',
+      ],
+      error: 'Bad Request',
+    },
+  })
+  @ApiForbiddenResponse({
+    description:
+      'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED) o es de comensal (DINER_ACCOUNT).',
+    type: ErrorResponseDto,
+    examples: {
+      ...RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
+    },
+  })
+  @ApiConflictResponse({
+    description:
+      'El usuario ya tiene un restaurante registrado: no se crea otro. Conviene llevarlo a la pantalla de mesas.',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 409,
+      message: ALREADY_REGISTERED_MESSAGE,
+      error: 'Conflict',
+    },
+  })
+  async register(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: RegisterRestaurantDto,
+  ): Promise<RestaurantProfileResponseDto> {
+    const { restaurant, schedules } = await this.registrationService.register(
+      user,
+      dto,
+    );
+    // Un restaurante recién registrado no puede tener reservas.
+    return RestaurantProfileResponseDto.fromEntities(restaurant, schedules, 0);
+  }
+
+  @Get('me')
+  // A pending or rejected restaurant still sees its own data and status (§11).
+  @AllowUnapprovedRestaurant()
+  // Un suspendido ve su restaurante y el motivo (suspensionReason).
+  @AllowSuspendedRestaurant()
+  @ApiOperation({
+    summary: 'Consultar el restaurante del usuario',
+    description:
+      'Devuelve el restaurante del usuario de la sesión con sus horarios y su estado de aprobación (approvalStatus, rejectionReason). Responde también con el restaurante pendiente o rechazado. Mismos campos que PATCH /restaurants/me, más schedules.',
+  })
+  @ApiOkResponse({
+    description: 'Restaurante del usuario, con sus horarios.',
+    type: RestaurantProfileResponseDto,
+  })
+  @ApiForbiddenResponse({
+    description:
+      'La cuenta no está habilitada como restaurante (errorCode: ACCOUNT_NOT_ENABLED), es de comensal (DINER_ACCOUNT) o todavía no registra su restaurante (RESTAURANT_REQUIRED): en ese caso hay que llevarlo al registro del restaurante.',
+    type: ErrorResponseDto,
+    examples: {
+      ...RESTAURANT_ENDPOINT_ACCOUNT_EXAMPLES,
+      restaurantRequired: {
+        summary: 'El usuario todavía no registra su restaurante',
+        value: {
+          statusCode: 403,
+          message: RESTAURANT_REQUIRED_MESSAGE,
+          error: 'Forbidden',
+          errorCode: RESTAURANT_REQUIRED_CODE,
+        },
+      },
+    },
+  })
+  async findMine(
+    @CurrentUser() user: CurrentUserData,
+  ): Promise<RestaurantProfileResponseDto> {
+    const { restaurant, schedules } = await this.registrationService.findMine(
+      user.restaurantId,
+    );
+    return RestaurantProfileResponseDto.fromEntities(
+      restaurant,
+      schedules,
+      await this.reservations.countActive(restaurant.id),
+    );
+  }
+}

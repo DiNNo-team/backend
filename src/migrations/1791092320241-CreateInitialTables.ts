@@ -1,0 +1,42 @@
+import { MigrationInterface, QueryRunner } from 'typeorm';
+
+export class CreateInitialTables1791092320241 implements MigrationInterface {
+  name = 'CreateInitialTables1791092320241';
+
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `CREATE TABLE "users" ("id" uuid NOT NULL DEFAULT gen_random_uuid(), "email" character varying(255) NOT NULL, "role" character varying(50) NOT NULL, "restaurant_id" uuid, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "UQ_users_email" UNIQUE ("email"), CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "restaurants" ("id" uuid NOT NULL DEFAULT gen_random_uuid(), "name" character varying(120) NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_e2133a72eb1cc8f588f7b503e68" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "tables" ("id" uuid NOT NULL DEFAULT gen_random_uuid(), "restaurant_id" uuid NOT NULL, "identifier" character varying(50) NOT NULL, "capacity" smallint NOT NULL, "status" character varying(20) NOT NULL DEFAULT 'available', "is_active" boolean NOT NULL DEFAULT true, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "CHK_tables_status" CHECK ("status" IN ('available', 'reserved', 'occupied')), CONSTRAINT "CHK_tables_capacity" CHECK ("capacity" BETWEEN 1 AND 20), CONSTRAINT "PK_7cf2aca7af9550742f855d4eb69" PRIMARY KEY ("id"))`,
+    );
+    // Hand-written: TypeORM cannot generate expression indexes (see Table entity).
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "UQ_tables_restaurant_id_identifier" ON "tables" ("restaurant_id", lower(trim("identifier")))`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" ADD CONSTRAINT "FK_a2db2210c81ee6fb1c11843e18c" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "tables" ADD CONSTRAINT "FK_77e362d578933cf4518770d11ae" FOREIGN KEY ("restaurant_id") REFERENCES "restaurants"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
+    );
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "tables" DROP CONSTRAINT "FK_77e362d578933cf4518770d11ae"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "users" DROP CONSTRAINT "FK_a2db2210c81ee6fb1c11843e18c"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "public"."UQ_tables_restaurant_id_identifier"`,
+    );
+    await queryRunner.query(`DROP TABLE "tables"`);
+    await queryRunner.query(`DROP TABLE "restaurants"`);
+    await queryRunner.query(`DROP TABLE "users"`);
+  }
+}

@@ -1,0 +1,238 @@
+name: CI/CD
+
+on:
+  # PRs to develop are checked before merging; a push to develop (a merged PR)
+  # is checked again, deployed to Azure, and Render's deployment is verified.
+  pull_request:
+    branches:
+      - develop
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # Exactly the versions in package-lock.json, like local installs.
+      - name: Install dependencies
+        run: npm ci
+
+      # Fast checks first: they fail in seconds with the clearest error.
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: E2E tests
+        run: npm run test:e2e
+
+      - name: Build
+        run: npm run build
+
+  # Deploys develop to Azure Container Apps: builds the image, pushes it to the
+  # registry and points the Container App at it, then waits until /v1/health
+  # serves the pushed commit. Signs in with OIDC (identity id-gh-backend): the
+  # federated credential only trusts this repo's develop branch, so the job
+  # must not declare an `environment` (that would change the token subject).
+  deploy-azure:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Only the latest commit of develop matters: a newer push cancels an older
+    # deployment that is still running.
+    concurrency:
+      group: deploy-azure-develop
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RESOURCE_GROUP: rg-dinno
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # The health check returns the first 7 characters of the commit.
+      - name: Set image tag
+        run: |
+          echo "COMMIT=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "IMAGE=${{ vars.ACR_NAME }}.azurecr.io/dinno-backend:${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push the image
+        run: |
+          az acr login --name "${{ vars.ACR_NAME }}"
+          docker build --tag "$IMAGE" .
+          docker push "$IMAGE"
+
+      # Only the image and GIT_COMMIT change: secrets, the other variables and
+      # the scale stay as they are in Azure.
+      - name: Deploy to Container Apps
+        run: |
+          az extension add --name containerapp --upgrade --only-show-errors
+          az containerapp update \
+            --name "${{ vars.APP_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$IMAGE" \
+            --set-env-vars "GIT_COMMIT=$COMMIT" \
+            --only-show-errors --output none
+
+      # Status alone is not enough: if the new revision fails to start, the
+      # previous one keeps answering "ok" with the old commit.
+      - name: Wait for Azure to serve this commit
+        run: |
+          fqdn=$(az containerapp show --name "${{ vars.APP_NAME }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn --output tsv)
+          url="https://$fqdn/v1/health"
+          deadline=$((SECONDS + 10 * 60))
+          last="sin respuesta"
+          until [ "$SECONDS" -ge "$deadline" ]; do
+            if body=$(curl --silent --fail --max-time 30 "$url"); then
+              served=$(echo "$body" | jq -r '.commit // "null"')
+              if [ "$served" = "$COMMIT" ]; then
+                echo "Azure sirve el commit $COMMIT."
+                exit 0
+              fi
+              last="responde el commit $served"
+            fi
+            echo "Esperando el commit $COMMIT ($last)."
+            sleep 15
+          done
+          echo "::error::En 10 minutos, $url no respondió el commit $COMMIT ($last). Revisa la revisión nueva: az containerapp revision list -n ${{ vars.APP_NAME }} -g $RESOURCE_GROUP y sus logs."
+          exit 1
+
+  # Render deploys develop on its own; this job does not deploy, it only checks
+  # that Render is serving the pushed commit and records the result as a
+  # GitHub deployment.
+  verify-deployment:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Render deploys only the latest commit of develop: an older run would
+    # wait for a commit that never gets deployed, so a newer push cancels it.
+    concurrency:
+      group: verify-deployment-develop
+      cancel-in-progress: true
+    permissions:
+      deployments: write
+    env:
+      SERVICE_URL: https://dinno-backend.onrender.com
+    steps:
+      - name: Create GitHub deployment
+        id: deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: production
+          environment-url: ${{ env.SERVICE_URL }}
+          sha: ${{ github.sha }}
+          initial-status: in_progress
+
+      # Waits until /v1/health answers status "ok" AND the pushed commit:
+      # status alone is not enough, because when a Render build fails the
+      # previous version stays up and keeps answering "ok". Render needs a few
+      # minutes to build and the free plan sleeps the service (the first
+      # request can take about a minute): retry every 20 s for up to 15 min.
+      - name: Wait for Render to serve this commit
+        id: health
+        run: |
+          expected="$GITHUB_SHA"
+          deadline=$((SECONDS + 15 * 60))
+          attempt=0
+          last_commit=""
+          last_problem="el health no respondió"
+          until [ "$SECONDS" -ge "$deadline" ]; do
+            attempt=$((attempt + 1))
+            if body=$(curl --silent --show-error --fail --max-time 90 \
+              "$SERVICE_URL/v1/health" 2>&1); then
+              fields=$(echo "$body" | jq -r '[.status // "", .commit // "null"] | @tsv' 2>/dev/null) || fields=""
+              status=$(echo "$fields" | cut -f1)
+              commit=$(echo "$fields" | cut -f2)
+              if [ "$status" = "ok" ] && [ "$commit" = "$expected" ]; then
+                echo "Render sirve el commit $expected (intento $attempt)."
+                exit 0
+              fi
+              if [ "$status" = "ok" ]; then
+                last_commit="$commit"
+                echo "Intento $attempt: responde el commit $commit; se espera $expected."
+              else
+                last_problem="respuesta inesperada: $body"
+                echo "Intento $attempt: $last_problem"
+              fi
+            else
+              last_problem="el health no respondió ($body)"
+              echo "Intento $attempt: $last_problem"
+            fi
+            sleep 20
+          done
+
+          # reason goes to the log; summary (under 140 characters, the GitHub
+          # limit) goes to the deployment status.
+          if [ "$last_commit" = "null" ]; then
+            reason="El health responde sin commit: RENDER_GIT_COMMIT no está definida en el servicio."
+            summary="El health responde sin commit (falta RENDER_GIT_COMMIT)."
+          elif [ -n "$last_commit" ]; then
+            reason="Se esperaba el commit $expected y respondió $last_commit. Lo más probable es que el build de Render haya fallado y siga viva la versión anterior: revisa el despliegue en el panel de Render."
+            summary="Responde ${last_commit:0:7} en vez de ${expected:0:7}: probablemente falló el build de Render."
+          else
+            reason="En 15 minutos, $SERVICE_URL/v1/health no respondió con el commit $expected ($last_problem)."
+            summary="El health no respondió en 15 minutos."
+          fi
+          echo "::error::$reason"
+          echo "summary=$summary" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Mark deployment as successful
+        if: success()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          state: success
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          environment-url: ${{ env.SERVICE_URL }}
+
+      - name: Mark deployment as failed
+        if: failure() && steps.deployment.outputs.deployment_id != ''
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          state: failure
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          description: ${{ steps.health.outputs.summary || 'La verificación del despliegue falló.' }}
+          log-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Mark deployment as replaced
+        if: cancelled() && steps.deployment.outputs.deployment_id != ''
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          state: inactive
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          description: Reemplazado por un push más reciente a develop.
