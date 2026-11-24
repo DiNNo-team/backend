@@ -12,6 +12,7 @@ import { parseTrustProxyHops } from './common/rate-limit/rate-limit.settings.js'
 import type { SocketConnectionLimiter } from './common/rate-limit/socket-connection-limiter.js';
 import { securityHeaders } from './common/security/security-headers.js';
 import { CorsIoAdapter } from './config/socket-io.adapter.js';
+import type { SocketIoAdapterConstructor } from './config/socket-io-redis.js';
 import { isDeployedEnvironment } from './modules/identity-access/index.js';
 
 export const API_PREFIX = 'v1';
@@ -72,6 +73,9 @@ export interface AppSetupOptions {
   // Solo la app real (main.ts) lo pasa: las e2e montan módulos sueltos, sin
   // RateLimitModule.
   socketConnectionLimiter?: SocketConnectionLimiter;
+  // Adaptador de Redis de Socket.IO (salas compartidas entre réplicas). Solo
+  // lo pasa main.ts; null o sin definir: el adaptador en memoria.
+  socketIoAdapter?: SocketIoAdapterConstructor | null;
 }
 
 // Configuración HTTP compartida por main.ts y las pruebas e2e.
@@ -105,7 +109,12 @@ export function configureApp(
   });
   // WebSocket (Socket.IO, /socket.io) con los mismos orígenes que la API.
   app.useWebSocketAdapter(
-    new CorsIoAdapter(app, corsOrigins, options.socketConnectionLimiter),
+    new CorsIoAdapter(
+      app,
+      corsOrigins,
+      options.socketConnectionLimiter,
+      options.socketIoAdapter,
+    ),
   );
 
   const document = SwaggerModule.createDocument(
